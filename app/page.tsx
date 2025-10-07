@@ -12,9 +12,9 @@ export default function EnlistLanding() {
       {/* Hero matching light theme */}
       <Card className="p-8">
         <p className="uppercase tracking-wide text-sm text-[var(--fg)]/70">{siteName} — Job Search Agent</p>
-        <h1 className="mt-2 text-display md:text-5xl text-[var(--fg)]">Find roles. Apply faster.</h1>
+        <h1 className="mt-2 text-display md:text-5xl text-[var(--fg)]">Find roles. Tailor resumes. Apply faster.</h1>
         <p className="mt-3 text-readable text-[var(--fg)]/80 max-w-2xl">
-          {siteName} scouts roles, tailors your materials, and applies automatically — keeping you in control every step of the way.
+          {siteName} scouts roles, builds and tailors your resume and cover letters, and applies automatically, keeping you in control every step of the way.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button as-child>
@@ -30,8 +30,8 @@ export default function EnlistLanding() {
       <section id="how-it-works" className="grid md:grid-cols-3 gap-6">
         {[
           { title: 'Share goals', body: 'Tell the assistant what roles and companies you’re targeting.' },
-          { title: 'Review matches', body: 'Approve curated openings with quick yes/no.' },
-          { title: 'Apply confidently', body: 'Send tailored applications you control — fast and polished.' },
+          { title: 'Tailor your resume', body: 'Generate and adapt a resume to each role’s requirements in seconds.' },
+          { title: 'Apply confidently', body: 'Send tailored applications you control, fast and polished.' },
         ].map((f) => (
           <Card className="p-5">
             <p className="text-heading text-[var(--fg)]">{f.title}</p>

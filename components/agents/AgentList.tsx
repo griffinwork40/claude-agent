@@ -49,18 +49,18 @@ export function AgentList(props: AgentListProps) {
   const groups = useFilteredGroups(query);
 
   return (
-    <aside className="h-full overflow-y-auto border-r border-[var(--border)] pr-2 bg-[var(--bg)]">
-      <div className="p-2 sticky top-0 bg-[var(--bg)]">
+    <aside className="h-full overflow-y-auto border-r border-[var(--border)] md:pr-2 bg-[var(--bg)]">
+      <div className="p-3 md:p-2 sticky top-0 bg-[var(--bg)] z-10">
         <div className="flex items-center gap-2">
           <input
             aria-label="Search agents"
             placeholder="Search agents..."
-            className="w-full rounded-md bg-[var(--muted)] text-[var(--fg)] placeholder-black/50 px-3 py-2 text-readable border border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-blue-600"
+            className="w-full rounded-md bg-[var(--muted)] text-[var(--fg)] placeholder-black/50 px-3 py-2 text-base md:text-sm border border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-blue-600"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <button
-            className="rounded-md bg-[var(--accent)] hover:bg-blue-700 text-[var(--accent-foreground)] px-3 py-2 text-readable"
+            className="rounded-md bg-[var(--accent)] hover:bg-blue-700 text-[var(--accent-foreground)] px-3 py-2 text-sm font-medium touch-manipulation whitespace-nowrap"
             aria-label="Create new agent"
           >
             New
@@ -68,7 +68,7 @@ export function AgentList(props: AgentListProps) {
         </div>
       </div>
 
-      <div className="px-2 pb-6 space-y-6">
+      <div className="px-3 md:px-2 pb-6 space-y-6">
         {(Object.keys(groups) as Array<Agent['status']>).map((status) => {
           const list = groups[status];
           if (list.length === 0) return null;
@@ -84,7 +84,7 @@ export function AgentList(props: AgentListProps) {
                     <li key={agent.id}>
                       <button
                         className={
-                          'w-full text-left rounded-md px-3 py-2 text-readable transition border-2 ' +
+                          'w-full text-left rounded-md px-3 py-3 md:py-2 transition border-2 touch-manipulation ' +
                           (active
                             ? 'bg-[var(--card)] text-[var(--fg)] border-[var(--border)]'
                             : 'bg-[var(--card)]/70 text-[var(--fg)]/90 border-transparent hover:border-[var(--border)]')
@@ -93,7 +93,7 @@ export function AgentList(props: AgentListProps) {
                         aria-current={active ? 'true' : undefined}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-[var(--fg)]">{agent.name}</span>
+                          <span className="font-medium text-[var(--fg)] text-base md:text-sm">{agent.name}</span>
                           {agent.diffStats ? (
                             <span className="text-xs text-[var(--fg)]/70">
                               +{agent.diffStats.plus} -{agent.diffStats.minus}

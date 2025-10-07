@@ -1,6 +1,8 @@
 // app/api/apply/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { JobOpportunity } from '@/types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -9,7 +11,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: NextRequest) {
   try {
-    const { jobId, userId } = await request.json();
+    const routeClient = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await routeClient.auth.getSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { jobId } = await request.json();
     
     if (!jobId) {
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -36,7 +42,7 @@ export async function POST(request: NextRequest) {
       .from('applications')
       .insert([{
         job_id: jobId,
-        user_id: userId,
+        user_id: session.user.id,
         status: applicationResult.success ? 'submitted' : 'failed',
         result: applicationResult,
         applied_at: new Date().toISOString()

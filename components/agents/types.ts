@@ -57,12 +57,14 @@ export interface AgentListProps {
 
 export interface BrowserPaneProps {
   agent: Agent | null;
+  isMobile?: boolean;
 }
 
 export interface ChatPaneProps {
   agent: Agent | null;
   messages: Message[];
   onSend: (content: string) => void;
+  isMobile?: boolean;
 }
 
 

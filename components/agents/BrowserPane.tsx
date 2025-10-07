@@ -9,17 +9,17 @@ import { BrowserPaneProps } from './types';
 /**
  * Static placeholder for the browser/workspace area.
  */
-export function BrowserPane({ agent }: BrowserPaneProps) {
+export function BrowserPane({ agent, isMobile = false }: BrowserPaneProps) {
   return (
-    <section className="h-full overflow-hidden px-3">
-      <div className="h-full rounded-lg border-2 border-[var(--border)] bg-[var(--card)]">
+    <section className={`h-full overflow-hidden ${!isMobile ? 'px-3' : ''}`}>
+      <div className={`h-full ${!isMobile ? 'rounded-lg' : ''} border-2 border-[var(--border)] bg-[var(--card)]`}>
         <div className="flex items-center justify-between px-4 py-2 border-b-2 border-[var(--border)]">
           <div className="flex items-center gap-2 text-sm text-[var(--fg)]">
             <span className="inline-flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-600" />
               {agent ? agent.name : 'No agent selected'}
             </span>
-            {agent ? (
+            {agent && !isMobile ? (
               <span className="text-[var(--fg)]/70">
                 • {agent.repo} • {agent.branch}
               </span>
@@ -34,8 +34,8 @@ export function BrowserPane({ agent }: BrowserPaneProps) {
             </button>
           </div>
         </div>
-        <div className="p-6 h-[calc(100%-41px)] overflow-auto">
-          <div className="h-full min-h-[420px] rounded-md border-2 border-dashed border-[var(--border)] bg-[var(--muted)] flex items-center justify-center text-[var(--fg)]/80">
+        <div className={`${isMobile ? 'p-3' : 'p-6'} h-[calc(100%-41px)] overflow-auto`}>
+          <div className={`h-full ${!isMobile ? 'min-h-[420px]' : 'min-h-[200px]'} rounded-md border-2 border-dashed border-[var(--border)] bg-[var(--muted)] flex items-center justify-center text-[var(--fg)]/80`}>
             Static workspace placeholder
           </div>
         </div>

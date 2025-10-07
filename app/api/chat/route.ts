@@ -1,6 +1,8 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { Message } from '@/types';
 import { runClaudeAgent } from '@/lib/claude-agent';
 
@@ -10,6 +12,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: NextRequest) {
   try {
+    const routeClient = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await routeClient.auth.getSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { message } = await request.json();
     
     if (!message) {
@@ -22,6 +27,7 @@ export async function POST(request: NextRequest) {
       .insert([{ 
         content: message, 
         sender: 'user',
+        user_id: session.user.id,
         created_at: new Date().toISOString()
       }])
       .select()

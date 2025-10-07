@@ -2,6 +2,7 @@
 import { SupabaseProvider } from '@/lib/supabase';
 import './globals.css';
 import { getSiteName, getSiteUrl } from '@/lib/site';
+import LogoutButton from '@/components/LogoutButton';
 
 const siteName = getSiteName();
 const siteUrl = getSiteUrl();
@@ -41,6 +42,7 @@ export default function RootLayout({
                 <a href="/" className="hover:underline">Home</a>
                 <a href="/agent" className="hover:underline">Agents</a>
                 <a href="https://docs.example.com" className="hover:underline" target="_blank" rel="noreferrer">Docs</a>
+                <LogoutButton />
               </nav>
             </div>
           </header>
