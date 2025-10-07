@@ -39,6 +39,17 @@ export default function EnlistLanding() {
           </Card>
         ))}
       </section>
+      {/* Landing-only footer */}
+      <footer className="rounded-xl bg-[var(--card)] border-2 border-[var(--border)] p-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="text-readable text-[var(--fg)]/70">© {new Date().getFullYear()} Enlist. All rights reserved.</p>
+          <nav className="flex items-center gap-4 text-sm">
+            <a href="/" className="hover:underline">Home</a>
+            <a href="/agent" className="hover:underline">Agents</a>
+            <a href="https://docs.example.com" className="hover:underline" target="_blank" rel="noreferrer">Docs</a>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }
