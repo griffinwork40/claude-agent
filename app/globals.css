@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dyslexia-friendly font faces */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/fonts/OpenDyslexic-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/fonts/OpenDyslexic-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Light theme design tokens */
+:root {
+  --bg: #f8f5f0;
+  --fg: #0a0a0a;
+  --card: #ffffff;
+  --muted: #f2eee8;
+  --border: #1f2937; /* gray-800 */
+  --accent: #2563eb; /* blue-600 */
+  --accent-foreground: #ffffff;
+}
+
+html, body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: 'OpenDyslexic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px; /* Base font size for accessibility */
+  line-height: 1.6; /* Improved line height for readability */
+  letter-spacing: 0.01em; /* Slight letter spacing for clarity */
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Accessibility-focused typography utilities */
+  .text-readable {
+    font-size: 1.125rem; /* 18px - WCAG recommended minimum */
+    line-height: 1.7;
+    letter-spacing: 0.015em;
+  }
+  
+  .text-large {
+    font-size: 1.25rem; /* 20px */
+    line-height: 1.8;
+    letter-spacing: 0.02em;
+  }
+  
+  .text-heading {
+    font-size: 1.5rem; /* 24px */
+    line-height: 1.5;
+    letter-spacing: 0.025em;
+    font-weight: 700;
+  }
+  
+  .text-display {
+    font-size: 2rem; /* 32px */
+    line-height: 1.4;
+    letter-spacing: 0.03em;
+    font-weight: 700;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c5c5c5;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

@@ -1,0 +1,359 @@
+// lib/playwright-service.ts
+import { chromium, Browser, Page } from 'playwright';
+import fs from 'fs/promises';
+import path from 'path';
+
+// Type definition for job application data
+interface JobApplicationData {
+  url: string;
+  profileData: any; // This would come from griffin.json
+  resumePath: string;
+}
+
+// Main class for handling Playwright automation
+export class PlaywrightApplicationService {
+  private browser: Browser | null = null;
+
+  async initialize() {
+    // Launch the browser when service is initialized
+    this.browser = await chromium.launch({
+      headless: process.env.NODE_ENV === 'production', // Set to false for debugging in development
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+      ],
+    });
+  }
+
+  async close() {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+    }
+  }
+
+  async submitApplication(jobData: JobApplicationData): Promise<{ success: boolean; message: string; details?: any }> {
+    if (!this.browser) {
+      throw new Error('Browser not initialized. Call initialize() first.');
+    }
+
+    let page: Page | null = null;
+
+    try {
+      // Create a new page for this application
+      page = await this.browser.newPage();
+      
+      // Set viewport to look like a real user
+      await page.setViewportSize({ width: 1366, height: 768 });
+      
+      // Navigate to the job application URL
+      console.log(`Navigating to: ${jobData.url}`);
+      await page.goto(jobData.url, { waitUntil: 'networkidle' });
+      
+      // Add a small delay to seem more human-like
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+
+      // Fill out the application form with profile data
+      await this.fillApplicationForm(page, jobData.profileData);
+
+      // Upload the resume
+      await this.uploadResume(page, jobData.resumePath);
+
+      // Submit the application
+      await this.submitForm(page);
+
+      // Wait for submission confirmation
+      await page.waitForTimeout(2000);
+
+      // Check if submission was successful
+      const success = await this.checkSubmissionSuccess(page);
+      
+      if (success) {
+        return {
+          success: true,
+          message: 'Application submitted successfully',
+          details: { url: jobData.url }
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Application submission may have failed - could not verify success',
+          details: { url: jobData.url }
+        };
+      }
+    } catch (error: any) {
+      console.error('Error during application submission:', error);
+      return {
+        success: false,
+        message: `Application failed: ${error.message}`,
+        details: { url: jobData.url, error: error.message }
+      };
+    } finally {
+      if (page) {
+        await page.close();
+      }
+    }
+  }
+
+  private async fillApplicationForm(page: Page, profileData: any) {
+    // Fill personal information fields
+    await this.fillField(page, 'firstName', profileData.personal_information.full_name.split(' ')[0]);
+    await this.fillField(page, 'lastName', profileData.personal_information.full_name.split(' ').slice(1).join(' '));
+    await this.fillField(page, 'email', profileData.personal_information.email);
+    await this.fillField(page, 'phone', profileData.personal_information.phone);
+    
+    // For more complex selectors, we need to try multiple common selectors
+    await this.fillField(page, '[data-qa="email"]', profileData.personal_information.email);
+    await this.fillField(page, '[data-test="email"]', profileData.personal_information.email);
+    await this.fillField(page, 'input[name*="email" i]', profileData.personal_information.email);
+    
+    // Fill location
+    if (profileData.personal_information.address) {
+      const addressParts = profileData.personal_information.address.split(',');
+      await this.fillField(page, 'city', addressParts[0]?.trim());
+      await this.fillField(page, 'state', addressParts[1]?.trim());
+      await this.fillField(page, 'zip', addressParts[2]?.trim());
+    }
+    
+    // Handle other common fields
+    await this.fillField(page, 'summary', profileData.additional_information.about || '');
+    await this.fillTextarea(page, '[name*="coverletter" i]', this.generateCoverLetter(profileData));
+    
+    // Handle work experience
+    for (const [index, job] of profileData.employment_history.entries()) {
+      await this.fillField(page, `[name*="company" i][data-index="${index}"]`, job.employer_name);
+      await this.fillField(page, `[name*="title" i][data-index="${index}"]`, job.job_title);
+      await this.fillTextarea(page, `[name*="description" i][data-index="${index}"]`, job.responsibilities.join('\n'));
+    }
+    
+    // Handle education
+    for (const [index, education] of profileData.education.entries()) {
+      await this.fillField(page, `[name*="school" i][data-index="${index}"]`, education.institution);
+      await this.fillField(page, `[name*="degree" i][data-index="${index}"]`, education.degree);
+      await this.fillField(page, `[name*="field" i][data-index="${index}"]`, education.major);
+    }
+    
+    // Handle skill fields (if any)
+    if (profileData.skills_and_qualifications.technical_skills) {
+      const skillsString = profileData.skills_and_qualifications.technical_skills.join(', ');
+      await this.fillTextarea(page, '[name*="skills" i]', skillsString);
+    }
+    
+    // Handle availability and legal questions
+    if (profileData.position_and_availability.availability.includes('full-time')) {
+      await this.clickCheckbox(page, '[name*="fulltime" i]');
+    }
+    
+    if (profileData.work_eligibility_and_legal.legally_authorized_to_work_in_us) {
+      await this.clickCheckbox(page, '[name*="authorized" i]');
+    }
+    
+    if (!profileData.work_eligibility_and_legal.require_sponsorship) {
+      await this.clickCheckbox(page, '[name*="sponsorship" i]');
+    }
+    
+    // Handle demographic questions
+    if (profileData.demographic_questions.gender_identity) {
+      await this.selectOption(page, '[name*="gender" i]', profileData.demographic_questions.gender_identity);
+    }
+  }
+
+  private async fillField(page: Page, selector: string, value: string) {
+    if (!value) return;
+    
+    // Try different selector strategies
+    const selectors = [
+      `input[name="${selector}"]`,
+      `input[id="${selector}"]`,
+      `input#${selector}`,
+      `input[data-qa="${selector}"]`,
+      `*[name*="${selector}" i]`,
+      selector
+    ];
+    
+    for (const sel of selectors) {
+      try {
+        await page.locator(sel).fill(value);
+        await page.waitForTimeout(500); // Small delay between fills
+        return; // Exit if successful
+      } catch (error) {
+        continue; // Try next selector
+      }
+    }
+    // If no selector worked, log for debugging
+    console.log(`Could not fill field with selector: ${selector}`);
+  }
+
+  private async fillTextarea(page: Page, selector: string, value: string) {
+    if (!value) return;
+    
+    const selectors = [
+      `textarea[name*="${selector}" i]`,
+      `textarea[id*="${selector}" i]`,
+      `textarea${selector}`,
+      `*[name*="${selector}" i]`,
+      selector
+    ];
+    
+    for (const sel of selectors) {
+      try {
+        await page.locator(sel).fill(value);
+        await page.waitForTimeout(500);
+        return;
+      } catch (error) {
+        continue;
+      }
+    }
+  }
+
+  private async clickCheckbox(page: Page, selector: string) {
+    const selectors = [
+      `input[type="checkbox"][name*="${selector}" i]`,
+      `input[type="checkbox"]#${selector}`,
+      `input[type="checkbox"][data-qa="${selector}"]`,
+      `*[name*="${selector}" i]`,
+      selector
+    ];
+    
+    for (const sel of selectors) {
+      try {
+        await page.locator(sel).click();
+        await page.waitForTimeout(500);
+        return;
+      } catch (error) {
+        continue;
+      }
+    }
+  }
+
+  private async selectOption(page: Page, selector: string, value: string) {
+    const selectors = [
+      `select[name*="${selector}" i]`,
+      `select#${selector}`,
+      `select[data-qa="${selector}"]`,
+      `select[name="${selector}"]`,
+      selector
+    ];
+    
+    for (const sel of selectors) {
+      try {
+        await page.locator(sel).selectOption(value);
+        await page.waitForTimeout(500);
+        return;
+      } catch (error) {
+        continue;
+      }
+    }
+  }
+
+  private async uploadResume(page: Page, resumePath: string) {
+    // Look for file upload elements
+    const fileInputs = await page.locator('input[type="file"]').all();
+    
+    if (fileInputs.length > 0) {
+      // Upload to the first file input we find
+      await fileInputs[0].setInputFiles(resumePath);
+      await page.waitForTimeout(2000); // Wait for upload to process
+    } else {
+      console.log('No file upload field found');
+    }
+  }
+
+  private async submitForm(page: Page) {
+    // Try different submit button selectors
+    const submitSelectors = [
+      'button[type="submit"]',
+      'input[type="submit"]',
+      'button:has-text("submit" i)',
+      'button:has-text("apply" i)',
+      'button:has-text("next" i)',
+      '[data-qa="submit"]',
+      '[data-test="submit"]',
+      '.apply-button',
+      '.submit-button'
+    ];
+    
+    for (const selector of submitSelectors) {
+      try {
+        const element = page.locator(selector);
+        const isVisible = await element.isVisible();
+        
+        if (isVisible) {
+          await element.click();
+          await page.waitForTimeout(1000);
+          return;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+    
+    throw new Error('Could not find submit button');
+  }
+
+  private async checkSubmissionSuccess(page: Page): Promise<boolean> {
+    // Check for common success indicators
+    const successIndicators = [
+      'application.*submitted',
+      'thank you for applying',
+      'application received',
+      'we have received your application'
+    ];
+    
+    const pageContent = await page.content();
+    
+    for (const indicator of successIndicators) {
+      const regex = new RegExp(indicator, 'i');
+      if (regex.test(pageContent)) {
+        return true;
+      }
+    }
+    
+    // Check for common success URLs
+    const successUrls = [
+      /\/application\/success/,
+      /\/thank-you/,
+      /\/confirmation/,
+      /apply\/done/,
+      /apply\/success/
+    ];
+    
+    const currentUrl = page.url();
+    for (const urlPattern of successUrls) {
+      if (urlPattern.test(currentUrl)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  private generateCoverLetter(profileData: any): string {
+    // Generate a personalized cover letter based on profile data
+    const coverLetter = `Dear Hiring Manager,
+
+I am writing to express my strong interest in the position. With my background in ${profileData.skills_and_qualifications.technical_skills.slice(0, 3).join(', ')}, I am confident that I would be a valuable addition to your team.
+
+In my role at ${profileData.employment_history[0]?.employer_name || 'my previous company'}, I ${profileData.employment_history[0]?.responsibilities[0] || 'demonstrated expertise in my field'}. This experience, combined with my ${profileData.skills_and_qualifications.business_and_product_skills[0] || 'professional skills'}, has prepared me well for this opportunity.
+
+I am particularly drawn to this position because of [specific reason related to the job/company]. I am excited about the possibility of contributing to your team and growing professionally within your organization.
+
+Thank you for considering my application. I look forward to discussing how my skills and experience align with your needs.
+
+Sincerely,
+${profileData.personal_information.full_name}`;
+
+    return coverLetter;
+  }
+}
+
+// Singleton instance
+let playwrightService: PlaywrightApplicationService | null = null;
+
+export const getPlaywrightService = (): PlaywrightApplicationService => {
+  if (!playwrightService) {
+    playwrightService = new PlaywrightApplicationService();
+  }
+  return playwrightService;
+};

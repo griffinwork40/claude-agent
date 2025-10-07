@@ -1,0 +1,56 @@
+{
+  "reference": "This system uses the existing griffin.json file from your resume project as the primary data source",
+  "note": "See /Users/griffinlong/Projects/personal_projects/resume/griffin.json for the actual structure",
+  "applicationStrategy": {
+    "jobCategories": {
+      "highPriority": [
+        "AI/ML Specialist",
+        "Marketing Technology Specialist", 
+        "Product Manager",
+        "Technical Consultant",
+        "Content Creator/Manager",
+        "Business Development",
+        "Customer Success Manager",
+        "Marketing Coordinator",
+        "Technical Writer",
+        "Freelance/Contract Roles"
+      ],
+      "mediumPriority": [
+        "Junior Developer (AI/automation focus)",
+        "UI/UX Designer",
+        "Operations Specialist",
+        "Sales Representative (tech)",
+        "Project Coordinator",
+        "Social Media Manager"
+      ],
+      "avoid": [
+        "Senior/Lead Developer",
+        "Traditional software engineering",
+        "Data Science (advanced math)",
+        "DevOps/Infrastructure",
+        "Embedded systems"
+      ]
+    },
+    "primarySkills": [
+      "AI Tools (ChatGPT, Claude, DALL-E, Gemini)",
+      "Prompt Engineering",
+      "Marketing Automation",
+      "Content Creation & Strategy",
+      "SaaS/Product Development",
+      "Client Management",
+      "Workflow Automation",
+      "No-Code Solutions",
+      "Technical Consulting",
+      "Entrepreneurship"
+    ],
+    "applicationEmphasis": [
+      "Proven experience building AI-powered SaaS products",
+      "Client-facing experience and communication skills",
+      "Entrepreneurial background and startup experience",
+      "Ability to bridge technical and business requirements",
+      "Track record of delivering real business value with AI tools",
+      "Experience with modern web technologies and APIs",
+      "Strong content creation and marketing skills"
+    ]
+  }
+}

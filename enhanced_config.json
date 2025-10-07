@@ -1,0 +1,108 @@
+{
+  "agentConfiguration": {
+    "resumeProjectPath": "/Users/griffinlong/Projects/personal_projects/resume",
+    "profileDataSource": "griffin.json",
+    "resumeFilePath": "{{griffin.json.resume_location}}",
+    "applicationRules": {
+      "qualityOverQuantity": true,
+      "respectRateLimits": true,
+      "userConsentRequired": true,
+      "accurateDataOnly": true
+    }
+  },
+  "jobSearchParameters": {
+    "highPriorityCategories": [
+      "AI/ML Specialist",
+      "Marketing Technology Specialist",
+      "Product Manager", 
+      "Technical Consultant",
+      "Content Creator/Manager",
+      "Business Development",
+      "Customer Success Manager",
+      "Marketing Coordinator",
+      "Technical Writer",
+      "Freelance/Contract Roles"
+    ],
+    "mediumPriorityCategories": [
+      "Junior Developer (AI/automation focus)",
+      "UI/UX Designer", 
+      "Operations Specialist",
+      "Sales Representative (tech)",
+      "Project Coordinator",
+      "Social Media Manager"
+    ],
+    "avoidCategories": [
+      "Senior/Lead Developer",
+      "Traditional software engineering",
+      "Data Science (advanced math)",
+      "DevOps/Infrastructure",
+      "Embedded systems"
+    ],
+    "searchKeywords": [
+      "AI specialist",
+      "Marketing technology",
+      "Product manager", 
+      "Technical consultant",
+      "Content manager",
+      "Business development",
+      "Customer success",
+      "Marketing coordinator",
+      "Technical writer",
+      "Automation specialist"
+    ]
+  },
+  "applicationPreferences": {
+    "maxApplicationsPerDay": 10,
+    "applyOnlyToPrequalifiedJobs": true,
+    "prioritizeEasyApply": true,
+    "avoidCompaniesList": [],
+    "applyToAllAtCompaniesList": []
+  },
+  "formFillingRules": {
+    "useExactDataFromProfile": true,
+    "highlightPrimarySkills": [
+      "AI Tools (ChatGPT, Claude, DALL-E, Gemini)",
+      "Prompt Engineering", 
+      "Marketing Automation",
+      "Content Creation & Strategy",
+      "SaaS/Product Development",
+      "Client Management",
+      "Workflow Automation",
+      "No-Code Solutions",
+      "Technical Consulting",
+      "Entrepreneurship"
+    ],
+    "emphasizeInApplications": [
+      "Proven experience building AI-powered SaaS products",
+      "Client-facing experience and communication skills", 
+      "Entrepreneurial background and startup experience",
+      "Ability to bridge technical and business requirements",
+      "Track record of delivering real business value with AI tools",
+      "Experience with modern web technologies and APIs",
+      "Strong content creation and marketing skills"
+    ]
+  },
+  "subagentConfiguration": {
+    "jobSearchAgent": {
+      "enabled": true,
+      "platforms": ["LinkedIn", "Indeed", "Glassdoor", "Other job boards"],
+      "searchFrequency": "daily",
+      "resultsLimit": 50
+    },
+    "jobCurationAgent": {
+      "enabled": true,
+      "scoringMethod": "composite",
+      "relevanceThreshold": 0.7
+    },
+    "userInteractionAgent": {
+      "enabled": true,
+      "presentationFormat": "structured",
+      "approvalRequired": true
+    },
+    "applicationAgent": {
+      "enabled": true,
+      "autoSubmit": false,
+      "requiresFinalReview": true
+    }
+  }
+}
