@@ -4,24 +4,40 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { Message } from '@/types';
-import { runClaudeAgent } from '@/lib/claude-agent';
+import { runClaudeAgent, runClaudeAgentStream } from '@/lib/claude-agent';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Use service role key for backend operations
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: NextRequest) {
+  console.log('=== Chat API Request Started ===');
+  
   try {
+    console.log('Checking authentication...');
     const routeClient = createRouteHandlerClient({ cookies });
     const { data: { session } } = await routeClient.auth.getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { message } = await request.json();
+    
+    if (!session) {
+      console.error('❌ Unauthorized: No session found');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.log('✓ User authenticated:', session.user.id);
+    
+    const { message, sessionId } = await request.json();
+    console.log('Request data:', { 
+      messageLength: message?.length, 
+      sessionId,
+      hasMessage: !!message 
+    });
     
     if (!message) {
+      console.error('❌ No message provided');
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
     // Store user message in database
+    console.log('Saving user message to database...');
     const { data: userMessage, error: userMessageError } = await supabase
       .from('messages')
       .insert([{ 
@@ -34,38 +50,139 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (userMessageError) {
-      console.error('Error saving user message:', userMessageError);
+      console.error('❌ Error saving user message:', userMessageError);
       return NextResponse.json({ error: 'Failed to save message' }, { status: 500 });
     }
+    console.log('✓ User message saved:', userMessage.id);
 
-    // Run Claude Agent to process the message
-    const agentResponse = await runClaudeAgent(message, userMessage.id);
-
-    // Store bot response in database
-    const { data: botMessage, error: botMessageError } = await supabase
-      .from('messages')
-      .insert([{
-        content: agentResponse.content,
-        sender: 'bot',
-        job_opportunity: agentResponse.jobOpportunity || null,
-        created_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-
-    if (botMessageError) {
-      console.error('Error saving bot message:', botMessageError);
-      return NextResponse.json({ error: 'Failed to save bot response' }, { status: 500 });
+    // Run Claude Agent with streaming
+    console.log('Starting Claude agent stream...');
+    let agentSessionId: string;
+    let stream: ReadableStream;
+    
+    try {
+      const result = await runClaudeAgentStream(
+        message, 
+        session.user.id, 
+        sessionId
+      );
+      agentSessionId = result.sessionId;
+      stream = result.stream;
+      console.log('✓ Agent stream started, sessionId:', agentSessionId);
+    } catch (error) {
+      console.error('❌ Failed to start agent stream:', error);
+      return NextResponse.json({ 
+        error: 'Failed to start agent stream',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      }, { status: 500 });
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: botMessage,
-      jobOpportunity: agentResponse.jobOpportunity 
+    // Create a readable stream for Server-Sent Events
+    const encoder = new TextEncoder();
+    let fullResponse = '';
+
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        console.log('Starting stream processing...');
+        try {
+          const reader = stream.getReader();
+          let chunkCount = 0;
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              console.log('✓ Stream completed, total chunks:', chunkCount);
+              console.log('Saving complete response to database...');
+              
+              // Store the complete response in database
+              const { data: botMessage, error: botMessageError } = await supabase
+                .from('messages')
+                .insert([{
+                  content: fullResponse,
+                  sender: 'bot',
+                  user_id: session.user.id,
+                  created_at: new Date().toISOString()
+                }])
+                .select()
+                .single();
+
+              if (botMessageError) {
+                console.error('❌ Error saving bot message:', botMessageError);
+              } else {
+                console.log('✓ Bot message saved:', botMessage.id);
+              }
+
+              // Send final event with session ID
+              const finalEvent = `data: ${JSON.stringify({ 
+                type: 'complete', 
+                sessionId: agentSessionId,
+                messageId: botMessage?.id 
+              })}\n\n`;
+              controller.enqueue(encoder.encode(finalEvent));
+              controller.close();
+              console.log('✓ Stream closed successfully');
+              break;
+            }
+
+            // Decode the chunk and add to full response
+            const chunk = new TextDecoder().decode(value);
+            fullResponse += chunk;
+            chunkCount++;
+
+            // Send chunk as SSE
+            const event = `data: ${JSON.stringify({ 
+              type: 'chunk', 
+              content: chunk 
+            })}\n\n`;
+            controller.enqueue(encoder.encode(event));
+            
+            if (chunkCount % 10 === 0) {
+              console.log(`Processed ${chunkCount} chunks, response length: ${fullResponse.length}`);
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error in streaming:', error);
+          console.error('Streaming error details:', {
+            message: error.message,
+            stack: error.stack,
+            fullResponseLength: fullResponse.length,
+            chunkCount
+          });
+          
+          const errorEvent = `data: ${JSON.stringify({ 
+            type: 'error', 
+            error: `Streaming error: ${error.message}`,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+          })}\n\n`;
+          controller.enqueue(encoder.encode(errorEvent));
+          controller.close();
+        }
+      }
+    });
+
+    console.log('✓ Returning streaming response');
+    return new Response(readableStream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
     });
   } catch (error) {
-    console.error('Error in chat API:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('❌ Error in chat API:', error);
+    console.error('API Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }, { status: 500 });
   }
 }
 

@@ -95,6 +95,29 @@ export default function AgentPage() {
     }
   }
 
+  // Function to refresh messages from the server
+  async function refreshMessages() {
+    try {
+      const response = await fetch('/api/chat');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          // Convert server messages to our Message format
+          const serverMessages: Message[] = data.data.map((msg: any) => ({
+            id: msg.id,
+            agentId: selectedAgent?.id || 'default',
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.content,
+            createdAt: msg.created_at,
+          }));
+          setMessages(serverMessages);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing messages:', error);
+    }
+  }
+
   function handleCloseBottomSheet() {
     setIsBottomSheetOpen(false);
   }
@@ -144,7 +167,7 @@ export default function AgentPage() {
             {activeTab === 'workspace' ? (
               <BrowserPane agent={selectedAgent} isMobile />
             ) : (
-              <ChatPane agent={selectedAgent} messages={messages} onSend={handleSend} isMobile />
+              <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} isMobile />
             )}
           </div>
         </BottomSheet>
@@ -211,7 +234,7 @@ export default function AgentPage() {
             {activeTab === 'workspace' ? (
               <BrowserPane agent={selectedAgent} />
             ) : (
-              <ChatPane agent={selectedAgent} messages={messages} onSend={handleSend} />
+              <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} />
             )}
           </div>
         </div>
@@ -246,7 +269,7 @@ export default function AgentPage() {
           maxWidth={600}
           position="right"
         >
-          <ChatPane agent={selectedAgent} messages={messages} onSend={handleSend} />
+          <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} />
         </ResizablePane>
       </div>
     </>
