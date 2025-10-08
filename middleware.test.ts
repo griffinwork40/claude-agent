@@ -8,6 +8,9 @@ vi.mock('@supabase/auth-helpers-nextjs', async () => {
     createServerClient: vi.fn(() => ({
       auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
     })),
+    createMiddlewareClient: vi.fn(() => ({
+      auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
+    })),
   };
 });
 

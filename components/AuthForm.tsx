@@ -65,8 +65,9 @@ export default function AuthForm({ mode }: AuthFormProps) {
       </h1>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="text-sm text-gray-700">Email</label>
+          <label htmlFor="email" className="text-sm text-gray-700">Email</label>
           <input
+            id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -75,8 +76,9 @@ export default function AuthForm({ mode }: AuthFormProps) {
           />
         </div>
         <div>
-          <label className="text-sm text-gray-700">Password</label>
+          <label htmlFor="password" className="text-sm text-gray-700">Password</label>
           <input
+            id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
