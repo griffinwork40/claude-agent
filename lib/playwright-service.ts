@@ -198,11 +198,16 @@ export class PlaywrightApplicationService {
 
     // Handle availability and legal questions
     const positionAndAvailability = toRecord(profileData.position_and_availability);
-    const availability =
-      typeof positionAndAvailability.availability === 'string'
-        ? positionAndAvailability.availability
-        : '';
-    if (availability.includes('full-time')) {
+    const availabilityValue = positionAndAvailability.availability;
+    const availabilityOptions =
+      typeof availabilityValue === 'string'
+        ? [availabilityValue]
+        : toStringArray(availabilityValue);
+    if (
+      availabilityOptions.some((option) =>
+        option.toLowerCase().includes('full-time')
+      )
+    ) {
       await this.clickCheckbox(page, '[name*="fulltime" i]');
     }
 
