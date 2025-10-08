@@ -9,7 +9,6 @@ describe('chat route guards', () => {
   it('rejects unauthenticated POST', async () => {
     // @ts-expect-error minimal request mock
     const res = await route.POST({ json: async () => ({ message: 'hi' }) });
-    // @ts-expect-error NextResponse
     expect(res.status).toBe(401);
   });
 });

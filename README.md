@@ -90,4 +90,4 @@ The system uses the existing `griffin.json` file from your resume project as the
 
 - If applications are failing, check that your resume and cover letter are accessible
 - If searches are returning no results, verify your location and job preferences
-- For CAPTCHA issues, the system will notify you to manually complete the challenge
+- For CAPTCHA issues, the system will notify you to manually complete the challenge# Test comment
