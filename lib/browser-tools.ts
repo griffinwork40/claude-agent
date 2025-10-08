@@ -335,7 +335,7 @@ export class BrowserJobService {
 
   private async fillLinkedInEasyApply(page: Page, userProfile: Record<string, unknown>) {
     // Fill personal information
-    const personalInfo = userProfile.personal_info as Record<string, unknown> || {};
+    const personalInfo = (userProfile.personal_info as Record<string, unknown>) ?? {};
     const fullName = (personalInfo.name as string) || '';
     const nameParts = fullName.split(' ');
     await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
@@ -355,7 +355,7 @@ export class BrowserJobService {
     }
     
     // Handle sponsorship
-    const workEligibility = userProfile.work_eligibility as Record<string, unknown> || {};
+    const workEligibility = (userProfile.work_eligibility as Record<string, unknown>) ?? {};
     const sponsorshipCheckbox = await page.locator('input[name*="sponsorship"], input[name*="visa"]').first();
     if (await sponsorshipCheckbox.isVisible() && !workEligibility.require_sponsorship) {
       await sponsorshipCheckbox.check();
@@ -364,7 +364,7 @@ export class BrowserJobService {
 
   private async fillGeneralApplicationForm(page: Page, userProfile: Record<string, unknown>) {
     // Generic form filling for non-LinkedIn sites
-    const personalInfo = userProfile.personal_info as Record<string, unknown> || {};
+    const personalInfo = (userProfile.personal_info as Record<string, unknown>) ?? {};
     const fullName = (personalInfo.name as string) || '';
     const nameParts = fullName.split(' ');
     await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');

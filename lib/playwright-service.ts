@@ -97,7 +97,7 @@ export class PlaywrightApplicationService {
 
   private async fillApplicationForm(page: Page, profileData: Record<string, unknown>) {
     // Fill personal information fields
-    const personalInfo = profileData.personal_information as Record<string, unknown> || {};
+    const personalInfo = (profileData.personal_information as Record<string, unknown>) ?? {};
     const fullName = (personalInfo.full_name as string) || '';
     const nameParts = fullName.split(' ');
     await this.fillField(page, 'firstName', nameParts[0] || '');
@@ -120,7 +120,7 @@ export class PlaywrightApplicationService {
     }
     
     // Handle other common fields
-    const additionalInfo = profileData.additional_information as Record<string, unknown> || {};
+    const additionalInfo = (profileData.additional_information as Record<string, unknown>) ?? {};
     await this.fillField(page, 'summary', (additionalInfo.about as string) || '');
     await this.fillTextarea(page, '[name*="coverletter" i]', this.generateCoverLetter(profileData));
     
@@ -142,7 +142,7 @@ export class PlaywrightApplicationService {
     }
     
     // Handle skill fields (if any)
-    const skillsAndQuals = profileData.skills_and_qualifications as Record<string, unknown> || {};
+    const skillsAndQuals = (profileData.skills_and_qualifications as Record<string, unknown>) ?? {};
     const technicalSkills = (skillsAndQuals.technical_skills as string[]) || [];
     if (technicalSkills.length > 0) {
       const skillsString = technicalSkills.join(', ');
@@ -150,13 +150,13 @@ export class PlaywrightApplicationService {
     }
     
     // Handle availability and legal questions
-    const positionAndAvailability = profileData.position_and_availability as Record<string, unknown> || {};
+    const positionAndAvailability = (profileData.position_and_availability as Record<string, unknown>) ?? {};
     const availability = (positionAndAvailability.availability as string) || '';
     if (availability.includes('full-time')) {
       await this.clickCheckbox(page, '[name*="fulltime" i]');
     }
     
-    const workEligibility = profileData.work_eligibility_and_legal as Record<string, unknown> || {};
+    const workEligibility = (profileData.work_eligibility_and_legal as Record<string, unknown>) ?? {};
     if (workEligibility.legally_authorized_to_work_in_us) {
       await this.clickCheckbox(page, '[name*="authorized" i]');
     }
@@ -166,7 +166,7 @@ export class PlaywrightApplicationService {
     }
     
     // Handle demographic questions
-    const demographicQuestions = profileData.demographic_questions as Record<string, unknown> || {};
+    const demographicQuestions = (profileData.demographic_questions as Record<string, unknown>) ?? {};
     const genderIdentity = demographicQuestions.gender_identity as string;
     if (genderIdentity) {
       await this.selectOption(page, '[name*="gender" i]', genderIdentity);
@@ -345,8 +345,8 @@ export class PlaywrightApplicationService {
 
   private generateCoverLetter(profileData: Record<string, unknown>): string {
     // Generate a personalized cover letter based on profile data
-    const personalInfo = profileData.personal_information as Record<string, unknown> || {};
-    const skillsAndQuals = profileData.skills_and_qualifications as Record<string, unknown> || {};
+    const personalInfo = (profileData.personal_information as Record<string, unknown>) ?? {};
+    const skillsAndQuals = (profileData.skills_and_qualifications as Record<string, unknown>) ?? {};
     const employmentHistory = (profileData.employment_history as Array<Record<string, unknown>>) || [];
     
     const technicalSkills = (skillsAndQuals.technical_skills as string[]) || [];
