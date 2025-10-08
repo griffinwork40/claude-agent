@@ -345,18 +345,26 @@ export class PlaywrightApplicationService {
 
   private generateCoverLetter(profileData: Record<string, unknown>): string {
     // Generate a personalized cover letter based on profile data
+    const personalInfo = profileData.personal_information as Record<string, unknown> || {};
+    const skillsAndQuals = profileData.skills_and_qualifications as Record<string, unknown> || {};
+    const employmentHistory = (profileData.employment_history as Array<Record<string, unknown>>) || [];
+    
+    const technicalSkills = (skillsAndQuals.technical_skills as string[]) || [];
+    const businessSkills = (skillsAndQuals.business_and_product_skills as string[]) || [];
+    const fullName = (personalInfo.full_name as string) || '';
+    
     const coverLetter = `Dear Hiring Manager,
 
-I am writing to express my strong interest in the position. With my background in ${profileData.skills_and_qualifications.technical_skills.slice(0, 3).join(', ')}, I am confident that I would be a valuable addition to your team.
+I am writing to express my strong interest in the position. With my background in ${technicalSkills.slice(0, 3).join(', ')}, I am confident that I would be a valuable addition to your team.
 
-In my role at ${profileData.employment_history[0]?.employer_name || 'my previous company'}, I ${profileData.employment_history[0]?.responsibilities[0] || 'demonstrated expertise in my field'}. This experience, combined with my ${profileData.skills_and_qualifications.business_and_product_skills[0] || 'professional skills'}, has prepared me well for this opportunity.
+In my role at ${employmentHistory[0]?.employer_name as string || 'my previous company'}, I ${(employmentHistory[0]?.responsibilities as string[])?.[0] || 'demonstrated expertise in my field'}. This experience, combined with my ${businessSkills[0] || 'professional skills'}, has prepared me well for this opportunity.
 
 I am particularly drawn to this position because of [specific reason related to the job/company]. I am excited about the possibility of contributing to your team and growing professionally within your organization.
 
 Thank you for considering my application. I look forward to discussing how my skills and experience align with your needs.
 
 Sincerely,
-${profileData.personal_information.full_name}`;
+${fullName}`;
 
     return coverLetter;
   }
