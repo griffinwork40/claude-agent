@@ -2,7 +2,7 @@
 // Purpose: Reusable Auth form for email/password + OAuth buttons
 "use client";
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
@@ -41,7 +41,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
     }
   }
 
-  async function handleOAuth(provider: 'google' | 'github') {
+  async function handleOAuth(provider: 'google' | 'github' | 'linkedin') {
     setLoading(true);
     setError(null);
     try {
@@ -63,8 +63,9 @@ export default function AuthForm({ mode }: AuthFormProps) {
       </h1>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="text-sm text-gray-700">Email</label>
+          <label htmlFor="email" className="text-sm text-gray-700">Email</label>
           <input
+            id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -73,8 +74,9 @@ export default function AuthForm({ mode }: AuthFormProps) {
           />
         </div>
         <div>
-          <label className="text-sm text-gray-700">Password</label>
+          <label htmlFor="password" className="text-sm text-gray-700">Password</label>
           <input
+            id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -106,6 +108,13 @@ export default function AuthForm({ mode }: AuthFormProps) {
           className="w-full border py-2 rounded-md hover:bg-gray-50"
         >
           Continue with GitHub
+        </button>
+        <button
+          onClick={() => handleOAuth('linkedin')}
+          disabled={loading}
+          className="w-full border py-2 rounded-md hover:bg-gray-50"
+        >
+          Continue with LinkedIn
         </button>
       </div>
     </div>
