@@ -97,64 +97,79 @@ export class PlaywrightApplicationService {
 
   private async fillApplicationForm(page: Page, profileData: Record<string, unknown>) {
     // Fill personal information fields
-    await this.fillField(page, 'firstName', profileData.personal_information.full_name.split(' ')[0]);
-    await this.fillField(page, 'lastName', profileData.personal_information.full_name.split(' ').slice(1).join(' '));
-    await this.fillField(page, 'email', profileData.personal_information.email);
-    await this.fillField(page, 'phone', profileData.personal_information.phone);
+    const personalInfo = profileData.personal_information as Record<string, unknown> || {};
+    const fullName = (personalInfo.full_name as string) || '';
+    const nameParts = fullName.split(' ');
+    await this.fillField(page, 'firstName', nameParts[0] || '');
+    await this.fillField(page, 'lastName', nameParts.slice(1).join(' ') || '');
+    await this.fillField(page, 'email', (personalInfo.email as string) || '');
+    await this.fillField(page, 'phone', (personalInfo.phone as string) || '');
     
     // For more complex selectors, we need to try multiple common selectors
-    await this.fillField(page, '[data-qa="email"]', profileData.personal_information.email);
-    await this.fillField(page, '[data-test="email"]', profileData.personal_information.email);
-    await this.fillField(page, 'input[name*="email" i]', profileData.personal_information.email);
+    await this.fillField(page, '[data-qa="email"]', (personalInfo.email as string) || '');
+    await this.fillField(page, '[data-test="email"]', (personalInfo.email as string) || '');
+    await this.fillField(page, 'input[name*="email" i]', (personalInfo.email as string) || '');
     
     // Fill location
-    if (profileData.personal_information.address) {
-      const addressParts = profileData.personal_information.address.split(',');
-      await this.fillField(page, 'city', addressParts[0]?.trim());
-      await this.fillField(page, 'state', addressParts[1]?.trim());
-      await this.fillField(page, 'zip', addressParts[2]?.trim());
+    const address = (personalInfo.address as string) || '';
+    if (address) {
+      const addressParts = address.split(',');
+      await this.fillField(page, 'city', addressParts[0]?.trim() || '');
+      await this.fillField(page, 'state', addressParts[1]?.trim() || '');
+      await this.fillField(page, 'zip', addressParts[2]?.trim() || '');
     }
     
     // Handle other common fields
-    await this.fillField(page, 'summary', profileData.additional_information.about || '');
+    const additionalInfo = profileData.additional_information as Record<string, unknown> || {};
+    await this.fillField(page, 'summary', (additionalInfo.about as string) || '');
     await this.fillTextarea(page, '[name*="coverletter" i]', this.generateCoverLetter(profileData));
     
     // Handle work experience
-    for (const [index, job] of profileData.employment_history.entries()) {
-      await this.fillField(page, `[name*="company" i][data-index="${index}"]`, job.employer_name);
-      await this.fillField(page, `[name*="title" i][data-index="${index}"]`, job.job_title);
-      await this.fillTextarea(page, `[name*="description" i][data-index="${index}"]`, job.responsibilities.join('\n'));
+    const employmentHistory = (profileData.employment_history as Array<Record<string, unknown>>) || [];
+    for (const [index, job] of employmentHistory.entries()) {
+      await this.fillField(page, `[name*="company" i][data-index="${index}"]`, (job.employer_name as string) || '');
+      await this.fillField(page, `[name*="title" i][data-index="${index}"]`, (job.job_title as string) || '');
+      const responsibilities = (job.responsibilities as string[]) || [];
+      await this.fillTextarea(page, `[name*="description" i][data-index="${index}"]`, responsibilities.join('\n'));
     }
     
     // Handle education
-    for (const [index, education] of profileData.education.entries()) {
-      await this.fillField(page, `[name*="school" i][data-index="${index}"]`, education.institution);
-      await this.fillField(page, `[name*="degree" i][data-index="${index}"]`, education.degree);
-      await this.fillField(page, `[name*="field" i][data-index="${index}"]`, education.major);
+    const education = (profileData.education as Array<Record<string, unknown>>) || [];
+    for (const [index, edu] of education.entries()) {
+      await this.fillField(page, `[name*="school" i][data-index="${index}"]`, (edu.institution as string) || '');
+      await this.fillField(page, `[name*="degree" i][data-index="${index}"]`, (edu.degree as string) || '');
+      await this.fillField(page, `[name*="field" i][data-index="${index}"]`, (edu.major as string) || '');
     }
     
     // Handle skill fields (if any)
-    if (profileData.skills_and_qualifications.technical_skills) {
-      const skillsString = profileData.skills_and_qualifications.technical_skills.join(', ');
+    const skillsAndQuals = profileData.skills_and_qualifications as Record<string, unknown> || {};
+    const technicalSkills = (skillsAndQuals.technical_skills as string[]) || [];
+    if (technicalSkills.length > 0) {
+      const skillsString = technicalSkills.join(', ');
       await this.fillTextarea(page, '[name*="skills" i]', skillsString);
     }
     
     // Handle availability and legal questions
-    if (profileData.position_and_availability.availability.includes('full-time')) {
+    const positionAndAvailability = profileData.position_and_availability as Record<string, unknown> || {};
+    const availability = (positionAndAvailability.availability as string) || '';
+    if (availability.includes('full-time')) {
       await this.clickCheckbox(page, '[name*="fulltime" i]');
     }
     
-    if (profileData.work_eligibility_and_legal.legally_authorized_to_work_in_us) {
+    const workEligibility = profileData.work_eligibility_and_legal as Record<string, unknown> || {};
+    if (workEligibility.legally_authorized_to_work_in_us) {
       await this.clickCheckbox(page, '[name*="authorized" i]');
     }
     
-    if (!profileData.work_eligibility_and_legal.require_sponsorship) {
+    if (!workEligibility.require_sponsorship) {
       await this.clickCheckbox(page, '[name*="sponsorship" i]');
     }
     
     // Handle demographic questions
-    if (profileData.demographic_questions.gender_identity) {
-      await this.selectOption(page, '[name*="gender" i]', profileData.demographic_questions.gender_identity);
+    const demographicQuestions = profileData.demographic_questions as Record<string, unknown> || {};
+    const genderIdentity = demographicQuestions.gender_identity as string;
+    if (genderIdentity) {
+      await this.selectOption(page, '[name*="gender" i]', genderIdentity);
     }
   }
 
