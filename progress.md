@@ -17,3 +17,9 @@
 
  - 2025-10-08: Disabled broken OpenDyslexic @font-face (bad .woff2 files). Will re-enable with valid binaries. Overall completion: 37%.
 
+- 2025-10-08: Fixed desktop layout for /agent page - replaced rigid CSS grid with flexible flexbox layout, removed extra padding/gaps that caused overflow, and ensured proper border styling for seamless three-pane experience. Overall completion: 39%.
+
+- 2025-10-08: Fixed root layout constraint issue - created LayoutWrapper component to conditionally apply max-width container only on non-agent pages, allowing /agent to use full viewport width. Standardized header height to 4rem (h-16) across all breakpoints. Overall completion: 42%.
+
+- 2025-10-08: Added resizable panes to /agent desktop layout - created ResizablePane component with drag handles allowing users to adjust the width of left sidebar (200-500px) and right chat pane (300-600px). Includes hover/active visual feedback and smooth dragging UX. Overall completion: 45%.
+

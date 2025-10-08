@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Agent, Message } from '@/components/agents/types';
 import { AgentList, BrowserPane, ChatPane, BottomSheet } from '@/components/agents';
 import { mockAgents, mockMessages } from '@/components/agents/mockData';
+import { ResizablePane } from '@/components/ResizablePane';
 
 export default function AgentPage() {
   const search = useSearchParams();
@@ -56,7 +57,7 @@ export default function AgentPage() {
   return (
     <>
       {/* Mobile Layout (< 768px) */}
-      <div className="md:hidden h-[calc(100dvh-64px)] bg-[var(--bg)] text-[var(--fg)]">
+      <div className="md:hidden h-[calc(100dvh-4rem)] bg-[var(--bg)] text-[var(--fg)]">
         <AgentList selectedAgentId={selectedAgentId} onSelect={handleSelect} />
         
         <BottomSheet 
@@ -100,7 +101,7 @@ export default function AgentPage() {
       </div>
 
       {/* Tablet Layout (768px - 1024px) */}
-      <div className="hidden md:flex lg:hidden h-[calc(100vh-64px)] bg-[var(--bg)] text-[var(--fg)]">
+      <div className="hidden md:flex lg:hidden h-[calc(100vh-4rem)] bg-[var(--bg)] text-[var(--fg)]">
         {/* Sidebar with toggle */}
         <div className={`transition-all duration-300 ${isSidebarOpen ? 'w-[280px]' : 'w-0'} overflow-hidden`}>
           <AgentList selectedAgentId={selectedAgentId} onSelect={handleSelect} />
@@ -162,10 +163,31 @@ export default function AgentPage() {
       </div>
 
       {/* Desktop Layout (> 1024px) */}
-      <div className="hidden lg:grid lg:grid-cols-[280px_minmax(400px,1fr)_380px] gap-3 p-3 h-[calc(100vh-64px)] bg-[var(--bg)] text-[var(--fg)]">
-        <AgentList selectedAgentId={selectedAgentId} onSelect={handleSelect} />
-        <BrowserPane agent={selectedAgent} />
-        <ChatPane agent={selectedAgent} messages={messages} onSend={handleSend} />
+      <div className="hidden lg:flex h-[calc(100vh-4rem)] bg-[var(--bg)] text-[var(--fg)] overflow-hidden">
+        {/* Left sidebar - resizable */}
+        <ResizablePane
+          defaultWidth={280}
+          minWidth={200}
+          maxWidth={500}
+          position="left"
+        >
+          <AgentList selectedAgentId={selectedAgentId} onSelect={handleSelect} />
+        </ResizablePane>
+        
+        {/* Center workspace - flexible, takes remaining space */}
+        <div className="flex-1 min-w-0">
+          <BrowserPane agent={selectedAgent} />
+        </div>
+        
+        {/* Right chat pane - resizable */}
+        <ResizablePane
+          defaultWidth={380}
+          minWidth={300}
+          maxWidth={600}
+          position="right"
+        >
+          <ChatPane agent={selectedAgent} messages={messages} onSend={handleSend} />
+        </ResizablePane>
       </div>
     </>
   );

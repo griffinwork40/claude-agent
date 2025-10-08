@@ -49,8 +49,8 @@ export function AgentList(props: AgentListProps) {
   const groups = useFilteredGroups(query);
 
   return (
-    <aside className="h-full overflow-y-auto border-r border-[var(--border)] md:pr-2 bg-[var(--bg)]">
-      <div className="p-3 md:p-2 sticky top-0 bg-[var(--bg)] z-10">
+    <aside className="h-full overflow-y-auto border-r-2 border-[var(--border)] bg-[var(--bg)]">
+      <div className="p-3 md:p-3 sticky top-0 bg-[var(--bg)] z-10">
         <div className="flex items-center gap-2">
           <input
             aria-label="Search agents"
@@ -68,7 +68,7 @@ export function AgentList(props: AgentListProps) {
         </div>
       </div>
 
-      <div className="px-3 md:px-2 pb-6 space-y-6">
+      <div className="px-3 pb-6 space-y-6">
         {(Object.keys(groups) as Array<Agent['status']>).map((status) => {
           const list = groups[status];
           if (list.length === 0) return null;

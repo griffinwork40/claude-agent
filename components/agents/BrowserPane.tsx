@@ -11,8 +11,8 @@ import { BrowserPaneProps } from './types';
  */
 export function BrowserPane({ agent, isMobile = false }: BrowserPaneProps) {
   return (
-    <section className={`h-full overflow-hidden ${!isMobile ? 'px-3' : ''}`}>
-      <div className={`h-full ${!isMobile ? 'rounded-lg' : ''} border-2 border-[var(--border)] bg-[var(--card)]`}>
+    <section className="h-full overflow-hidden">
+      <div className="h-full border-r-2 border-l-2 border-[var(--border)] bg-[var(--card)]">
         <div className="flex items-center justify-between px-4 py-2 border-b-2 border-[var(--border)]">
           <div className="flex items-center gap-2 text-sm text-[var(--fg)]">
             <span className="inline-flex items-center gap-2">
