@@ -355,18 +355,22 @@ export class BrowserJobService {
     }
     
     // Handle sponsorship
+    const workEligibility = userProfile.work_eligibility as Record<string, unknown> || {};
     const sponsorshipCheckbox = await page.locator('input[name*="sponsorship"], input[name*="visa"]').first();
-    if (await sponsorshipCheckbox.isVisible() && !userProfile.work_eligibility?.require_sponsorship) {
+    if (await sponsorshipCheckbox.isVisible() && !workEligibility.require_sponsorship) {
       await sponsorshipCheckbox.check();
     }
   }
 
   private async fillGeneralApplicationForm(page: Page, userProfile: Record<string, unknown>) {
     // Generic form filling for non-LinkedIn sites
-    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', userProfile.personal_info?.name?.split(' ')[0] || '');
-    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', userProfile.personal_info?.name?.split(' ').slice(1).join(' ') || '');
-    await this.fillField(page, 'input[name*="email"]', userProfile.personal_info?.email || '');
-    await this.fillField(page, 'input[name*="phone"]', userProfile.personal_info?.phone || '');
+    const personalInfo = userProfile.personal_info as Record<string, unknown> || {};
+    const fullName = (personalInfo.name as string) || '';
+    const nameParts = fullName.split(' ');
+    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
+    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
+    await this.fillField(page, 'input[name*="email"]', (personalInfo.email as string) || '');
+    await this.fillField(page, 'input[name*="phone"]', (personalInfo.phone as string) || '');
     
     // Try to submit
     const submitButton = await page.locator('button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply")').first();
