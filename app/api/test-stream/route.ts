@@ -1,8 +1,8 @@
 // app/api/test-stream/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   console.log('=== Testing Claude Agent Streaming ===');
   
   try {
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('Testing query function with streaming...');
-    const queryResult = query({
+    query({
       prompt: 'Hello, can you help me find a job?',
       options: {
         systemPrompt: 'You are a helpful job search assistant.',

@@ -25,7 +25,7 @@ export interface JobOpportunity {
   applied: boolean;
   applied_at?: string;
   status: 'discovered' | 'interested' | 'applied' | 'rejected';
-  raw_data?: any; // Original scraped data
+  raw_data?: Record<string, unknown>; // Original scraped data
   created_at: string;
 }
 
@@ -62,7 +62,7 @@ export interface UserProfile {
 export interface ToolUse {
   id: string;
   name: string;
-  input: Record<string, any>;
+  input: Record<string, unknown>;
 }
 
 export interface ToolResult {
@@ -74,7 +74,7 @@ export interface ToolResult {
 // Browser tool execution result
 export interface BrowserToolResult {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
   message?: string;
 }

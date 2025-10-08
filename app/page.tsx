@@ -1,5 +1,6 @@
 // app/page.tsx
 
+import Link from 'next/link';
 import { getSiteName } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -44,8 +45,8 @@ export default function EnlistLanding() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-readable text-[var(--fg)]/70">© {new Date().getFullYear()} Enlist. All rights reserved.</p>
           <nav className="flex items-center gap-4 text-sm">
-            <a href="/" className="hover:underline">Home</a>
-            <a href="/agent" className="hover:underline">Agents</a>
+            <Link href="/" className="hover:underline">Home</Link>
+            <Link href="/agent" className="hover:underline">Agents</Link>
             <a href="https://docs.example.com" className="hover:underline" target="_blank" rel="noreferrer">Docs</a>
           </nav>
         </div>

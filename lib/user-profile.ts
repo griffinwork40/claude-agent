@@ -1,7 +1,6 @@
 // lib/user-profile.ts
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
-import path from 'path';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -83,7 +82,7 @@ export async function importProfileFromFile(userId: string, filePath?: string): 
           ...(profileData.skills_and_qualifications?.business_and_product_skills || [])
         ],
         years_experience: calculateYearsExperience(profileData.employment_history || []),
-        previous_roles: (profileData.employment_history || []).map((job: any) => ({
+        previous_roles: (profileData.employment_history || []).map((job: Record<string, unknown>) => ({
           title: job.job_title || '',
           company: job.employer_name || '',
           duration: `${job.start_date || ''} - ${job.end_date || 'Present'}`
@@ -176,7 +175,7 @@ export async function getOrCreateUserProfile(userId: string): Promise<UserProfil
 }
 
 // Calculate years of experience from employment history
-function calculateYearsExperience(employmentHistory: any[]): number {
+function calculateYearsExperience(employmentHistory: Array<Record<string, unknown>>): number {
   if (!employmentHistory || employmentHistory.length === 0) return 0;
   
   let totalMonths = 0;

@@ -1,12 +1,10 @@
 // lib/playwright-service.ts
 import { chromium, Browser, Page } from 'playwright';
-import fs from 'fs/promises';
-import path from 'path';
 
 // Type definition for job application data
 interface JobApplicationData {
   url: string;
-  profileData: any; // This would come from griffin.json
+  profileData: Record<string, unknown>; // This would come from griffin.json
   resumePath: string;
 }
 
@@ -33,7 +31,7 @@ export class PlaywrightApplicationService {
     }
   }
 
-  async submitApplication(jobData: JobApplicationData): Promise<{ success: boolean; message: string; details?: any }> {
+  async submitApplication(jobData: JobApplicationData): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
     if (!this.browser) {
       throw new Error('Browser not initialized. Call initialize() first.');
     }
@@ -82,12 +80,13 @@ export class PlaywrightApplicationService {
           details: { url: jobData.url }
         };
       }
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('Error during application submission:', error);
       return {
         success: false,
-        message: `Application failed: ${error.message}`,
-        details: { url: jobData.url, error: error.message }
+        message: `Application failed: ${errorMessage}`,
+        details: { url: jobData.url, error: errorMessage }
       };
     } finally {
       if (page) {
@@ -96,7 +95,7 @@ export class PlaywrightApplicationService {
     }
   }
 
-  private async fillApplicationForm(page: Page, profileData: any) {
+  private async fillApplicationForm(page: Page, profileData: Record<string, unknown>) {
     // Fill personal information fields
     await this.fillField(page, 'firstName', profileData.personal_information.full_name.split(' ')[0]);
     await this.fillField(page, 'lastName', profileData.personal_information.full_name.split(' ').slice(1).join(' '));
@@ -177,7 +176,7 @@ export class PlaywrightApplicationService {
         await page.locator(sel).fill(value);
         await page.waitForTimeout(500); // Small delay between fills
         return; // Exit if successful
-      } catch (error) {
+      } catch {
         continue; // Try next selector
       }
     }
@@ -201,7 +200,7 @@ export class PlaywrightApplicationService {
         await page.locator(sel).fill(value);
         await page.waitForTimeout(500);
         return;
-      } catch (error) {
+      } catch {
         continue;
       }
     }
@@ -221,7 +220,7 @@ export class PlaywrightApplicationService {
         await page.locator(sel).click();
         await page.waitForTimeout(500);
         return;
-      } catch (error) {
+      } catch {
         continue;
       }
     }
@@ -241,7 +240,7 @@ export class PlaywrightApplicationService {
         await page.locator(sel).selectOption(value);
         await page.waitForTimeout(500);
         return;
-      } catch (error) {
+      } catch {
         continue;
       }
     }
@@ -284,7 +283,7 @@ export class PlaywrightApplicationService {
           await page.waitForTimeout(1000);
           return;
         }
-      } catch (error) {
+      } catch {
         continue;
       }
     }
@@ -329,7 +328,7 @@ export class PlaywrightApplicationService {
     return false;
   }
 
-  private generateCoverLetter(profileData: any): string {
+  private generateCoverLetter(profileData: Record<string, unknown>): string {
     // Generate a personalized cover letter based on profile data
     const coverLetter = `Dear Hiring Manager,
 
