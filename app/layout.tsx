@@ -3,6 +3,8 @@ import './globals.css';
 import { getSiteName, getSiteUrl } from '@/lib/site';
 import LogoutButton from '@/components/LogoutButton';
 import LayoutWrapper from '@/components/LayoutWrapper';
+import { getServerSupabase } from '@/lib/supabase/server';
+import React, { type ReactNode } from 'react';
 
 const siteName = getSiteName();
 const siteUrl = getSiteUrl();
@@ -26,11 +28,13 @@ export const metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
+  const supabase = getServerSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
   return (
     <html lang="en">
       <body className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
@@ -41,7 +45,7 @@ export default function RootLayout({
               <a href="/" className="hover:underline">Home</a>
               <a href="/agent" className="hover:underline">Agents</a>
               <a href="https://docs.example.com" className="hover:underline" target="_blank" rel="noreferrer">Docs</a>
-              <LogoutButton />
+              {session && <LogoutButton />}
             </nav>
           </div>
         </header>
