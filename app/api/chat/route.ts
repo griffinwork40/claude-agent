@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
     console.log('Request data:', { 
       messageLength: message?.length, 
       sessionId,
-      hasMessage: !!message 
+      hasMessage: !!message,
+      requestHeaders: Object.fromEntries(request.headers.entries())
     });
     
     if (!message) {
@@ -80,11 +81,18 @@ export async function POST(request: NextRequest) {
     // Create a readable stream for Server-Sent Events
     const encoder = new TextEncoder();
     let fullResponse = '';
+    let preambleSent = false;
 
     const readableStream = new ReadableStream({
       async start(controller) {
         console.log('Starting stream processing...');
         try {
+          // Immediately send a preamble SSE event so the client receives bytes even if downstream fails
+          const preamble = `data: ${JSON.stringify({ type: 'status', content: 'starting' })}\n\n`;
+          controller.enqueue(encoder.encode(preamble));
+          preambleSent = true;
+          console.log('✓ SSE preamble event sent');
+
           const reader = stream.getReader();
           let chunkCount = 0;
           
@@ -127,6 +135,7 @@ export async function POST(request: NextRequest) {
 
             // Decode the chunk and add to full response
             const chunk = new TextDecoder().decode(value);
+            console.log('Chunk received bytes:', value?.length ?? 0);
             fullResponse += chunk;
             chunkCount++;
 
@@ -150,12 +159,18 @@ export async function POST(request: NextRequest) {
             chunkCount
           });
           
-          const errorEvent = `data: ${JSON.stringify({ 
-            type: 'error', 
-            error: `Streaming error: ${error.message}`,
-            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-          })}\n\n`;
-          controller.enqueue(encoder.encode(errorEvent));
+          // Ensure client receives an error SSE event before closing
+          try {
+            const errorEvent = `data: ${JSON.stringify({ 
+              type: 'error', 
+              error: `Streaming error: ${error.message}`,
+              details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            })}\n\n`;
+            controller.enqueue(encoder.encode(errorEvent));
+            console.log('✓ SSE error event sent to client');
+          } catch (enqueueErr) {
+            console.error('❌ Failed to enqueue SSE error event:', enqueueErr);
+          }
           controller.close();
         }
       }
