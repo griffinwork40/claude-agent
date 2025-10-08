@@ -3,6 +3,9 @@ import { chromium, Browser, Page } from 'playwright';
 import { JobOpportunity } from '@/types';
 import fs from 'fs/promises';
 
+const toRecord = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+
 // Browser automation service for job searching and application
 export class BrowserJobService {
   private browser: Browser | null = null;
@@ -335,17 +338,25 @@ export class BrowserJobService {
 
   private async fillLinkedInEasyApply(page: Page, userProfile: Record<string, unknown>) {
     // Fill personal information
-    const personalInfo = (userProfile.personal_info as Record<string, unknown>) ?? {};
-    const fullName = (personalInfo.name as string) || '';
+    const personalInfo = toRecord(userProfile.personal_info);
+    const fullName = typeof personalInfo.name === 'string' ? personalInfo.name : '';
     const nameParts = fullName.split(' ');
     await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
     await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
-    await this.fillField(page, 'input[name*="email"]', (personalInfo.email as string) || '');
-    await this.fillField(page, 'input[name*="phone"]', (personalInfo.phone as string) || '');
-    
+    await this.fillField(
+      page,
+      'input[name*="email"]',
+      typeof personalInfo.email === 'string' ? personalInfo.email : ''
+    );
+    await this.fillField(
+      page,
+      'input[name*="phone"]',
+      typeof personalInfo.phone === 'string' ? personalInfo.phone : ''
+    );
+
     // Handle location
-    if (personalInfo.location) {
-      await this.fillField(page, 'input[name*="city"], input[name*="location"]', personalInfo.location as string);
+    if (typeof personalInfo.location === 'string') {
+      await this.fillField(page, 'input[name*="city"], input[name*="location"]', personalInfo.location);
     }
     
     // Handle work authorization
@@ -355,22 +366,33 @@ export class BrowserJobService {
     }
     
     // Handle sponsorship
-    const workEligibility = (userProfile.work_eligibility as Record<string, unknown>) ?? {};
+    const workEligibility = toRecord(userProfile.work_eligibility);
     const sponsorshipCheckbox = await page.locator('input[name*="sponsorship"], input[name*="visa"]').first();
-    if (await sponsorshipCheckbox.isVisible() && !workEligibility.require_sponsorship) {
+    const requiresSponsorship = workEligibility.require_sponsorship;
+    const canSkipSponsorship =
+      requiresSponsorship === false || requiresSponsorship === 'no' || requiresSponsorship === undefined;
+    if (await sponsorshipCheckbox.isVisible() && canSkipSponsorship) {
       await sponsorshipCheckbox.check();
     }
   }
 
   private async fillGeneralApplicationForm(page: Page, userProfile: Record<string, unknown>) {
     // Generic form filling for non-LinkedIn sites
-    const personalInfo = (userProfile.personal_info as Record<string, unknown>) ?? {};
-    const fullName = (personalInfo.name as string) || '';
+    const personalInfo = toRecord(userProfile.personal_info);
+    const fullName = typeof personalInfo.name === 'string' ? personalInfo.name : '';
     const nameParts = fullName.split(' ');
     await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
     await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
-    await this.fillField(page, 'input[name*="email"]', (personalInfo.email as string) || '');
-    await this.fillField(page, 'input[name*="phone"]', (personalInfo.phone as string) || '');
+    await this.fillField(
+      page,
+      'input[name*="email"]',
+      typeof personalInfo.email === 'string' ? personalInfo.email : ''
+    );
+    await this.fillField(
+      page,
+      'input[name*="phone"]',
+      typeof personalInfo.phone === 'string' ? personalInfo.phone : ''
+    );
     
     // Try to submit
     const submitButton = await page.locator('button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply")').first();

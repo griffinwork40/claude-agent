@@ -1,5 +1,4 @@
 import '@testing-library/jest-dom';
-import React from 'react';
 
 // Make Vitest globals available
 declare global {
@@ -10,7 +9,4 @@ declare global {
   const afterEach: typeof import('vitest').afterEach;
   const vi: typeof import('vitest').vi;
 }
-
-// Make React available globally for JSX
-global.React = React;
 
