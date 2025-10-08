@@ -1,131 +1,416 @@
 // lib/claude-agent.ts
-import { customAgent } from '@anthropic-ai/claude-agent-sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { browserTools, getBrowserJobService } from './browser-tools';
+import { getOrCreateUserProfile } from './user-profile';
+import { ToolUse, ToolResult, BrowserToolResult } from '@/types';
 
-// Initialize the Claude Agent with our subagents
-let jobSearchAgent: any, jobCurationAgent: any, userInteractionAgent: any, applicationAgent: any;
+// Debug: Log SDK import
+console.log('Anthropic SDK imported successfully');
+console.log('Anthropic class:', Anthropic);
 
-export async function initializeAgents() {
-  // Initialize each subagent from the markdown files
-  jobSearchAgent = await customAgent({
-    name: 'Job Search Agent',
-    instructions: await getAgentInstructions('./.claude/agents/job-search-agent.md'),
-    // Additional configuration for the agent
-  });
+// Initialize the Anthropic client
+let anthropic: Anthropic | null = null;
+let agentInstructions: string | null = null;
 
-  jobCurationAgent = await customAgent({
-    name: 'Job Curation Agent',
-    instructions: await getAgentInstructions('./.claude/agents/job-curation-agent.md'),
-  });
-
-  userInteractionAgent = await customAgent({
-    name: 'User Interaction Agent',
-    instructions: await getAgentInstructions('./.claude/agents/user-interaction-agent.md'),
-  });
-
-  applicationAgent = await customAgent({
-    name: 'Application Agent',
-    instructions: await getAgentInstructions('./.claude/agents/application-agent.md'),
-  });
-}
-
-async function getAgentInstructions(filePath: string): Promise<string> {
-  // In a real implementation, this would read the agent instructions from the file
-  // For now, we'll return a placeholder
-  const response = await fetch(filePath);
-  return response.text();
-}
-
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Main function to run the Claude Agent
-export async function runClaudeAgent(userMessage: string, userId: string) {
-  // Initialize agents if not already done
-  if (!jobSearchAgent) {
-    await initializeAgents();
+export async function initializeAgent(): Promise<{ client: Anthropic; instructions: string }> {
+  if (anthropic && agentInstructions) {
+    console.log('Using cached Anthropic client and instructions');
+    return { client: anthropic, instructions: agentInstructions };
   }
 
-  // Check if this is an approval for a job
-  if (userMessage.toLowerCase().includes('yes')) {
-    // Find the most recent job opportunity for this user
-    const { data: lastJob, error } = await supabase
-      .from('messages')
-      .select('job_opportunity')
-      .eq('sender', 'bot')
-      .filter('job_opportunity', 'not.is', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+  try {
+    console.log('Initializing Anthropic client...');
     
-    if (lastJob && lastJob.job_opportunity) {
-      // Trigger the application process
+    // Check if API key is available
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+    }
+    console.log('✓ Anthropic API key found');
+
+    // Initialize Anthropic client
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+    console.log('✓ Anthropic client initialized');
+
+    // Read agent instructions from the markdown file
+    const instructionsPath = join(process.cwd(), '.claude/agents/job-assistant-agent.md');
+    console.log('Reading instructions from:', instructionsPath);
+    
+    const instructions = readFileSync(instructionsPath, 'utf-8');
+    console.log('✓ Agent instructions loaded, length:', instructions.length);
+
+    agentInstructions = instructions;
+    console.log('✓ Claude agent initialized successfully');
+    return { client: anthropic, instructions: agentInstructions };
+  } catch (error: unknown) {
+    console.error('Failed to initialize Claude agent:', error);
+    const errMessage = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    console.error('Error details:', {
+      message: errMessage,
+      stack: errStack,
+      cwd: process.cwd(),
+      hasApiKey: !!process.env.ANTHROPIC_API_KEY
+    });
+    throw new Error(`Failed to initialize Claude agent: ${errMessage}`);
+  }
+}
+
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+// Session management for agent conversations
+const agentSessions = new Map<string, any>();
+
+export async function createAgentSession(userId: string): Promise<string> {
+  const sessionId = `session_${Date.now()}_${userId}`;
+  agentSessions.set(sessionId, { userId, messages: [] });
+  return sessionId;
+}
+
+export async function getAgentSession(sessionId: string) {
+  return agentSessions.get(sessionId);
+}
+
+export async function runClaudeAgentStream(
+  userMessage: string, 
+  userId: string, 
+  sessionId?: string
+): Promise<{ sessionId: string; stream: ReadableStream }> {
+  try {
+    console.log('Starting Claude agent stream with tool calling...', {
+      userMessage: userMessage.substring(0, 100) + '...',
+      userId,
+      sessionId,
+      hasExistingSession: sessionId ? agentSessions.has(sessionId) : false
+    });
+
+    // Initialize agent
+    const { client, instructions } = await initializeAgent();
+    console.log('✓ Agent initialized for streaming with tools');
+    
+    // Get or create session
+    let session;
+    if (sessionId && agentSessions.has(sessionId)) {
+      console.log('Using existing session:', sessionId);
+      session = agentSessions.get(sessionId);
+    } else {
+      console.log('Creating new session...');
+      session = { userId, messages: [] };
+      sessionId = `session_${Date.now()}_${userId}`;
+      agentSessions.set(sessionId, session);
+      console.log('✓ New session created:', sessionId);
+    }
+
+    // Add user message to session
+    session.messages.push({ role: 'user', content: userMessage });
+
+    // Create messages array for the API call
+    const messages = [
+      { role: 'user' as const, content: userMessage }
+    ];
+
+    console.log('Starting Claude streaming with tools...');
+    
+    // Create a readable stream from the Anthropic streaming API
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          console.log('Starting Anthropic streaming with tool calling...');
+          
+          const stream = await client.messages.create({
+            model: 'claude-3-5-sonnet-latest',
+            max_tokens: 4096,
+            system: instructions,
+            messages: messages,
+            tools: browserTools, // Add tools support
+            stream: true
+          });
+
+          console.log('✓ Anthropic stream with tools started');
+          
+          let toolUses: ToolUse[] = [];
+          let currentToolUse: ToolUse | null = null;
+          let toolInputJson = '';
+          
+          for await (const chunk of stream) {
+            if (chunk.type === 'content_block_start' && chunk.content_block.type === 'tool_use') {
+              // Start of a tool use
+              currentToolUse = {
+                id: chunk.content_block.id,
+                name: chunk.content_block.name,
+                input: {}
+              };
+              toolInputJson = '';
+              console.log(`🔧 Tool use started: ${chunk.content_block.name}`);
+            } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'input_json_delta') {
+              // Collect tool input JSON
+              toolInputJson += chunk.delta.partial_json;
+            } else if (chunk.type === 'content_block_stop' && currentToolUse) {
+              // End of tool use, parse input and execute
+              try {
+                currentToolUse.input = JSON.parse(toolInputJson);
+                toolUses.push(currentToolUse);
+                console.log(`🔧 Tool use completed: ${currentToolUse.name}`, currentToolUse.input);
+              } catch (error) {
+                console.error('Error parsing tool input JSON:', error);
+              }
+              currentToolUse = null;
+              toolInputJson = '';
+            } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+              // Regular text content
+              const content = chunk.delta.text;
+              if (content) {
+                console.log(`✓ Streaming chunk: ${content.length} chars`);
+                const encoded = new TextEncoder().encode(content);
+                controller.enqueue(encoded);
+              }
+            } else if (chunk.type === 'message_stop') {
+              console.log('✓ Stream completed, executing tools...');
+              
+              // Execute tools if any were requested
+              if (toolUses.length > 0) {
+                console.log(`🔧 Executing ${toolUses.length} tools...`);
+                const toolResults = await executeTools(toolUses, userId);
+                
+                // Add tool results to messages and continue conversation
+                const toolResultMessages = toolResults.map(result => ({
+                  role: 'user' as const,
+                  content: [{
+                    type: 'tool_result' as const,
+                    tool_use_id: result.tool_use_id,
+                    content: result.content,
+                    is_error: result.is_error
+                  }]
+                }));
+                
+                // Continue conversation with tool results
+                const continuationStream = await client.messages.create({
+                  model: 'claude-3-5-sonnet-latest',
+                  max_tokens: 4096,
+                  system: instructions,
+                  messages: [
+                    ...messages,
+                    ...toolResultMessages
+                  ],
+                  tools: browserTools,
+                  stream: true
+                });
+                
+                // Stream the continuation response
+                for await (const chunk of continuationStream) {
+                  if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+                    const content = chunk.delta.text;
+                    if (content) {
+                      const encoded = new TextEncoder().encode(content);
+                      controller.enqueue(encoded);
+                    }
+                  } else if (chunk.type === 'message_stop') {
+                    break;
+                  }
+                }
+              }
+              
+              controller.close();
+              break;
+            }
+          }
+          
+          console.log('✓ Stream processing completed');
+        } catch (error: unknown) {
+          console.error('❌ Error in Anthropic streaming:', error);
+          const errMessage = error instanceof Error ? error.message : String(error);
+          const errStack = error instanceof Error ? error.stack : undefined;
+          const errName = error instanceof Error ? error.name : undefined;
+          console.error('Error details:', {
+            message: errMessage,
+            stack: errStack,
+            name: errName
+          });
+          controller.error(error);
+        }
+      }
+    });
+    
+    return {
+      sessionId,
+      stream
+    };
+  } catch (error: unknown) {
+    console.error('Error running Claude agent stream:', error);
+    const errMessage = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    console.error('Error details:', {
+      message: errMessage,
+      stack: errStack,
+      userMessage: userMessage.substring(0, 100),
+      userId,
+      sessionId
+    });
+    throw new Error(`Failed to run Claude agent: ${errMessage}`);
+  }
+}
+
+// Execute browser tools
+async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolResult[]> {
+  const results: ToolResult[] = [];
+  const browserService = getBrowserJobService();
+  
+  try {
+    await browserService.initialize();
+    
+    for (const toolUse of toolUses) {
+      console.log(`🔧 Executing tool: ${toolUse.name}`, toolUse.input);
+      
       try {
-        const applyResponse = await fetch('/api/apply', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            jobId: lastJob.job_opportunity.id, 
-            userId 
-          })
+        let result: BrowserToolResult;
+        
+        switch (toolUse.name) {
+          case 'search_jobs_indeed':
+            const indeedJobs = await browserService.searchJobsIndeed(toolUse.input as {
+              keywords: string;
+              location: string;
+              experience_level?: string;
+              remote?: boolean;
+            });
+            result = {
+              success: true,
+              data: indeedJobs,
+              message: `Found ${indeedJobs.length} jobs on Indeed`
+            };
+            break;
+            
+          case 'search_jobs_linkedin':
+            const linkedinJobs = await browserService.searchJobsLinkedIn({
+              ...(toolUse.input as {
+                keywords: string;
+                location: string;
+                experience_level?: string;
+                remote?: boolean;
+              }),
+              userId
+            });
+            result = {
+              success: true,
+              data: linkedinJobs,
+              message: `Found ${linkedinJobs.length} jobs on LinkedIn`
+            };
+            break;
+            
+          case 'get_job_details':
+            const jobDetails = await browserService.getJobDetails((toolUse.input as { job_url: string }).job_url);
+            result = {
+              success: true,
+              data: jobDetails,
+              message: 'Job details retrieved successfully'
+            };
+            break;
+            
+          case 'apply_to_job':
+            // Get user profile for application
+            const userProfile = await getOrCreateUserProfile(userId);
+            if (!userProfile) {
+              result = {
+                success: false,
+                error: 'User profile not found. Please set up your profile first.'
+              };
+            } else {
+              const applicationResult = await browserService.applyToJob(
+                (toolUse.input as { job_url: string }).job_url,
+                userProfile
+              );
+              result = {
+                success: applicationResult.success,
+                data: applicationResult.details,
+                message: applicationResult.message
+              };
+            }
+            break;
+            
+          default:
+            result = {
+              success: false,
+              error: `Unknown tool: ${toolUse.name}`
+            };
+        }
+        
+        results.push({
+          tool_use_id: toolUse.id,
+          content: JSON.stringify(result),
+          is_error: !result.success
         });
         
-        const applyResult = await applyResponse.json();
+        console.log(`✓ Tool ${toolUse.name} executed:`, result.success ? 'SUCCESS' : 'FAILED');
         
-        return {
-          content: applyResult.success 
-            ? `Great! I've applied to ${lastJob.job_opportunity.title} at ${lastJob.job_opportunity.company}. ${applyResult.message}`
-            : `I encountered an issue applying to ${lastJob.job_opportunity.title}: ${applyResult.message}`,
-          jobOpportunity: null
-        };
-      } catch (error) {
-        return {
-          content: `Sorry, I encountered an error while trying to apply: ${error.message}`,
-          jobOpportunity: null
-        };
+      } catch (error: unknown) {
+        console.error(`❌ Error executing tool ${toolUse.name}:`, error);
+        results.push({
+          tool_use_id: toolUse.id,
+          content: JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : String(error)
+          }),
+          is_error: true
+        });
       }
     }
     
-    return {
-      content: "I'm not sure which job you're referring to. Could you clarify?",
-      jobOpportunity: null
-    };
-  } else if (userMessage.toLowerCase().includes('no')) {
-    // If user said no, find next opportunity
-    return {
-      content: "Okay, I'll skip this position and continue looking for opportunities that match your profile.",
-      jobOpportunity: null
-    };
-  } else {
-    // Default response - simulate finding a job
-    // In a real implementation, this would run the job search agent
-    return {
-      content: "I found an interesting opportunity for you:",
-      jobOpportunity: {
-        id: `job-${Date.now()}`,
-        title: "Senior AI Product Manager",
-        company: "Tech Innovations Inc.",
-        location: "San Francisco, CA (Remote OK)",
-        description: "We're looking for an experienced AI Product Manager to lead our generative AI initiatives. You'll work with cross-functional teams to develop and deploy AI solutions that transform our business.",
-        salary: "$140,000 - $180,000",
-        application_url: "https://example.com/apply/123",
-        skills: ["AI Strategy", "Product Management", "Machine Learning", "Team Leadership"],
-        match_percentage: 92
-      }
-    };
+  } catch (error: unknown) {
+    console.error('❌ Error in executeTools:', error);
+    // Return error for all tools
+    for (const toolUse of toolUses) {
+      results.push({
+        tool_use_id: toolUse.id,
+        content: JSON.stringify({
+          success: false,
+          error: `Tool execution failed: ${error instanceof Error ? error.message : String(error)}`
+        }),
+        is_error: true
+      });
+    }
+  } finally {
+    // Don't close browser here as it might be needed for multiple tools
+    // await browserService.close();
   }
+  
+  return results;
 }
 
-// Placeholder for actual Claude Agent SDK integration
-// This would be replaced with the real implementation
-export async function runSubagent(agentName: string, input: string) {
-  // This would call the specific subagent with the input
-  // For now, return a placeholder response
-  return {
-    content: `Processed by ${agentName}: ${input}`,
-    data: {}
-  };
+// Legacy function for backward compatibility (non-streaming)
+export async function runClaudeAgent(userMessage: string, userId: string) {
+  try {
+    const { client, instructions } = await initializeAgent();
+    
+    const result = await client.messages.create({
+      model: 'claude-3-5-sonnet-latest',
+      max_tokens: 1000,
+      system: instructions,
+      messages: [
+        { role: 'user', content: userMessage }
+      ]
+    });
+    
+    // Extract plain text from content blocks
+    const text = result.content
+      .map((block: any) => (block.type === 'text' ? block.text : ''))
+      .join('');
+    
+    return {
+      content: text,
+      jobOpportunity: null // Will be extracted from content if present
+    };
+  } catch (error) {
+    console.error('Error running Claude agent:', error);
+    return {
+      content: "I'm sorry, I encountered an error processing your request. Please try again.",
+      jobOpportunity: null
+    };
+  }
 }
