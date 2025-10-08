@@ -4,21 +4,37 @@
  */
 'use client';
 
-import { ButtonHTMLAttributes } from 'react';
+import { ButtonHTMLAttributes, ReactElement, ReactNode, cloneElement, isValidElement } from 'react';
 
 type Variant = 'primary' | 'outline';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   variant?: Variant;
+  asChild?: boolean;
+  children?: ReactNode;
 }
 
-export function Button({ variant = 'primary', className = '', ...props }: ButtonProps) {
+export function Button({ variant = 'primary', className = '', asChild = false, children, ...props }: ButtonProps) {
   const base = 'inline-flex items-center justify-center rounded-md px-4 py-2 text-readable font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600';
   const variants: Record<Variant, string> = {
     primary: 'bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-blue-700',
     outline: 'bg-[var(--muted)] text-[var(--fg)] border border-[var(--border)] hover:bg-white',
   };
-  return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
+  const mergedClassName = `${base} ${variants[variant]} ${className}`.trim();
+
+  if (asChild && isValidElement(children)) {
+    const child = children as ReactElement;
+    const childClassName = (child.props?.className ?? '') as string;
+    return cloneElement(child, {
+      className: `${mergedClassName} ${childClassName}`.trim(),
+    });
+  }
+
+  return (
+    <button className={mergedClassName} {...props}>
+      {children}
+    </button>
+  );
 }
 
 

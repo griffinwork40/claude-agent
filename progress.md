@@ -1,5 +1,6 @@
 # Progress
 
+- 2025-10-07: Fixed React key warnings on landing; implemented asChild in Button; updated web manifest to use existing SVG icon. Overall completion: 31%.
 - 2025-10-07: Refactored /agent page for full mobile responsiveness with bottom sheet UI pattern, tablet 2-pane layout with collapsible sidebar, and improved desktop 3-pane layout. Added smooth animations and touch-friendly interactions. Overall completion: 22%.
 - 2025-10-07: Updated landing copy to highlight resume building/tailoring. Overall completion: 17%.
 - 2025-10-07: Initiated Supabase auth integration (helpers dep added). Overall completion: 15%.
@@ -8,4 +9,11 @@
 
 - 2025-10-07: Wired to multi-agent-reviews Supabase via env; created tables (messages, jobs, applications). Overall completion: 28%.
 
+
+- 2025-10-08: Fixed Supabase helpers usage: switched to createClientComponentClient and createServerComponentClient to resolve runtime error when logging out. Overall completion: 34%.
+
+
+- 2025-10-08: Replaced deprecated updateSession with createMiddlewareClient in `middleware.ts` to fix signup/login redirects and cookie sync. Overall completion: 36%.
+
+ - 2025-10-08: Disabled broken OpenDyslexic @font-face (bad .woff2 files). Will re-enable with valid binaries. Overall completion: 37%.
 

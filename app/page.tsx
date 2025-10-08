@@ -17,10 +17,10 @@ export default function EnlistLanding() {
           {siteName} scouts roles, builds and tailors your resume and cover letters, and applies automatically, keeping you in control every step of the way.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Button as-child>
+          <Button asChild>
             <a href="/agent">Open agents</a>
           </Button>
-          <Button variant="outline" as-child>
+          <Button variant="outline" asChild>
             <a href="#how-it-works">See how it works</a>
           </Button>
         </div>
@@ -32,8 +32,8 @@ export default function EnlistLanding() {
           { title: 'Share goals', body: 'Tell the assistant what roles and companies you’re targeting.' },
           { title: 'Tailor your resume', body: 'Generate and adapt a resume to each role’s requirements in seconds.' },
           { title: 'Apply confidently', body: 'Send tailored applications you control, fast and polished.' },
-        ].map((f) => (
-          <Card className="p-5">
+        ].map((f, idx) => (
+          <Card key={f.title ?? idx} className="p-5">
             <p className="text-heading text-[var(--fg)]">{f.title}</p>
             <p className="text-readable text-[var(--fg)]/80 mt-2">{f.body}</p>
           </Card>

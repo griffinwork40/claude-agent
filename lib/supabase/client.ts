@@ -3,12 +3,10 @@
 
 "use client";
 
-import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export function getBrowserSupabase() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  return createClientComponentClient();
 }
 
 
