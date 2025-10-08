@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Agent, Message } from '@/components/agents/types';
 import { AgentList, BrowserPane, ChatPane, BottomSheet } from '@/components/agents';
-import { mockAgents, mockMessages } from '@/components/agents/mockData';
+import { mockMessages } from '@/components/agents/mockData';
 import { ResizablePane } from '@/components/ResizablePane';
 
 export default function AgentPage() {
@@ -16,6 +16,7 @@ export default function AgentPage() {
   const router = useRouter();
 
   const initialId = search.get('agentId');
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(
     initialId ?? null
   );
@@ -25,8 +26,30 @@ export default function AgentPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const selectedAgent: Agent | null = useMemo(() => {
-    return mockAgents.find((a) => a.id === selectedAgentId) ?? null;
-  }, [selectedAgentId]);
+    return agents.find((a) => a.id === selectedAgentId) ?? null;
+  }, [agents, selectedAgentId]);
+
+  function handleCreateAgent() {
+    const now = new Date().toISOString();
+    const newAgent: Agent = {
+      id: `agent-${Date.now()}`,
+      name: 'New conversation',
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    setAgents((prev) => [newAgent, ...prev]);
+    setSelectedAgentId(newAgent.id);
+    
+    // Update URL
+    const params = new URLSearchParams(Array.from(search.entries()));
+    params.set('agentId', newAgent.id);
+    router.push(`?${params.toString()}`);
+    
+    // On mobile, open the bottom sheet
+    setIsBottomSheetOpen(true);
+    setActiveTab('chat');
+  }
 
   function handleSelect(agentId: string) {
     setSelectedAgentId(agentId);
@@ -40,6 +63,7 @@ export default function AgentPage() {
 
   function handleSend(content: string) {
     if (!selectedAgent) return;
+    
     const newMsg: Message = {
       id: `m-${Date.now()}`,
       agentId: selectedAgent.id,
@@ -48,6 +72,27 @@ export default function AgentPage() {
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, newMsg]);
+    
+    // Auto-name agent based on first message
+    if (selectedAgent.name === 'New conversation' && content.trim()) {
+      const autoName = content.trim().slice(0, 50) + (content.length > 50 ? '...' : '');
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === selectedAgent.id
+            ? { ...a, name: autoName, updatedAt: new Date().toISOString() }
+            : a
+        )
+      );
+    } else {
+      // Update the agent's updatedAt timestamp
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === selectedAgent.id
+            ? { ...a, updatedAt: new Date().toISOString() }
+            : a
+        )
+      );
+    }
   }
 
   function handleCloseBottomSheet() {
@@ -58,7 +103,12 @@ export default function AgentPage() {
     <>
       {/* Mobile Layout (< 768px) */}
       <div className="md:hidden h-[calc(100dvh-4rem)] bg-[var(--bg)] text-[var(--fg)]">
-        <AgentList selectedAgentId={selectedAgentId} onSelect={handleSelect} />
+        <AgentList 
+          agents={agents}
+          selectedAgentId={selectedAgentId} 
+          onSelect={handleSelect}
+          onCreate={handleCreateAgent}
+        />
         
         <BottomSheet 
           isOpen={isBottomSheetOpen} 
@@ -104,7 +154,12 @@ export default function AgentPage() {
       <div className="hidden md:flex lg:hidden h-[calc(100vh-4rem)] bg-[var(--bg)] text-[var(--fg)]">
         {/* Sidebar with toggle */}
         <div className={`transition-all duration-300 ${isSidebarOpen ? 'w-[280px]' : 'w-0'} overflow-hidden`}>
-          <AgentList selectedAgentId={selectedAgentId} onSelect={handleSelect} />
+          <AgentList 
+            agents={agents}
+            selectedAgentId={selectedAgentId} 
+            onSelect={handleSelect}
+            onCreate={handleCreateAgent}
+          />
         </div>
 
         {/* Main content area */}
@@ -122,7 +177,7 @@ export default function AgentPage() {
             </button>
             {selectedAgent && (
               <span className="text-sm font-medium text-[var(--fg)]">
-                {selectedAgent.name} • {selectedAgent.repo}
+                {selectedAgent.name}
               </span>
             )}
           </div>
@@ -171,7 +226,12 @@ export default function AgentPage() {
           maxWidth={500}
           position="left"
         >
-          <AgentList selectedAgentId={selectedAgentId} onSelect={handleSelect} />
+          <AgentList 
+            agents={agents}
+            selectedAgentId={selectedAgentId} 
+            onSelect={handleSelect}
+            onCreate={handleCreateAgent}
+          />
         </ResizablePane>
         
         {/* Center workspace - flexible, takes remaining space */}

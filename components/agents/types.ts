@@ -6,34 +6,15 @@
  */
 
 /**
- * A coarse-grained lifecycle state for an agent item in the dashboard.
- * - `open`: actively being worked on
- * - `ready`: queued and ready to open
- * - `awaiting`: requires user input or follow-up
- * - `expired`: no longer actionable
- */
-export type AgentStep = 'open' | 'ready' | 'awaiting' | 'expired';
-
-/**
- * Basic diff statistics attached to an agent when relevant (e.g., PRs).
- */
-export interface DiffStats {
-  plus: number;
-  minus: number;
-}
-
-/**
- * Minimal representation of an agent item in the list.
+ * Minimal representation of an agent (conversation thread) in the list.
+ * Agents can be used for job searching, resume building, email outreach, etc.
  */
 export interface Agent {
   id: string;
   name: string;
-  repo: string; // e.g., owner/repo
-  branch: string;
-  status: AgentStep;
+  description?: string;
+  createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
-  author?: string; // optional owner/creator
-  diffStats?: DiffStats;
 }
 
 /**
@@ -51,8 +32,10 @@ export interface Message {
  * Strongly typed props for the three panes. Public APIs are documented.
  */
 export interface AgentListProps {
+  agents: Agent[];
   selectedAgentId: string | null;
   onSelect: (agentId: string) => void;
+  onCreate: () => void;
 }
 
 export interface BrowserPaneProps {

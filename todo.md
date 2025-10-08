@@ -23,3 +23,14 @@ Frontend polish and fixes (2025-10-07):
 - [x] Add missing keys to mapped feature cards in `app/page.tsx`
 - [x] Update `public/site.webmanifest` to reference existing `/icon.svg`
 
+Agent UI refactor (2025-10-08):
+
+- [x] Remove hardcoded mock agents and placeholder data
+- [x] Update type definitions to support conversation-based agents
+- [x] Implement "New agent" button with agent creation flow
+- [x] Add empty state UI with helpful messaging
+- [x] Auto-name agents from first user message
+- [x] Update AgentList component with flat list and search
+- [x] Update BrowserPane for job search context
+- [x] Remove coding-specific fields (repo, branch, diffStats, status grouping)
+

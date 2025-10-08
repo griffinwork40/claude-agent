@@ -23,3 +23,5 @@
 
 - 2025-10-08: Added resizable panes to /agent desktop layout - created ResizablePane component with drag handles allowing users to adjust the width of left sidebar (200-500px) and right chat pane (300-600px). Includes hover/active visual feedback and smooth dragging UX. Overall completion: 45%.
 
+- 2025-10-08: Refactored agent UI from code-focused PR interface to flexible job search assistant. Removed hardcoded mock agents, updated types to remove coding-specific fields (repo, branch, diffStats), simplified Agent interface to conversation-based model. Implemented "New agent" button that creates blank conversations with auto-naming from first message. Added comprehensive empty state with helpful messaging. Updated AgentList, BrowserPane, and main agent page to reflect new conversation-based paradigm. Overall completion: 52%.
+
