@@ -6,9 +6,17 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { Message } from '@/types';
 import { runClaudeAgent, runClaudeAgentStream } from '@/lib/claude-agent';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Use service role key for backend operations
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Create Supabase client lazily to avoid build-time errors
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase configuration is missing. Please set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 export async function POST(request: NextRequest) {
   console.log('=== Chat API Request Started ===');
@@ -39,6 +47,7 @@ export async function POST(request: NextRequest) {
 
     // Store user message in database
     console.log('Saving user message to database...');
+    const supabase = getSupabaseClient();
     const { data: userMessage, error: userMessageError } = await supabase
       .from('messages')
       .insert([{ 
@@ -211,6 +220,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('messages')
       .select('*')

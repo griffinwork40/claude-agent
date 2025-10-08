@@ -5,9 +5,17 @@ import { cookies } from 'next/headers';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { JobOpportunity } from '@/types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Create Supabase client lazily to avoid build-time errors
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase configuration is missing. Please set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the job details from the database
+    const supabase = getSupabaseClient();
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .select('*')

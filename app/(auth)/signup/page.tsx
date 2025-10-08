@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import AuthForm from '@/components/AuthForm';
+import AuthFormWrapper from '@/components/AuthFormWrapper';
 import { Suspense } from 'react';
 
 export default function SignupPage() {
@@ -10,7 +10,7 @@ export default function SignupPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto pt-16 px-4">
         <Suspense fallback={<div className="text-center text-gray-600">Loading…</div>}>
-          <AuthForm mode="signup" />
+          <AuthFormWrapper mode="signup" />
         </Suspense>
         <p className="mt-4 text-center text-sm text-gray-600">
           Already have an account?{' '}

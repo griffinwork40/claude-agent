@@ -4,6 +4,9 @@
  */
 'use client';
 
+// Force dynamic rendering to avoid static generation issues with useSearchParams
+export const dynamic = 'force-dynamic';
+
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Agent, Message } from '@/components/agents/types';

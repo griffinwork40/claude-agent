@@ -3,17 +3,16 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
 interface AuthFormProps {
   mode: 'login' | 'signup';
+  redirect?: string;
 }
 
-export default function AuthForm({ mode }: AuthFormProps) {
+export default function AuthForm({ mode, redirect = '/settings' }: AuthFormProps) {
   const router = useRouter();
-  const search = useSearchParams();
-  const redirect = search.get('redirect') || '/settings';
   const supabase = getBrowserSupabase();
 
   const [email, setEmail] = useState('');
