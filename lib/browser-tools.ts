@@ -335,8 +335,10 @@ export class BrowserJobService {
 
   private async fillLinkedInEasyApply(page: Page, userProfile: Record<string, unknown>) {
     // Fill personal information
-    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', userProfile.personal_info?.name?.split(' ')[0] || '');
-    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', userProfile.personal_info?.name?.split(' ').slice(1).join(' ') || '');
+    const fullName = userProfile.personal_info?.name as string || '';
+    const nameParts = fullName.split(' ');
+    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
+    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
     await this.fillField(page, 'input[name*="email"]', userProfile.personal_info?.email || '');
     await this.fillField(page, 'input[name*="phone"]', userProfile.personal_info?.phone || '');
     
