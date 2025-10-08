@@ -329,7 +329,7 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
             } else {
               const applicationResult = await browserService.applyToJob(
                 (toolUse.input as { job_url: string }).job_url,
-                userProfile as Record<string, unknown>
+                userProfile as unknown as Record<string, unknown>
               );
               result = {
                 success: applicationResult.success,
