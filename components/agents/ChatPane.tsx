@@ -119,13 +119,15 @@ export function ChatPane({ agent, messages, onSend, isMobile = false }: ChatPane
           }
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('❌ Error in streaming:', error);
-      console.error('Streaming error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
+      if (error instanceof Error) {
+        console.error('Streaming error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      }
       setIsStreaming(false);
       setStreamingMessage('');
     }

@@ -58,10 +58,11 @@ export class BrowserJobService {
                   el.querySelector('.jobTitle')?.textContent?.trim() || 'Unknown Title',
           company: el.querySelector('.companyName')?.textContent?.trim() || 'Unknown Company',
           location: el.querySelector('.companyLocation')?.textContent?.trim() || 'Unknown Location',
-          salary: el.querySelector('.salary-snippet')?.textContent?.trim() || null,
-          url: el.querySelector('.jobTitle a')?.href || 
-               el.querySelector('.jobTitle')?.href || '',
+          salary: el.querySelector('.salary-snippet')?.textContent?.trim() || undefined,
+          url: (el.querySelector('.jobTitle a') as HTMLAnchorElement | null)?.getAttribute('href') || 
+               (el.querySelector('.jobTitle') as HTMLAnchorElement | null)?.getAttribute('href') || '',
           description: el.querySelector('.job-snippet')?.textContent?.trim() || '',
+          application_url: (el.querySelector('.jobTitle a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
           source: 'indeed' as const,
           skills: [],
           experience_level: 'unknown',
@@ -76,9 +77,10 @@ export class BrowserJobService {
       console.log(`Found ${jobs.length} jobs on Indeed`);
       return jobs;
       
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error searching Indeed:', error);
-      throw new Error(`Indeed search failed: ${error.message}`);
+      const errMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Indeed search failed: ${errMessage}`);
     } finally {
       await page.close();
     }
@@ -113,9 +115,10 @@ export class BrowserJobService {
           title: el.querySelector('.job-card-list__title')?.textContent?.trim() || 'Unknown Title',
           company: el.querySelector('.job-card-container__company-name')?.textContent?.trim() || 'Unknown Company',
           location: el.querySelector('.job-card-container__metadata-item')?.textContent?.trim() || 'Unknown Location',
-          salary: null, // LinkedIn doesn't show salary in search results
-          url: el.querySelector('a')?.href || '',
+          salary: undefined, // LinkedIn doesn't show salary in search results
+          url: (el.querySelector('a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
           description: el.querySelector('.job-card-list__description')?.textContent?.trim() || '',
+          application_url: (el.querySelector('a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
           source: 'linkedin' as const,
           skills: [],
           experience_level: 'unknown',
@@ -130,9 +133,10 @@ export class BrowserJobService {
       console.log(`Found ${jobs.length} jobs on LinkedIn`);
       return jobs;
       
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error searching LinkedIn:', error);
-      throw new Error(`LinkedIn search failed: ${error.message}`);
+      const errMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`LinkedIn search failed: ${errMessage}`);
     } finally {
       await page.close();
     }
@@ -153,7 +157,7 @@ export class BrowserJobService {
       // Wait for job content to load
       await page.waitForTimeout(2000);
       
-      const jobDetails = await page.evaluate(() => {
+      const jobDetails = await page.evaluate((currentUrl) => {
         // Extract job description
         const description = document.querySelector('.jobs-description-content__text')?.textContent?.trim() ||
                           document.querySelector('.jobsearch-jobDescriptionText')?.textContent?.trim() ||
@@ -167,12 +171,12 @@ export class BrowserJobService {
         
         // Extract salary if available
         const salary = document.querySelector('.jobs-unified-top-card__job-insight--salary')?.textContent?.trim() ||
-                      document.querySelector('.salary-snippet')?.textContent?.trim() || null;
+                      document.querySelector('.salary-snippet')?.textContent?.trim() || undefined;
         
         // Extract application URL
-        const applicationUrl = document.querySelector('.jobs-apply-button')?.href ||
-                              document.querySelector('a[href*="apply"]')?.href ||
-                              jobUrl;
+        const applicationUrl = (document.querySelector('.jobs-apply-button') as HTMLAnchorElement | null)?.getAttribute('href') ||
+                              (document.querySelector('a[href*="apply"]') as HTMLAnchorElement | null)?.getAttribute('href') ||
+                              currentUrl;
         
         return {
           description,
@@ -180,13 +184,14 @@ export class BrowserJobService {
           salary,
           application_url: applicationUrl
         };
-      });
+      }, jobUrl);
 
       return jobDetails;
       
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error getting job details:', error);
-      throw new Error(`Failed to get job details: ${error.message}`);
+      const errMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get job details: ${errMessage}`);
     } finally {
       await page.close();
     }
@@ -234,12 +239,13 @@ export class BrowserJobService {
       // Fallback: try to find general application form
       return await this.fillGeneralApplicationForm(page, userProfile);
       
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error applying to job:', error);
+      const errMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: `Application failed: ${error.message}`,
-        details: { url: jobUrl, error: error.message }
+        message: `Application failed: ${errMessage}`,
+        details: { url: jobUrl, error: errMessage }
       };
     } finally {
       await page.close();
@@ -389,8 +395,9 @@ export class BrowserJobService {
         await field.fill(value);
         await page.waitForTimeout(500);
       }
-    } catch (error) {
-      console.log(`Could not fill field ${selector}: ${error.message}`);
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.log(`Could not fill field ${selector}: ${errMessage}`);
     }
   }
 }
@@ -411,7 +418,7 @@ export const browserTools = [
     name: 'search_jobs_indeed',
     description: 'Search for jobs on Indeed.com with specific criteria. Indeed does not require authentication.',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
         keywords: { 
           type: 'string', 
@@ -438,7 +445,7 @@ export const browserTools = [
     name: 'search_jobs_linkedin',
     description: 'Search for jobs on LinkedIn with specific criteria. Requires LinkedIn authentication.',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
         keywords: { 
           type: 'string', 
@@ -469,7 +476,7 @@ export const browserTools = [
     name: 'get_job_details',
     description: 'Get detailed information about a specific job posting',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
         job_url: { 
           type: 'string', 
@@ -483,7 +490,7 @@ export const browserTools = [
     name: 'apply_to_job',
     description: 'Apply to a job using the user\'s profile data. Only use after getting explicit user confirmation.',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
         job_url: { 
           type: 'string', 

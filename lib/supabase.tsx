@@ -18,7 +18,7 @@ interface SupabaseProviderProps {
 }
 
 export const SupabaseProvider = ({ children }: SupabaseProviderProps) => {
-  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null);
+  const [supabase, setSupabase] = useState<any | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

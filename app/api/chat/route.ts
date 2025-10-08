@@ -70,11 +70,12 @@ export async function POST(request: NextRequest) {
       agentSessionId = result.sessionId;
       stream = result.stream;
       console.log('✓ Agent stream started, sessionId:', agentSessionId);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('❌ Failed to start agent stream:', error);
+      const errMessage = error instanceof Error ? error.message : String(error);
       return NextResponse.json({ 
         error: 'Failed to start agent stream',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        details: process.env.NODE_ENV === 'development' ? errMessage : undefined
       }, { status: 500 });
     }
 
@@ -86,6 +87,8 @@ export async function POST(request: NextRequest) {
     const readableStream = new ReadableStream({
       async start(controller) {
         console.log('Starting stream processing...');
+        // Ensure counters/state visible to catch scope
+        let chunkCount = 0;
         try {
           // Immediately send a preamble SSE event so the client receives bytes even if downstream fails
           const preamble = `data: ${JSON.stringify({ type: 'status', content: 'starting' })}\n\n`;
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
           console.log('✓ SSE preamble event sent');
 
           const reader = stream.getReader();
-          let chunkCount = 0;
+          // chunkCount declared above
           
           while (true) {
             const { done, value } = await reader.read();
@@ -150,11 +153,13 @@ export async function POST(request: NextRequest) {
               console.log(`Processed ${chunkCount} chunks, response length: ${fullResponse.length}`);
             }
           }
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('❌ Error in streaming:', error);
+          const errMessage = error instanceof Error ? error.message : String(error);
+          const errStack = error instanceof Error ? error.stack : undefined;
           console.error('Streaming error details:', {
-            message: error.message,
-            stack: error.stack,
+            message: errMessage,
+            stack: errStack,
             fullResponseLength: fullResponse.length,
             chunkCount
           });
@@ -163,8 +168,8 @@ export async function POST(request: NextRequest) {
           try {
             const errorEvent = `data: ${JSON.stringify({ 
               type: 'error', 
-              error: `Streaming error: ${error.message}`,
-              details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+              error: `Streaming error: ${errMessage}`,
+              details: process.env.NODE_ENV === 'development' ? errStack : undefined
             })}\n\n`;
             controller.enqueue(encoder.encode(errorEvent));
             console.log('✓ SSE error event sent to client');
@@ -187,16 +192,19 @@ export async function POST(request: NextRequest) {
         'Access-Control-Allow-Headers': 'Content-Type',
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error in chat API:', error);
+    const errMessage = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    const errName = error instanceof Error ? error.name : undefined;
     console.error('API Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
+      message: errMessage,
+      stack: errStack,
+      name: errName
     });
     return NextResponse.json({ 
       error: 'Internal server error',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? errMessage : undefined
     }, { status: 500 });
   }
 }

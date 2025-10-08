@@ -29,12 +29,12 @@ export async function GET(request: NextRequest) {
       agentName: 'Job Application Assistant'
     });
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Claude Agent test failed:', error);
     return NextResponse.json({ 
       status: 'error',
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: error instanceof Error ? error.message : String(error),
+      details: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
     }, { status: 500 });
   }
 }

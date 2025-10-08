@@ -46,15 +46,17 @@ export async function initializeAgent(): Promise<{ client: Anthropic; instructio
     agentInstructions = instructions;
     console.log('✓ Claude agent initialized successfully');
     return { client: anthropic, instructions: agentInstructions };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Failed to initialize Claude agent:', error);
+    const errMessage = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
+      message: errMessage,
+      stack: errStack,
       cwd: process.cwd(),
       hasApiKey: !!process.env.ANTHROPIC_API_KEY
     });
-    throw new Error(`Failed to initialize Claude agent: ${error.message}`);
+    throw new Error(`Failed to initialize Claude agent: ${errMessage}`);
   }
 }
 
@@ -122,7 +124,7 @@ export async function runClaudeAgentStream(
           console.log('Starting Anthropic streaming with tool calling...');
           
           const stream = await client.messages.create({
-            model: 'claude-3-5-sonnet-20241022',
+            model: 'claude-3-5-sonnet-latest',
             max_tokens: 4096,
             system: instructions,
             messages: messages,
@@ -160,7 +162,7 @@ export async function runClaudeAgentStream(
               }
               currentToolUse = null;
               toolInputJson = '';
-            } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text') {
+            } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
               // Regular text content
               const content = chunk.delta.text;
               if (content) {
@@ -189,7 +191,7 @@ export async function runClaudeAgentStream(
                 
                 // Continue conversation with tool results
                 const continuationStream = await client.messages.create({
-                  model: 'claude-3-5-sonnet-20241022',
+                  model: 'claude-3-5-sonnet-latest',
                   max_tokens: 4096,
                   system: instructions,
                   messages: [
@@ -202,7 +204,7 @@ export async function runClaudeAgentStream(
                 
                 // Stream the continuation response
                 for await (const chunk of continuationStream) {
-                  if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text') {
+                  if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
                     const content = chunk.delta.text;
                     if (content) {
                       const encoded = new TextEncoder().encode(content);
@@ -216,20 +218,19 @@ export async function runClaudeAgentStream(
               
               controller.close();
               break;
-            } else if (chunk.type === 'error') {
-              console.error('❌ Stream error from Anthropic:', chunk);
-              controller.error(new Error(chunk.error?.message || 'Unknown streaming error'));
-              break;
             }
           }
           
           console.log('✓ Stream processing completed');
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('❌ Error in Anthropic streaming:', error);
+          const errMessage = error instanceof Error ? error.message : String(error);
+          const errStack = error instanceof Error ? error.stack : undefined;
+          const errName = error instanceof Error ? error.name : undefined;
           console.error('Error details:', {
-            message: error.message,
-            stack: error.stack,
-            name: error.name
+            message: errMessage,
+            stack: errStack,
+            name: errName
           });
           controller.error(error);
         }
@@ -240,16 +241,18 @@ export async function runClaudeAgentStream(
       sessionId,
       stream
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error running Claude agent stream:', error);
+    const errMessage = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
+      message: errMessage,
+      stack: errStack,
       userMessage: userMessage.substring(0, 100),
       userId,
       sessionId
     });
-    throw new Error(`Failed to run Claude agent: ${error.message}`);
+    throw new Error(`Failed to run Claude agent: ${errMessage}`);
   }
 }
 
@@ -269,7 +272,12 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
         
         switch (toolUse.name) {
           case 'search_jobs_indeed':
-            const indeedJobs = await browserService.searchJobsIndeed(toolUse.input);
+            const indeedJobs = await browserService.searchJobsIndeed(toolUse.input as {
+              keywords: string;
+              location: string;
+              experience_level?: string;
+              remote?: boolean;
+            });
             result = {
               success: true,
               data: indeedJobs,
@@ -279,7 +287,12 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
             
           case 'search_jobs_linkedin':
             const linkedinJobs = await browserService.searchJobsLinkedIn({
-              ...toolUse.input,
+              ...(toolUse.input as {
+                keywords: string;
+                location: string;
+                experience_level?: string;
+                remote?: boolean;
+              }),
               userId
             });
             result = {
@@ -290,7 +303,7 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
             break;
             
           case 'get_job_details':
-            const jobDetails = await browserService.getJobDetails(toolUse.input.job_url);
+            const jobDetails = await browserService.getJobDetails((toolUse.input as { job_url: string }).job_url);
             result = {
               success: true,
               data: jobDetails,
@@ -308,7 +321,7 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
               };
             } else {
               const applicationResult = await browserService.applyToJob(
-                toolUse.input.job_url,
+                (toolUse.input as { job_url: string }).job_url,
                 userProfile
               );
               result = {
@@ -334,20 +347,20 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
         
         console.log(`✓ Tool ${toolUse.name} executed:`, result.success ? 'SUCCESS' : 'FAILED');
         
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`❌ Error executing tool ${toolUse.name}:`, error);
         results.push({
           tool_use_id: toolUse.id,
           content: JSON.stringify({
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : String(error)
           }),
           is_error: true
         });
       }
     }
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error in executeTools:', error);
     // Return error for all tools
     for (const toolUse of toolUses) {
@@ -355,7 +368,7 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
         tool_use_id: toolUse.id,
         content: JSON.stringify({
           success: false,
-          error: `Tool execution failed: ${error.message}`
+          error: `Tool execution failed: ${error instanceof Error ? error.message : String(error)}`
         }),
         is_error: true
       });
@@ -374,7 +387,7 @@ export async function runClaudeAgent(userMessage: string, userId: string) {
     const { client, instructions } = await initializeAgent();
     
     const result = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-5-sonnet-latest',
       max_tokens: 1000,
       system: instructions,
       messages: [
@@ -382,8 +395,13 @@ export async function runClaudeAgent(userMessage: string, userId: string) {
       ]
     });
     
+    // Extract plain text from content blocks
+    const text = result.content
+      .map((block: any) => (block.type === 'text' ? block.text : ''))
+      .join('');
+    
     return {
-      content: result.content[0].text,
+      content: text,
       jobOpportunity: null // Will be extracted from content if present
     };
   } catch (error) {

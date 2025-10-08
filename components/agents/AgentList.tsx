@@ -150,7 +150,7 @@ export function AgentList(props: AgentListProps) {
       {agents.length > 0 && filteredAgents.length === 0 && query && (
         <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
           <p className="text-sm text-[var(--fg)]/70">
-            No agents found matching "{query}"
+            No agents found matching &quot;{query}&quot;
           </p>
         </div>
       )}
