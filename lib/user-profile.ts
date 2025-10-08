@@ -181,9 +181,11 @@ function calculateYearsExperience(employmentHistory: Array<Record<string, unknow
   let totalMonths = 0;
   
   for (const job of employmentHistory) {
-    if (job.start_date && job.end_date) {
-      const start = new Date(job.start_date);
-      const end = job.end_date === 'Present' ? new Date() : new Date(job.end_date);
+    const startDate = job.start_date as string;
+    const endDate = job.end_date as string;
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = endDate === 'Present' ? new Date() : new Date(endDate);
       const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
       totalMonths += months;
     }
