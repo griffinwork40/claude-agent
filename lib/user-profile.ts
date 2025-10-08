@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import path from 'path';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 export interface UserProfile {
   id?: string;
@@ -39,6 +41,7 @@ export interface UserProfile {
 // Get user profile from database
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   try {
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('user_profiles')
       .select('*')
@@ -96,6 +99,7 @@ export async function importProfileFromFile(userId: string, filePath?: string): 
     };
 
     // Save to database
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('user_profiles')
       .upsert([userProfile], { onConflict: 'user_id' })
@@ -118,6 +122,7 @@ export async function importProfileFromFile(userId: string, filePath?: string): 
 // Update user profile
 export async function updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile | null> {
   try {
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('user_profiles')
       .update({

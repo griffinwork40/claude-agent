@@ -11,6 +11,8 @@ import { AgentList, BrowserPane, ChatPane, BottomSheet } from '@/components/agen
 import { mockMessages } from '@/components/agents/mockData';
 import { ResizablePane } from '@/components/ResizablePane';
 
+export const dynamic = 'force-dynamic';
+
 export default function AgentPage() {
   const search = useSearchParams();
   const router = useRouter();
