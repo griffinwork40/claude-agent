@@ -340,12 +340,12 @@ export class BrowserJobService {
     const nameParts = fullName.split(' ');
     await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
     await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
-    await this.fillField(page, 'input[name*="email"]', userProfile.personal_info?.email || '');
-    await this.fillField(page, 'input[name*="phone"]', userProfile.personal_info?.phone || '');
+    await this.fillField(page, 'input[name*="email"]', (personalInfo.email as string) || '');
+    await this.fillField(page, 'input[name*="phone"]', (personalInfo.phone as string) || '');
     
     // Handle location
-    if (userProfile.personal_info?.location) {
-      await this.fillField(page, 'input[name*="city"], input[name*="location"]', userProfile.personal_info.location);
+    if (personalInfo.location) {
+      await this.fillField(page, 'input[name*="city"], input[name*="location"]', personalInfo.location as string);
     }
     
     // Handle work authorization
