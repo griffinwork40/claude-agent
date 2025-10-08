@@ -335,7 +335,8 @@ export class BrowserJobService {
 
   private async fillLinkedInEasyApply(page: Page, userProfile: Record<string, unknown>) {
     // Fill personal information
-    const fullName = userProfile.personal_info?.name as string || '';
+    const personalInfo = userProfile.personal_info as Record<string, unknown> || {};
+    const fullName = (personalInfo.name as string) || '';
     const nameParts = fullName.split(' ');
     await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
     await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
