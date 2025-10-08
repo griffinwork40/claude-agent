@@ -125,16 +125,16 @@ export class PlaywrightApplicationService {
     await this.fillTextarea(page, '[name*="coverletter" i]', this.generateCoverLetter(profileData));
     
     // Handle work experience
-    const employmentHistory = (profileData.employment_history as Array<Record<string, unknown>>) || [];
+    const employmentHistory = (profileData.employment_history as Array<Record<string, unknown>>) ?? [];
     for (const [index, job] of employmentHistory.entries()) {
       await this.fillField(page, `[name*="company" i][data-index="${index}"]`, (job.employer_name as string) || '');
       await this.fillField(page, `[name*="title" i][data-index="${index}"]`, (job.job_title as string) || '');
-      const responsibilities = (job.responsibilities as string[]) || [];
+      const responsibilities = (job.responsibilities as string[]) ?? [];
       await this.fillTextarea(page, `[name*="description" i][data-index="${index}"]`, responsibilities.join('\n'));
     }
-    
+
     // Handle education
-    const education = (profileData.education as Array<Record<string, unknown>>) || [];
+    const education = (profileData.education as Array<Record<string, unknown>>) ?? [];
     for (const [index, edu] of education.entries()) {
       await this.fillField(page, `[name*="school" i][data-index="${index}"]`, (edu.institution as string) || '');
       await this.fillField(page, `[name*="degree" i][data-index="${index}"]`, (edu.degree as string) || '');
@@ -143,7 +143,7 @@ export class PlaywrightApplicationService {
     
     // Handle skill fields (if any)
     const skillsAndQuals = (profileData.skills_and_qualifications as Record<string, unknown>) ?? {};
-    const technicalSkills = (skillsAndQuals.technical_skills as string[]) || [];
+    const technicalSkills = (skillsAndQuals.technical_skills as string[]) ?? [];
     if (technicalSkills.length > 0) {
       const skillsString = technicalSkills.join(', ');
       await this.fillTextarea(page, '[name*="skills" i]', skillsString);
@@ -347,10 +347,10 @@ export class PlaywrightApplicationService {
     // Generate a personalized cover letter based on profile data
     const personalInfo = (profileData.personal_information as Record<string, unknown>) ?? {};
     const skillsAndQuals = (profileData.skills_and_qualifications as Record<string, unknown>) ?? {};
-    const employmentHistory = (profileData.employment_history as Array<Record<string, unknown>>) || [];
-    
-    const technicalSkills = (skillsAndQuals.technical_skills as string[]) || [];
-    const businessSkills = (skillsAndQuals.business_and_product_skills as string[]) || [];
+    const employmentHistory = (profileData.employment_history as Array<Record<string, unknown>>) ?? [];
+
+    const technicalSkills = (skillsAndQuals.technical_skills as string[]) ?? [];
+    const businessSkills = (skillsAndQuals.business_and_product_skills as string[]) ?? [];
     const fullName = (personalInfo.full_name as string) || '';
     
     const coverLetter = `Dear Hiring Manager,
