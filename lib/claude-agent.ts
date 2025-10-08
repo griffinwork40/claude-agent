@@ -99,6 +99,13 @@ export async function runClaudeAgentStream(
     if (sessionId && agentSessions.has(sessionId)) {
       console.log('Using existing session:', sessionId);
       session = agentSessions.get(sessionId);
+      if (!session) {
+        console.log('Session not found, creating new one...');
+        session = { userId, messages: [] };
+        sessionId = `session_${Date.now()}_${userId}`;
+        agentSessions.set(sessionId, session);
+        console.log('✓ New session created:', sessionId);
+      }
     } else {
       console.log('Creating new session...');
       session = { userId, messages: [] };
