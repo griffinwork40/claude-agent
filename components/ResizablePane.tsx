@@ -27,10 +27,59 @@ export function ResizablePane({
   const [isDragging, setIsDragging] = useState(false);
   const paneRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Adjust the current pane width by a delta while clamping to the provided
+   * minimum and maximum width values.
+   *
+   * @param delta - The amount to change the current width by.
+   */
+  const adjustWidthBy = useCallback(
+    (delta: number) => {
+      setWidth((prevWidth) => {
+        const nextWidth = Math.max(
+          minWidth,
+          Math.min(maxWidth, prevWidth + delta),
+        );
+
+        if (nextWidth !== prevWidth) {
+          onWidthChange?.(nextWidth);
+        }
+
+        return nextWidth;
+      });
+    },
+    [maxWidth, minWidth, onWidthChange],
+  );
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
   }, []);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (!paneRef.current) {
+        return;
+      }
+
+      const increment = 16;
+      const isRtl =
+        getComputedStyle(paneRef.current).direction === 'rtl';
+      const isArrowRight = event.key === 'ArrowRight';
+      const logicalDirection = isArrowRight ? 1 : -1;
+      const flowDirection = isRtl ? -logicalDirection : logicalDirection;
+      const positionDirection = position === 'left' ? 1 : -1;
+
+      adjustWidthBy(flowDirection * positionDirection * increment);
+    },
+    [adjustWidthBy, position],
+  );
 
   useEffect(() => {
     if (!isDragging) return;
@@ -77,14 +126,27 @@ export function ResizablePane({
       {/* Resize handle */}
       <div
         className={`absolute top-0 ${
-          position === 'left' ? 'right-0' : 'left-0'
-        } h-full w-1 cursor-col-resize hover:bg-[var(--accent)]/50 transition-colors ${
-          isDragging ? 'bg-[var(--accent)]' : ''
-        } group`}
+          position === 'left'
+            ? 'right-0 translate-x-1/2'
+            : 'left-0 -translate-x-1/2'
+        } group h-full w-11 cursor-col-resize select-none transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--accent)] ${
+          isDragging
+            ? 'bg-[var(--accent)]/20'
+            : 'hover:bg-[var(--accent)]/10 active:bg-[var(--accent)]/20'
+        }`}
         onMouseDown={handleMouseDown}
+        onKeyDown={handleKeyDown}
+        role="separator"
+        aria-label={`Resize ${position} pane`}
+        tabIndex={0}
       >
-        {/* Wider hit area for easier grabbing */}
-        <div className="absolute top-0 h-full w-3 -translate-x-1/2 left-1/2" />
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 flex w-2 -translate-x-1/2 items-center justify-center">
+          <span
+            className={`block h-11 w-px rounded-full bg-[var(--accent)] transition-opacity ${
+              isDragging ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
+            }`}
+          />
+        </div>
       </div>
     </div>
   );

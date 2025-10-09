@@ -28,4 +28,5 @@
 - 2025-10-08: Refactored agent UI from code-focused PR interface to flexible job search assistant. Removed hardcoded mock agents, updated types to remove coding-specific fields (repo, branch, diffStats), simplified Agent interface to conversation-based model. Implemented "New agent" button that creates blank conversations with auto-naming from first message. Added comprehensive empty state with helpful messaging. Updated AgentList, BrowserPane, and main agent page to reflect new conversation-based paradigm. Overall completion: 52%.
 
 - 2025-10-09: Repositioned auth experience copy to highlight the AI job apply agent value props and aligned AuthForm messaging. Overall completion: 55%.
+- 2025-10-09: Implemented responsive header navigation with hamburger trigger, focus-trapped mobile menu, route-aware highlighting, and unit tests covering mobile/desktop breakpoints. Overall completion: 55%.
 
