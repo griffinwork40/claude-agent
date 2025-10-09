@@ -130,7 +130,9 @@ export default function AuthForm({ mode }: AuthFormProps) {
           {mode === 'login' ? 'Welcome back' : 'Create your account'}
         </h1>
         <p className="text-readable text-[var(--fg)]/70">
-          {mode === 'login' ? 'Log in to manage your recruiting workflow.' : 'Get started with streamlined candidate hiring.'}
+          {mode === 'login'
+            ? 'Log in to review curated roles, drafts, and application history.'
+            : 'Join Enlist to launch your AI-powered job search in minutes.'}
         </p>
       </div>
       <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>

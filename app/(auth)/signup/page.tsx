@@ -9,9 +9,9 @@ export const dynamic = 'force-dynamic';
 
 export default function SignupPage() {
   const benefits = [
-    'Launch collaborative hiring plans with plug-and-play templates.',
-    'Share structured feedback instantly across your team.',
-    'Give candidates a polished experience with automated nudges.',
+    'Spin up multi-board searches with prioritized role criteria in minutes.',
+    'Review AI-curated job packets complete with pros, cons, and salary signals.',
+    'Approve applications once and let Enlist handle follow-ups automatically.',
   ];
 
   return (
@@ -23,13 +23,13 @@ export default function SignupPage() {
             <div className="absolute -bottom-10 -left-10 hidden h-32 w-32 rounded-full bg-[var(--accent)]/10 blur-3xl lg:block" aria-hidden="true" />
             <div className="relative space-y-6">
               <p className="inline-flex items-center gap-2 rounded-full bg-[var(--card)]/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--fg)]/60">
-                Start with Enlist
+                Start your AI job search
               </p>
               <h1 className="text-display text-[var(--fg)]">
-                Build a candidate journey people rave about
+                Build a job hunt that runs itself
               </h1>
               <p className="text-readable text-[var(--fg)]/70">
-                Craft structured hiring workflows, automate updates, and share insights in real time—without compromising accessibility.
+                Create saved searches, collaborate on approvals, and dispatch polished applications without leaving the Enlist workspace.
               </p>
               <ul className="space-y-3 text-left">
                 {benefits.map((benefit) => (

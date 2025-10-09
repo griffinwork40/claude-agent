@@ -9,9 +9,9 @@ export const dynamic = 'force-dynamic';
 
 export default function LoginPage() {
   const benefits = [
-    'Centralize every candidate conversation in one shared inbox.',
-    'Automate scheduling and follow-ups with our AI assistant.',
-    'Track pipeline health with accessible, real-time dashboards.',
+    'Let the AI scout fresh, relevant roles across your target markets every day.',
+    'Auto-tailor resumes and cover letters using the context from your Enlist workspace.',
+    'Stay on top of every application with approvals, reminders, and status syncing.',
   ];
 
   return (
@@ -23,13 +23,13 @@ export default function LoginPage() {
             <div className="absolute -bottom-10 -left-10 hidden h-32 w-32 rounded-full bg-[var(--accent)]/10 blur-3xl lg:block" aria-hidden="true" />
             <div className="relative space-y-6">
               <p className="inline-flex items-center gap-2 rounded-full bg-[var(--card)]/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--fg)]/60">
-                Enlist Platform
+                Enlist Job Apply Agent
               </p>
               <h1 className="text-display text-[var(--fg)]">
-                Hiring collaboration that scales with your team
+                Your AI partner for applying to the right roles faster
               </h1>
               <p className="text-readable text-[var(--fg)]/70">
-                Bring recruiters, interviewers, and hiring managers together in one accessible workspace designed for modern recruiting teams.
+                Enlist monitors job boards, drafts tailored materials, and files applications end-to-end so you can focus on interviews.
               </p>
               <ul className="space-y-3 text-left">
                 {benefits.map((benefit) => (
