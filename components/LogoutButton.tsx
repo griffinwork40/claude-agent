@@ -1,6 +1,7 @@
 // components/LogoutButton.tsx
 "use client";
 
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 

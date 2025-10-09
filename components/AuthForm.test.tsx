@@ -3,12 +3,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AuthForm from './AuthForm';
 import { vi } from 'vitest';
 
+const signInWithOAuthMock = vi.fn(async () => ({}));
+
 vi.mock('@/lib/supabase/client', () => ({
   getBrowserSupabase: () => ({
     auth: {
       signInWithPassword: vi.fn(async () => ({ data: {}, error: null })),
       signUp: vi.fn(async () => ({ data: {}, error: null })),
-      signInWithOAuth: vi.fn(async () => ({})),
+      signInWithOAuth: signInWithOAuthMock,
     },
   }),
 }));
@@ -37,6 +39,17 @@ describe('AuthForm', () => {
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: /sign up/i }));
     await waitFor(() => expect(screen.queryByText(/please wait/i)).toBeNull());
+  });
+
+  it('renders LinkedIn button and triggers LinkedIn OAuth', async () => {
+    render(<AuthForm mode="login" />);
+    const btn = await screen.findByRole('button', { name: /continue with linkedin/i });
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(signInWithOAuthMock).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'linkedin' })
+      );
+    });
   });
 });
 

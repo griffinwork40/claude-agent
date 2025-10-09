@@ -2,21 +2,21 @@
 import './globals.css';
 import Link from 'next/link';
 import { getSiteName, getSiteUrl } from '@/lib/site';
-import LogoutButton from '@/components/LogoutButton';
 import LayoutWrapper from '@/components/LayoutWrapper';
 import { getServerSupabase } from '@/lib/supabase/server';
+import HeaderNavigation from '@/components/HeaderNavigation';
 
 const siteName = getSiteName();
 const siteUrl = getSiteUrl();
 
 export const metadata = {
   title: siteName,
-  description: 'Enlist is your job search agent—scouting roles, tailoring materials, and applying automatically.',
+  description: 'The new way to search for jobs. Save 10+ hours per week with AI-powered job search, tailored applications, and automatic applying.',
   metadataBase: siteUrl,
   manifest: '/site.webmanifest',
   openGraph: {
     title: siteName,
-    description: 'Enlist is your job search agent—scouting roles, tailoring materials, and applying automatically.',
+    description: 'The new way to search for jobs. Save 10+ hours per week with AI-powered job search, tailored applications, and automatic applying.',
     url: siteUrl,
     siteName,
     type: 'website',
@@ -24,7 +24,7 @@ export const metadata = {
   twitter: {
     card: 'summary_large_image',
     title: siteName,
-    description: 'Enlist is your job search agent—scouting roles, tailoring materials, and applying automatically.',
+    description: 'The new way to search for jobs. Save 10+ hours per week with AI-powered job search, tailored applications, and automatic applying.',
   },
 };
 
