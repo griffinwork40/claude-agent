@@ -18,7 +18,7 @@ export default function EnlistLanding() {
           <span className="block text-3xl md:text-4xl mt-2 text-[var(--fg)]/90">Save hours every week.</span>
         </h1>
         <p className="mt-3 text-readable text-[var(--fg)]/80 max-w-2xl">
-          Stop wasting time on endless job boards. {siteName} uses AI to find perfect roles, craft tailored applications, and apply automatically—saving you 10+ hours per week while you stay in complete control.
+          Stop wasting time on endless job boards. {siteName} uses AI to find perfect roles, craft tailored applications, and apply to multiple jobs simultaneously—saving you 10+ hours per week while you stay in complete control.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>
@@ -35,7 +35,7 @@ export default function EnlistLanding() {
         {[
           { title: 'Share your goals', body: 'Tell our AI what roles and companies you want—takes 2 minutes, not hours of browsing.' },
           { title: 'AI crafts perfect applications', body: 'Generate tailored resumes and cover letters in seconds, not days of manual work.' },
-          { title: 'Apply automatically', body: 'Send polished applications instantly while you focus on what matters—your career.' },
+          { title: 'Apply to multiple jobs at once', body: 'Run agents in parallel to apply to dozens of jobs simultaneously while you focus on what matters—your career.' },
         ].map((f, idx) => (
           <Card key={f.title ?? idx} className="p-5">
             <p className="text-heading text-[var(--fg)]">{f.title}</p>
