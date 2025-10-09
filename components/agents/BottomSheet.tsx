@@ -98,6 +98,12 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
     const lastElement = focusableElements[focusableElements.length - 1];
     const activeElement = document.activeElement as HTMLElement | null;
 
+    if (activeElement === sheetRef.current) {
+      event.preventDefault();
+      (event.shiftKey ? lastElement : firstElement).focus();
+      return;
+    }
+
     if (!event.shiftKey && activeElement === lastElement) {
       event.preventDefault();
       firstElement.focus();
