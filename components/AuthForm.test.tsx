@@ -1,3 +1,4 @@
+import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AuthForm from './AuthForm';
 import { vi } from 'vitest';
@@ -15,7 +16,7 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('next/navigation', async (orig) => {
   const actual = await orig();
   return {
-    ...actual,
+    ...(actual as Record<string, unknown>),
     useRouter: () => ({ replace: vi.fn() }),
     useSearchParams: () => new URLSearchParams(),
   };

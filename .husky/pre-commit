@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+set -euo pipefail
+
+echo "🔍 Running linter..."
+npm run lint
+echo "🔧 Running type check..."
+npx tsc --noEmit

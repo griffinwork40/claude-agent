@@ -8,13 +8,15 @@ vi.mock('@supabase/auth-helpers-nextjs', async () => {
     createServerClient: vi.fn(() => ({
       auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
     })),
+    createMiddlewareClient: vi.fn(() => ({
+      auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
+    })),
   };
 });
 
 function makeRequest(pathname: string) {
   // next/server NextRequest is complex; construct with URL
   const url = new URL(`http://localhost:3000${pathname}`);
-  // @ts-expect-error - minimal init for tests
   return new NextRequest(url);
 }
 

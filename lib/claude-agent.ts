@@ -95,10 +95,10 @@ export async function runClaudeAgentStream(
     console.log('✓ Agent initialized for streaming with tools');
     
     // Get or create session
-    let session;
+    let session: AgentSession;
     if (sessionId && agentSessions.has(sessionId)) {
       console.log('Using existing session:', sessionId);
-      session = agentSessions.get(sessionId);
+      session = agentSessions.get(sessionId)!;
     } else {
       console.log('Creating new session...');
       session = { userId, messages: [] };
@@ -322,7 +322,7 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
             } else {
               const applicationResult = await browserService.applyToJob(
                 (toolUse.input as { job_url: string }).job_url,
-                userProfile
+                userProfile as unknown as Record<string, unknown>
               );
               result = {
                 success: applicationResult.success,

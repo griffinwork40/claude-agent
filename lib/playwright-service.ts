@@ -8,6 +8,20 @@ interface JobApplicationData {
   resumePath: string;
 }
 
+const toRecord = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+
+const toRecordArray = (value: unknown): Array<Record<string, unknown>> =>
+  Array.isArray(value)
+    ? value
+        .filter((item): item is Record<string, unknown> =>
+          item !== null && typeof item === 'object'
+        )
+    : [];
+
+const toStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
 // Main class for handling Playwright automation
 export class PlaywrightApplicationService {
   private browser: Browser | null = null;
@@ -97,64 +111,125 @@ export class PlaywrightApplicationService {
 
   private async fillApplicationForm(page: Page, profileData: Record<string, unknown>) {
     // Fill personal information fields
-    await this.fillField(page, 'firstName', profileData.personal_information.full_name.split(' ')[0]);
-    await this.fillField(page, 'lastName', profileData.personal_information.full_name.split(' ').slice(1).join(' '));
-    await this.fillField(page, 'email', profileData.personal_information.email);
-    await this.fillField(page, 'phone', profileData.personal_information.phone);
+    const personalInfo = toRecord(profileData.personal_information);
+    const fullName = typeof personalInfo.full_name === 'string' ? personalInfo.full_name : '';
+    const nameParts = fullName.split(' ');
+    await this.fillField(page, 'firstName', nameParts[0] || '');
+    await this.fillField(page, 'lastName', nameParts.slice(1).join(' ') || '');
+    await this.fillField(
+      page,
+      'email',
+      typeof personalInfo.email === 'string' ? personalInfo.email : ''
+    );
+    await this.fillField(
+      page,
+      'phone',
+      typeof personalInfo.phone === 'string' ? personalInfo.phone : ''
+    );
     
     // For more complex selectors, we need to try multiple common selectors
-    await this.fillField(page, '[data-qa="email"]', profileData.personal_information.email);
-    await this.fillField(page, '[data-test="email"]', profileData.personal_information.email);
-    await this.fillField(page, 'input[name*="email" i]', profileData.personal_information.email);
-    
+    const email = typeof personalInfo.email === 'string' ? personalInfo.email : '';
+    await this.fillField(page, '[data-qa="email"]', email);
+    await this.fillField(page, '[data-test="email"]', email);
+    await this.fillField(page, 'input[name*="email" i]', email);
+
     // Fill location
-    if (profileData.personal_information.address) {
-      const addressParts = profileData.personal_information.address.split(',');
-      await this.fillField(page, 'city', addressParts[0]?.trim());
-      await this.fillField(page, 'state', addressParts[1]?.trim());
-      await this.fillField(page, 'zip', addressParts[2]?.trim());
+    const address = typeof personalInfo.address === 'string' ? personalInfo.address : '';
+    if (address) {
+      const addressParts = address.split(',');
+      await this.fillField(page, 'city', addressParts[0]?.trim() || '');
+      await this.fillField(page, 'state', addressParts[1]?.trim() || '');
+      await this.fillField(page, 'zip', addressParts[2]?.trim() || '');
     }
-    
+
     // Handle other common fields
-    await this.fillField(page, 'summary', profileData.additional_information.about || '');
+    const additionalInfo = toRecord(profileData.additional_information);
+    await this.fillField(
+      page,
+      'summary',
+      typeof additionalInfo.about === 'string' ? additionalInfo.about : ''
+    );
     await this.fillTextarea(page, '[name*="coverletter" i]', this.generateCoverLetter(profileData));
-    
+
     // Handle work experience
-    for (const [index, job] of profileData.employment_history.entries()) {
-      await this.fillField(page, `[name*="company" i][data-index="${index}"]`, job.employer_name);
-      await this.fillField(page, `[name*="title" i][data-index="${index}"]`, job.job_title);
-      await this.fillTextarea(page, `[name*="description" i][data-index="${index}"]`, job.responsibilities.join('\n'));
+    const employmentHistory = toRecordArray(profileData.employment_history);
+    for (const [index, job] of employmentHistory.entries()) {
+      await this.fillField(
+        page,
+        `[name*="company" i][data-index="${index}"]`,
+        typeof job.employer_name === 'string' ? job.employer_name : ''
+      );
+      await this.fillField(
+        page,
+        `[name*="title" i][data-index="${index}"]`,
+        typeof job.job_title === 'string' ? job.job_title : ''
+      );
+      const responsibilities = toStringArray(job.responsibilities);
+      await this.fillTextarea(page, `[name*="description" i][data-index="${index}"]`, responsibilities.join('\n'));
     }
-    
+
     // Handle education
-    for (const [index, education] of profileData.education.entries()) {
-      await this.fillField(page, `[name*="school" i][data-index="${index}"]`, education.institution);
-      await this.fillField(page, `[name*="degree" i][data-index="${index}"]`, education.degree);
-      await this.fillField(page, `[name*="field" i][data-index="${index}"]`, education.major);
+    const education = toRecordArray(profileData.education);
+    for (const [index, edu] of education.entries()) {
+      await this.fillField(
+        page,
+        `[name*="school" i][data-index="${index}"]`,
+        typeof edu.institution === 'string' ? edu.institution : ''
+      );
+      await this.fillField(
+        page,
+        `[name*="degree" i][data-index="${index}"]`,
+        typeof edu.degree === 'string' ? edu.degree : ''
+      );
+      await this.fillField(
+        page,
+        `[name*="field" i][data-index="${index}"]`,
+        typeof edu.major === 'string' ? edu.major : ''
+      );
     }
-    
+
     // Handle skill fields (if any)
-    if (profileData.skills_and_qualifications.technical_skills) {
-      const skillsString = profileData.skills_and_qualifications.technical_skills.join(', ');
+    const skillsAndQuals = toRecord(profileData.skills_and_qualifications);
+    const technicalSkills = toStringArray(skillsAndQuals.technical_skills);
+    if (technicalSkills.length > 0) {
+      const skillsString = technicalSkills.join(', ');
       await this.fillTextarea(page, '[name*="skills" i]', skillsString);
     }
-    
+
     // Handle availability and legal questions
-    if (profileData.position_and_availability.availability.includes('full-time')) {
+    const positionAndAvailability = toRecord(profileData.position_and_availability);
+    const availabilityValue = positionAndAvailability.availability;
+    const availabilityOptions =
+      typeof availabilityValue === 'string'
+        ? [availabilityValue]
+        : toStringArray(availabilityValue);
+    if (
+      availabilityOptions.some((option) =>
+        option.toLowerCase().includes('full-time')
+      )
+    ) {
       await this.clickCheckbox(page, '[name*="fulltime" i]');
     }
-    
-    if (profileData.work_eligibility_and_legal.legally_authorized_to_work_in_us) {
+
+    const workEligibility = toRecord(profileData.work_eligibility_and_legal);
+    const legallyAuthorized = workEligibility.legally_authorized_to_work_in_us;
+    if (legallyAuthorized === true || legallyAuthorized === 'yes') {
       await this.clickCheckbox(page, '[name*="authorized" i]');
     }
-    
-    if (!profileData.work_eligibility_and_legal.require_sponsorship) {
+
+    const requiresSponsorship = workEligibility.require_sponsorship;
+    if (requiresSponsorship === false || requiresSponsorship === 'no' || requiresSponsorship === undefined) {
       await this.clickCheckbox(page, '[name*="sponsorship" i]');
     }
-    
+
     // Handle demographic questions
-    if (profileData.demographic_questions.gender_identity) {
-      await this.selectOption(page, '[name*="gender" i]', profileData.demographic_questions.gender_identity);
+    const demographicQuestions = toRecord(profileData.demographic_questions);
+    const genderIdentity =
+      typeof demographicQuestions.gender_identity === 'string'
+        ? demographicQuestions.gender_identity
+        : '';
+    if (genderIdentity) {
+      await this.selectOption(page, '[name*="gender" i]', genderIdentity);
     }
   }
 
@@ -330,18 +405,37 @@ export class PlaywrightApplicationService {
 
   private generateCoverLetter(profileData: Record<string, unknown>): string {
     // Generate a personalized cover letter based on profile data
+    const personalInfo = toRecord(profileData.personal_information);
+    const skillsAndQuals = toRecord(profileData.skills_and_qualifications);
+    const employmentHistory = toRecordArray(profileData.employment_history);
+
+    const technicalSkills = toStringArray(skillsAndQuals.technical_skills);
+    const businessSkills = toStringArray(skillsAndQuals.business_and_product_skills);
+    const fullName = typeof personalInfo.full_name === 'string' ? personalInfo.full_name : '';
+
+    const highlightedTechnicalSkills = technicalSkills.slice(0, 3).join(', ') || 'my technical expertise';
+    const firstEmployment = employmentHistory[0];
+    const employerName =
+      typeof firstEmployment?.employer_name === 'string'
+        ? firstEmployment.employer_name
+        : 'my previous company';
+    const responsibilities = toStringArray(firstEmployment?.responsibilities);
+    const primaryResponsibility =
+      responsibilities[0] || 'demonstrated expertise in my field';
+    const highlightedBusinessSkill = businessSkills[0] || 'professional skills';
+
     const coverLetter = `Dear Hiring Manager,
 
-I am writing to express my strong interest in the position. With my background in ${profileData.skills_and_qualifications.technical_skills.slice(0, 3).join(', ')}, I am confident that I would be a valuable addition to your team.
+I am writing to express my strong interest in the position. With my background in ${highlightedTechnicalSkills}, I am confident that I would be a valuable addition to your team.
 
-In my role at ${profileData.employment_history[0]?.employer_name || 'my previous company'}, I ${profileData.employment_history[0]?.responsibilities[0] || 'demonstrated expertise in my field'}. This experience, combined with my ${profileData.skills_and_qualifications.business_and_product_skills[0] || 'professional skills'}, has prepared me well for this opportunity.
+In my role at ${employerName}, I ${primaryResponsibility}. This experience, combined with my ${highlightedBusinessSkill}, has prepared me well for this opportunity.
 
 I am particularly drawn to this position because of [specific reason related to the job/company]. I am excited about the possibility of contributing to your team and growing professionally within your organization.
 
 Thank you for considering my application. I look forward to discussing how my skills and experience align with your needs.
 
 Sincerely,
-${profileData.personal_information.full_name}`;
+${fullName}`;
 
     return coverLetter;
   }
