@@ -1,3 +1,7 @@
+/**
+ * Next.js configuration used by the application build and runtime pipelines.
+ * Ensures the custom ESLint configuration does not block production builds.
+ */
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -6,4 +10,4 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
+export default nextConfig
