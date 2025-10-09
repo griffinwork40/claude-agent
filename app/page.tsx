@@ -12,7 +12,11 @@ export default function EnlistLanding() {
       {/* Hero matching light theme */}
       <Card className="p-8">
         <p className="uppercase tracking-wide text-sm text-[var(--fg)]/70">{siteName} — Job Search Agent</p>
-        <h1 className="mt-2 text-display md:text-5xl text-[var(--fg)]">The new way to search for jobs. Save hours every week.</h1>
+        <h1 className="mt-2 text-display md:text-5xl text-[var(--fg)]">
+          <span className="block">The new way to</span>
+          <span className="block text-[var(--accent)]">search for jobs.</span>
+          <span className="block text-3xl md:text-4xl mt-2 text-[var(--fg)]/90">Save hours every week.</span>
+        </h1>
         <p className="mt-3 text-readable text-[var(--fg)]/80 max-w-2xl">
           Stop wasting time on endless job boards. {siteName} uses AI to find perfect roles, craft tailored applications, and apply automatically—saving you 10+ hours per week while you stay in complete control.
         </p>
