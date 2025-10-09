@@ -12,9 +12,9 @@ export default function EnlistLanding() {
       {/* Hero matching light theme */}
       <Card className="p-8">
         <p className="uppercase tracking-wide text-sm text-[var(--fg)]/70">{siteName} — Job Search Agent</p>
-        <h1 className="mt-2 text-display md:text-5xl text-[var(--fg)]">Find roles. Tailor resumes. Apply faster.</h1>
+        <h1 className="mt-2 text-display md:text-5xl text-[var(--fg)]">The new way to search for jobs. Save hours every week.</h1>
         <p className="mt-3 text-readable text-[var(--fg)]/80 max-w-2xl">
-          {siteName} scouts roles, builds and tailors your resume and cover letters, and applies automatically, keeping you in control every step of the way.
+          Stop wasting time on endless job boards. {siteName} uses AI to find perfect roles, craft tailored applications, and apply automatically—saving you 10+ hours per week while you stay in complete control.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>
@@ -29,9 +29,9 @@ export default function EnlistLanding() {
       {/* How it works simplified to match UI */}
       <section id="how-it-works" className="grid md:grid-cols-3 gap-6">
         {[
-          { title: 'Share goals', body: 'Tell the assistant what roles and companies you’re targeting.' },
-          { title: 'Tailor your resume', body: 'Generate and adapt a resume to each role’s requirements in seconds.' },
-          { title: 'Apply confidently', body: 'Send tailored applications you control, fast and polished.' },
+          { title: 'Share your goals', body: 'Tell our AI what roles and companies you want—takes 2 minutes, not hours of browsing.' },
+          { title: 'AI crafts perfect applications', body: 'Generate tailored resumes and cover letters in seconds, not days of manual work.' },
+          { title: 'Apply automatically', body: 'Send polished applications instantly while you focus on what matters—your career.' },
         ].map((f, idx) => (
           <Card key={f.title ?? idx} className="p-5">
             <p className="text-heading text-[var(--fg)]">{f.title}</p>
