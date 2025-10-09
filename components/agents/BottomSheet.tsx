@@ -4,7 +4,7 @@
  */
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef, type KeyboardEvent } from 'react';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -21,14 +21,26 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
   const sheetRef = useRef<HTMLDivElement>(null);
   const startY = useRef<number>(0);
   const currentY = useRef<number>(0);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
 
   useEffect(() => {
-    // Prevent body scroll when sheet is open
     if (isOpen) {
+      previousFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+      sheetRef.current?.focus();
+      return () => {
+        document.body.style.overflow = '';
+      };
     }
+
+    document.body.style.overflow = '';
+    if (previousFocusRef.current) {
+      previousFocusRef.current.focus();
+      previousFocusRef.current = null;
+    }
+
     return () => {
       document.body.style.overflow = '';
     };
@@ -65,6 +77,42 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
     currentY.current = 0;
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab' || !sheetRef.current) {
+      return;
+    }
+
+    const focusableSelectors =
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+    const focusableElements = Array.from(
+      sheetRef.current.querySelectorAll<HTMLElement>(focusableSelectors),
+    ).filter((element) => !element.hasAttribute('aria-hidden'));
+
+    if (focusableElements.length === 0) {
+      event.preventDefault();
+      sheetRef.current.focus();
+      return;
+    }
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement as HTMLElement | null;
+
+    if (activeElement === sheetRef.current) {
+      event.preventDefault();
+      (event.shiftKey ? lastElement : firstElement).focus();
+      return;
+    }
+
+    if (!event.shiftKey && activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    } else if (event.shiftKey && activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -84,6 +132,11 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
       >
         {/* Handle bar for swipe indicator */}
         <div className="flex justify-center py-3 border-b border-[var(--border)]">
@@ -91,18 +144,24 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
         </div>
 
         {/* Header */}
-        {title && (
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-            <h2 className="text-lg font-semibold text-[var(--fg)]">{title}</h2>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-md hover:bg-[var(--muted)] text-[var(--fg)]"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-          </div>
-        )}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          {title ? (
+            <h2 id={titleId} className="text-lg font-semibold text-[var(--fg)]">
+              {title}
+            </h2>
+          ) : (
+            <span id={titleId} className="sr-only">
+              Bottom sheet dialog
+            </span>
+          )}
+          <button
+            onClick={onClose}
+            className="p-2 rounded-md hover:bg-[var(--muted)] text-[var(--fg)]"
+            aria-label="Close bottom sheet"
+          >
+            ✕
+          </button>
+        </div>
 
         {/* Content */}
         <div className="h-[calc(100%-3rem)] overflow-hidden">
