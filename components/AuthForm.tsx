@@ -102,7 +102,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       router.replace(redirect);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
-      setError(errorMessage);
+      setFormError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -120,7 +120,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'OAuth failed';
-      setError(errorMessage);
+      setFormError(errorMessage);
       setLoading(false);
     }
   }
