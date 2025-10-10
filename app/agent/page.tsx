@@ -63,40 +63,6 @@ export default function AgentPage() {
     setIsBottomSheetOpen(true);
   }
 
-  function handleSend(content: string) {
-    if (!selectedAgent) return;
-    
-    const newMsg: Message = {
-      id: `m-${Date.now()}`,
-      agentId: selectedAgent.id,
-      role: 'user',
-      content,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, newMsg]);
-    
-    // Auto-name agent based on first message
-    if (selectedAgent.name === 'New conversation' && content.trim()) {
-      const autoName = content.trim().slice(0, 50) + (content.length > 50 ? '...' : '');
-      setAgents((prev) =>
-        prev.map((a) =>
-          a.id === selectedAgent.id
-            ? { ...a, name: autoName, updatedAt: new Date().toISOString() }
-            : a
-        )
-      );
-    } else {
-      // Update the agent's updatedAt timestamp
-      setAgents((prev) =>
-        prev.map((a) =>
-          a.id === selectedAgent.id
-            ? { ...a, updatedAt: new Date().toISOString() }
-            : a
-        )
-      );
-    }
-  }
-
   // Function to refresh messages from the server
   async function refreshMessages() {
     try {
@@ -104,8 +70,14 @@ export default function AgentPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data) {
+          interface ServerMessage {
+            id: string;
+            sender: string;
+            content: string;
+            created_at: string;
+          }
           // Convert server messages to our Message format
-          const serverMessages: Message[] = data.data.map((msg: any) => ({
+          const serverMessages: Message[] = data.data.map((msg: ServerMessage) => ({
             id: msg.id,
             agentId: selectedAgent?.id || 'default',
             role: msg.sender === 'user' ? 'user' : 'assistant',

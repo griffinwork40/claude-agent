@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { Message } from '@/types';
-import { runClaudeAgent, runClaudeAgentStream } from '@/lib/claude-agent';
+import { runClaudeAgentStream } from '@/lib/claude-agent';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -85,7 +84,6 @@ export async function POST(request: NextRequest) {
     // Create a readable stream for Server-Sent Events
     const encoder = new TextEncoder();
     let fullResponse = '';
-    let preambleSent = false;
 
     const readableStream = new ReadableStream({
       async start(controller) {
@@ -96,7 +94,6 @@ export async function POST(request: NextRequest) {
           // Immediately send a preamble SSE event so the client receives bytes even if downstream fails
           const preamble = `data: ${JSON.stringify({ type: 'status', content: 'starting' })}\n\n`;
           controller.enqueue(encoder.encode(preamble));
-          preambleSent = true;
           console.log('✓ SSE preamble event sent');
 
           const reader = stream.getReader();
