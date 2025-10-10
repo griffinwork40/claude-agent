@@ -11,6 +11,36 @@ interface JobApplicationData {
 const toRecord = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
+const normalizeBoolean = (value: unknown): boolean | undefined => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    if (Number.isNaN(value)) {
+      return undefined;
+    }
+    return value !== 0;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+
+    if (['yes', 'y', 'true', 't', '1'].includes(normalized)) {
+      return true;
+    }
+
+    if (['no', 'n', 'false', 'f', '0'].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return undefined;
+};
+
 const toRecordArray = (value: unknown): Array<Record<string, unknown>> =>
   Array.isArray(value)
     ? value
@@ -212,13 +242,15 @@ export class PlaywrightApplicationService {
     }
 
     const workEligibility = toRecord(profileData.work_eligibility_and_legal);
-    const legallyAuthorized = workEligibility.legally_authorized_to_work_in_us;
-    if (legallyAuthorized === true || legallyAuthorized === 'yes') {
+    const legallyAuthorized = normalizeBoolean(
+      workEligibility.legally_authorized_to_work_in_us
+    );
+    if (legallyAuthorized === true) {
       await this.clickCheckbox(page, '[name*="authorized" i]');
     }
 
-    const requiresSponsorship = workEligibility.require_sponsorship;
-    if (requiresSponsorship === false || requiresSponsorship === 'no' || requiresSponsorship === undefined) {
+    const requiresSponsorship = normalizeBoolean(workEligibility.require_sponsorship);
+    if (requiresSponsorship !== true) {
       await this.clickCheckbox(page, '[name*="sponsorship" i]');
     }
 
