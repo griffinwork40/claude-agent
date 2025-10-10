@@ -2,6 +2,28 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 
+interface GriffinEmploymentHistoryEntry {
+  job_title?: string;
+  employer_name?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+interface GriffinProfile {
+  personal_information?: {
+    full_name?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+  };
+  skills_and_qualifications?: {
+    technical_skills?: string[];
+    business_and_product_skills?: string[];
+  };
+  employment_history?: GriffinEmploymentHistoryEntry[];
+  resume_location?: string;
+}
+
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -65,7 +87,7 @@ export async function importProfileFromFile(userId: string, filePath?: string): 
     // Default to the griffin.json file if no path provided
     const profilePath = filePath || '/Users/griffinlong/Projects/personal_projects/resume/griffin.json';
     
-    const profileData = JSON.parse(readFileSync(profilePath, 'utf8'));
+    const profileData = JSON.parse(readFileSync(profilePath, 'utf8')) as GriffinProfile;
     
     // Transform griffin.json structure to our UserProfile interface
     const userProfile: UserProfile = {
@@ -81,11 +103,11 @@ export async function importProfileFromFile(userId: string, filePath?: string): 
           ...(profileData.skills_and_qualifications?.technical_skills || []),
           ...(profileData.skills_and_qualifications?.business_and_product_skills || [])
         ],
-        years_experience: calculateYearsExperience(profileData.employment_history || []),
-        previous_roles: (profileData.employment_history || []).map((job: Record<string, unknown>) => ({
-          title: job.job_title || '',
-          company: job.employer_name || '',
-          duration: `${job.start_date || ''} - ${job.end_date || 'Present'}`
+        years_experience: calculateYearsExperience(profileData.employment_history ?? []),
+        previous_roles: (profileData.employment_history ?? []).map((job) => ({
+          title: job.job_title ?? '',
+          company: job.employer_name ?? '',
+          duration: formatEmploymentDuration(job.start_date, job.end_date)
         }))
       },
       preferences: {
@@ -175,23 +197,41 @@ export async function getOrCreateUserProfile(userId: string): Promise<UserProfil
 }
 
 // Calculate years of experience from employment history
-function calculateYearsExperience(employmentHistory: Array<Record<string, unknown>>): number {
+function calculateYearsExperience(employmentHistory: GriffinEmploymentHistoryEntry[]): number {
   if (!employmentHistory || employmentHistory.length === 0) return 0;
-  
+
   let totalMonths = 0;
-  
+
   for (const job of employmentHistory) {
-    const startDate = job.start_date as string;
-    const endDate = job.end_date as string;
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = endDate === 'Present' ? new Date() : new Date(endDate);
-      const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-      totalMonths += months;
+    const { start_date: startDate, end_date: endDate } = job;
+    if (!startDate) {
+      continue;
     }
+
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : new Date();
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      continue;
+    }
+
+    const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+    totalMonths += Math.max(months, 0);
   }
-  
+
   return Math.round(totalMonths / 12);
+}
+
+function formatEmploymentDuration(startDate?: string, endDate?: string): string {
+  if (!startDate && !endDate) {
+    return '';
+  }
+
+  if (!startDate) {
+    return endDate ?? 'Present';
+  }
+
+  const formattedEnd = endDate ?? 'Present';
+  return `${startDate} - ${formattedEnd}`;
 }
 
 // Validate user profile completeness
