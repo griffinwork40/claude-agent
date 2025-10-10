@@ -1,4 +1,9 @@
 import '@testing-library/jest-dom';
+import { config } from 'dotenv';
+import path from 'path';
+
+// Load environment variables from .env.local
+config({ path: path.resolve(__dirname, '.env.local') });
 
 // Make Vitest globals available
 declare global {
