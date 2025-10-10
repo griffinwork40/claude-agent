@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const mockUsePathname = vi.fn<string, []>();
+const mockUsePathname = vi.fn();
 const mockReplace = vi.fn();
 
 vi.mock('next/navigation', async (importOriginal) => {
