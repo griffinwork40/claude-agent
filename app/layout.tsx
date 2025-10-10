@@ -34,7 +34,17 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const supabase = getServerSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
+  let session = null;
+  
+  if (supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+    } catch (error) {
+      console.warn('Failed to get session:', error);
+    }
+  }
+  
   return (
     <html lang="en">
       <body className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">

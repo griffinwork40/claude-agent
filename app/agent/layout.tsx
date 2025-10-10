@@ -6,6 +6,12 @@ export const dynamic = 'force-dynamic';
 
 export default async function AgentLayout({ children }: { children: React.ReactNode }) {
   const supabase = getServerSupabase();
+  
+  if (!supabase) {
+    // If Supabase is not available, redirect to login
+    redirect('/login?redirect=/agent');
+  }
+  
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login?redirect=/agent');
   return <>{children}</>;
