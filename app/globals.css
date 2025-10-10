@@ -29,6 +29,8 @@
   --border: #1f2937; /* gray-800 */
   --accent: #2563eb; /* blue-600 */
   --accent-foreground: #ffffff;
+  --danger: #dc2626; /* red-600 */
+  --danger-soft: #fee2e2;
 }
 
 html, body {

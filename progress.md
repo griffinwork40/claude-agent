@@ -1,3 +1,5 @@
+<!-- progress.md Purpose: Track major project milestones and completion percentage. -->
+
 # Progress
 
 - 2025-10-07: Fixed React key warnings on landing; implemented asChild in Button; updated web manifest to use existing SVG icon. Overall completion: 31%.
@@ -24,4 +26,8 @@
 - 2025-10-08: Added resizable panes to /agent desktop layout - created ResizablePane component with drag handles allowing users to adjust the width of left sidebar (200-500px) and right chat pane (300-600px). Includes hover/active visual feedback and smooth dragging UX. Overall completion: 45%.
 
 - 2025-10-08: Refactored agent UI from code-focused PR interface to flexible job search assistant. Removed hardcoded mock agents, updated types to remove coding-specific fields (repo, branch, diffStats), simplified Agent interface to conversation-based model. Implemented "New agent" button that creates blank conversations with auto-naming from first message. Added comprehensive empty state with helpful messaging. Updated AgentList, BrowserPane, and main agent page to reflect new conversation-based paradigm. Overall completion: 52%.
+
+- 2025-10-09: Repositioned auth experience copy to highlight the AI job apply agent value props and aligned AuthForm messaging. Overall completion: 55%.
+- 2025-10-09: Optimized mobile auth layout so login and signup cards render first, reducing scroll friction for new and returning users. Overall completion: 56%.
+- 2025-10-09: Implemented responsive header navigation with hamburger trigger, focus-trapped mobile menu, route-aware highlighting, and unit tests covering mobile/desktop breakpoints. Overall completion: 55%.
 

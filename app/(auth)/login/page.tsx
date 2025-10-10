@@ -7,17 +7,57 @@ import { Suspense } from 'react';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Renders the login experience with marketing context and authentication form.
+ */
 export default function LoginPage() {
+  const benefits = [
+    'Let the AI scout fresh, relevant roles across your target markets every day.',
+    'Auto-tailor resumes and cover letters using the context from your Enlist workspace.',
+    'Stay on top of every application with approvals, reminders, and status syncing.',
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-2xl mx-auto pt-16 px-4">
-        <Suspense fallback={<div className="text-center text-gray-600">Loading…</div>}>
-          <AuthForm mode="login" />
-        </Suspense>
-        <p className="mt-4 text-center text-sm text-gray-600">
-          Don’t have an account?{' '}
-          <Link href="/signup" className="text-indigo-600 hover:underline">Sign up</Link>
-        </p>
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
+      <div className="mx-auto flex min-h-screen max-w-6xl flex-col-reverse justify-center gap-10 px-4 py-10 sm:px-6 sm:py-12 lg:flex-row lg:items-center lg:gap-16 lg:py-20">
+        <div className="mx-auto w-full max-w-xl text-center lg:mx-0 lg:max-w-2xl lg:text-left">
+          <div className="relative overflow-hidden rounded-3xl border border-[var(--border)]/15 bg-gradient-to-br from-[var(--muted)]/90 via-[var(--card)] to-[var(--accent)]/10 p-10 shadow-[0_32px_80px_rgba(15,23,42,0.18)]">
+            <div className="absolute -top-16 -right-16 hidden h-48 w-48 rounded-full bg-[var(--accent)]/20 blur-3xl lg:block" aria-hidden="true" />
+            <div className="absolute -bottom-10 -left-10 hidden h-32 w-32 rounded-full bg-[var(--accent)]/10 blur-3xl lg:block" aria-hidden="true" />
+            <div className="relative space-y-6">
+              <p className="inline-flex items-center gap-2 rounded-full bg-[var(--card)]/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--fg)]/60">
+                Enlist Job Apply Agent
+              </p>
+              <h1 className="text-display text-[var(--fg)]">
+                Your AI partner for applying to the right roles faster
+              </h1>
+              <p className="text-readable text-[var(--fg)]/70">
+                Enlist monitors job boards, drafts tailored materials, and files applications end-to-end so you can focus on interviews.
+              </p>
+              <ul className="space-y-3 text-left">
+                {benefits.map((benefit) => (
+                  <li key={benefit} className="flex items-start gap-3 text-readable text-[var(--fg)]/80">
+                    <span className="mt-1 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full bg-[var(--accent)]/15 text-[var(--accent)]">
+                      ✓
+                    </span>
+                    <span>{benefit}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div className="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-md">
+          <Suspense fallback={<div className="text-center text-readable text-[var(--fg)]/60">Loading…</div>}>
+            <AuthForm mode="login" />
+          </Suspense>
+          <p className="mt-6 text-center text-sm text-[var(--fg)]/70">
+            Don’t have an account?{' '}
+            <Link href="/signup" className="font-semibold text-[var(--accent)] hover:underline">
+              Sign up
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
