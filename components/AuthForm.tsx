@@ -100,9 +100,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
         if (error) throw error;
       }
       router.replace(redirect);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
-      setError(errorMessage);
+    } catch (err: any) {
+      setFormError(err?.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -118,9 +117,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
         provider,
         options: { redirectTo: `${origin}/auth/callback` },
       });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'OAuth failed';
-      setError(errorMessage);
+    } catch (err: any) {
+      setFormError(err?.message || 'OAuth failed');
       setLoading(false);
     }
   }

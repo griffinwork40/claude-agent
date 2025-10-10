@@ -31,3 +31,5 @@
 - 2025-10-09: Optimized mobile auth layout so login and signup cards render first, reducing scroll friction for new and returning users. Overall completion: 56%.
 - 2025-10-09: Implemented responsive header navigation with hamburger trigger, focus-trapped mobile menu, route-aware highlighting, and unit tests covering mobile/desktop breakpoints. Overall completion: 55%.
 
+- 2025-10-10: Fixed Vercel build failure by correcting undefined `setError` usage in `components/AuthForm.tsx` to `setFormError`, and removed duplicate `resolve` block in `vitest.config.ts` that caused a TypeScript compile error. Verified production build passes locally. Overall completion: 58%.
+
