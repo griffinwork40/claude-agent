@@ -209,7 +209,10 @@ function calculateYearsExperience(employmentHistory: GriffinEmploymentHistoryEnt
     }
 
     const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : new Date();
+    const normalizedEndDate = endDate?.trim();
+    const end = !normalizedEndDate || normalizedEndDate.toLowerCase() === 'present'
+      ? new Date()
+      : new Date(normalizedEndDate);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       continue;
     }
