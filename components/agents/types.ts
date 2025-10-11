@@ -15,6 +15,7 @@ export interface Agent {
   description?: string;
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
+  archived?: boolean; // Whether the conversation is archived
 }
 
 /**
@@ -36,6 +37,10 @@ export interface AgentListProps {
   selectedAgentId: string | null;
   onSelect: (agentId: string) => void;
   onCreate: () => void;
+  onArchive?: (agentId: string) => void;
+  onUnarchive?: (agentId: string) => void;
+  showArchived?: boolean;
+  onToggleShowArchived?: () => void;
 }
 
 export interface Activity {

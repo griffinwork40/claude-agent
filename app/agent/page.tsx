@@ -28,18 +28,30 @@ export default function AgentPage() {
   const [activeTab, setActiveTab] = useState<'workspace' | 'chat'>('workspace');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
 
   const selectedAgent: Agent | null = useMemo(() => {
     return agents.find((a) => a.id === selectedAgentId) ?? null;
   }, [agents, selectedAgentId]);
 
-  // Load messages from database on mount
+  // Filter agents based on archived status
+  const displayedAgents = useMemo(() => {
+    return agents.filter(agent => showArchived ? agent.archived : !agent.archived);
+  }, [agents, showArchived]);
+
+  // Load messages and sessions from database on mount
   useEffect(() => {
-    async function loadMessages() {
-      console.log('Loading messages from database...');
+    async function loadData() {
+      console.log('Loading messages and sessions from database...');
       setIsLoadingMessages(true);
       
       try {
+        // Load sessions first to get archived status
+        const sessionsResponse = await fetch('/api/sessions?includeArchived=true');
+        const sessionsResult = await sessionsResponse.json();
+        const sessions = sessionsResult.success ? sessionsResult.data : [];
+        const sessionMap = new Map(sessions.map((s: any) => [s.id, s]));
+        
         // Load all messages to create agents for existing conversations
         const loadedMessages = await loadMessagesFromAPI();
         console.log(`Loaded ${loadedMessages.length} messages from database`);
@@ -55,15 +67,18 @@ export default function AgentPage() {
             return acc;
           }, {} as Record<string, typeof loadedMessages>);
           
-          // Create agents for each conversation
+          // Create agents for each conversation with session metadata
           const newAgents: Agent[] = Object.entries(messagesByAgent).map(([agentId, messages]) => {
             const sortedMessages = messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            const session = sessionMap.get(agentId);
+            
             return {
               id: agentId,
-              name: agentId === 'default-agent' ? 'Job Application Assistant' : `Conversation ${agentId.slice(-6)}`,
-              description: agentId === 'default-agent' ? 'Your AI assistant for job searching and applications' : 'Previous conversation',
-              createdAt: sortedMessages[0].createdAt,
-              updatedAt: sortedMessages[sortedMessages.length - 1].createdAt,
+              name: session?.name || (agentId === 'default-agent' ? 'Job Application Assistant' : `Conversation ${agentId.slice(-6)}`),
+              description: session?.description || (agentId === 'default-agent' ? 'Your AI assistant for job searching and applications' : 'Previous conversation'),
+              createdAt: session?.created_at || sortedMessages[0].createdAt,
+              updatedAt: session?.updated_at || sortedMessages[sortedMessages.length - 1].createdAt,
+              archived: session?.archived || false,
             };
           });
           
@@ -75,30 +90,33 @@ export default function AgentPage() {
           });
           
           if (!selectedAgentId) {
-            // Select the most recently updated agent
-            const mostRecentAgent = newAgents.sort((a, b) => 
-              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-            )[0];
-            
-            setSelectedAgentId(mostRecentAgent.id);
-            
-            // Update URL to include the selected agent
-            const params = new URLSearchParams(Array.from(search.entries()));
-            params.set('agentId', mostRecentAgent.id);
-            router.replace(`?${params.toString()}`);
+            // Select the most recently updated non-archived agent
+            const nonArchivedAgents = newAgents.filter(a => !a.archived);
+            if (nonArchivedAgents.length > 0) {
+              const mostRecentAgent = nonArchivedAgents.sort((a, b) => 
+                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+              )[0];
+              
+              setSelectedAgentId(mostRecentAgent.id);
+              
+              // Update URL to include the selected agent
+              const params = new URLSearchParams(Array.from(search.entries()));
+              params.set('agentId', mostRecentAgent.id);
+              router.replace(`?${params.toString()}`);
+            }
           }
           
           setMessages(loadedMessages);
         }
       } catch (error) {
-        console.error('Error loading messages:', error);
+        console.error('Error loading data:', error);
       } finally {
         setIsLoadingMessages(false);
       }
     }
     
-    // Only load messages on initial mount, not when search params change
-    loadMessages();
+    // Only load data on initial mount, not when search params change
+    loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Intentionally only run on mount
   
@@ -192,6 +210,48 @@ export default function AgentPage() {
     setActivities([]);
   }, []);
 
+  const handleArchive = useCallback(async (agentId: string) => {
+    try {
+      const response = await fetch('/api/sessions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: agentId, archived: true }),
+      });
+
+      if (response.ok) {
+        setAgents(prev => prev.map(a => 
+          a.id === agentId ? { ...a, archived: true } : a
+        ));
+        console.log(`Archived conversation ${agentId}`);
+      }
+    } catch (error) {
+      console.error('Error archiving conversation:', error);
+    }
+  }, []);
+
+  const handleUnarchive = useCallback(async (agentId: string) => {
+    try {
+      const response = await fetch('/api/sessions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: agentId, archived: false }),
+      });
+
+      if (response.ok) {
+        setAgents(prev => prev.map(a => 
+          a.id === agentId ? { ...a, archived: false } : a
+        ));
+        console.log(`Unarchived conversation ${agentId}`);
+      }
+    } catch (error) {
+      console.error('Error unarchiving conversation:', error);
+    }
+  }, []);
+
+  const handleToggleShowArchived = useCallback(() => {
+    setShowArchived(prev => !prev);
+  }, []);
+
   // Show loading state while messages are being loaded
   if (isLoadingMessages) {
     return (
@@ -209,10 +269,14 @@ export default function AgentPage() {
       {/* Mobile Layout (< 768px) */}
       <div className="md:hidden h-[calc(100dvh-4rem)] bg-[var(--bg)] text-[var(--fg)]">
         <AgentList 
-          agents={agents}
+          agents={displayedAgents}
           selectedAgentId={selectedAgentId} 
           onSelect={handleSelect}
           onCreate={handleCreateAgent}
+          onArchive={handleArchive}
+          onUnarchive={handleUnarchive}
+          showArchived={showArchived}
+          onToggleShowArchived={handleToggleShowArchived}
         />
         
         <BottomSheet 
@@ -260,10 +324,14 @@ export default function AgentPage() {
         {/* Sidebar with toggle */}
         <div className={`transition-all duration-300 ${isSidebarOpen ? 'w-[280px]' : 'w-0'} overflow-hidden`}>
           <AgentList 
-            agents={agents}
+            agents={displayedAgents}
             selectedAgentId={selectedAgentId} 
             onSelect={handleSelect}
             onCreate={handleCreateAgent}
+            onArchive={handleArchive}
+            onUnarchive={handleUnarchive}
+            showArchived={showArchived}
+            onToggleShowArchived={handleToggleShowArchived}
           />
         </div>
 
@@ -332,10 +400,14 @@ export default function AgentPage() {
           position="left"
         >
           <AgentList 
-            agents={agents}
+            agents={displayedAgents}
             selectedAgentId={selectedAgentId} 
             onSelect={handleSelect}
             onCreate={handleCreateAgent}
+            onArchive={handleArchive}
+            onUnarchive={handleUnarchive}
+            showArchived={showArchived}
+            onToggleShowArchived={handleToggleShowArchived}
           />
         </ResizablePane>
         

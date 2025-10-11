@@ -49,14 +49,23 @@ function formatRelativeTime(isoString: string): string {
  * Renders the left navigation pane with search, empty state, and agent list.
  */
 export function AgentList(props: AgentListProps) {
-  const { agents, selectedAgentId, onSelect, onCreate } = props;
+  const { 
+    agents, 
+    selectedAgentId, 
+    onSelect, 
+    onCreate, 
+    onArchive,
+    onUnarchive,
+    showArchived = false,
+    onToggleShowArchived
+  } = props;
   const [query, setQuery] = useState('');
   const filteredAgents = useFilteredAgents(agents, query);
 
   return (
     <aside className="h-full overflow-y-auto border-r-2 border-[var(--border)] bg-[var(--bg)]">
       <div className="p-3 md:p-3 sticky top-0 bg-[var(--bg)] z-10">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-2">
           <input
             aria-label="Search agents"
             placeholder="Search agents..."
@@ -72,6 +81,15 @@ export function AgentList(props: AgentListProps) {
             New
           </button>
         </div>
+        {onToggleShowArchived && (
+          <button
+            onClick={onToggleShowArchived}
+            className="w-full text-left text-xs text-[var(--fg)]/60 hover:text-[var(--fg)] px-2 py-1 rounded transition"
+            aria-label={showArchived ? "Hide archived conversations" : "Show archived conversations"}
+          >
+            {showArchived ? '← Hide archived' : '→ Show archived'}
+          </button>
+        )}
       </div>
 
       {/* Empty State */}
@@ -113,8 +131,9 @@ export function AgentList(props: AgentListProps) {
           <ul className="space-y-1">
             {filteredAgents.map((agent) => {
               const active = agent.id === selectedAgentId;
+              const isArchived = agent.archived;
               return (
-                <li key={agent.id}>
+                <li key={agent.id} className="relative group">
                   <button
                     className={
                       'w-full text-left rounded-md px-3 py-3 md:py-2 transition border-2 touch-manipulation ' +
@@ -126,8 +145,13 @@ export function AgentList(props: AgentListProps) {
                     aria-current={active ? 'true' : undefined}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-[var(--fg)] text-base md:text-sm">
+                      <span className="font-medium text-[var(--fg)] text-base md:text-sm flex items-center gap-2">
                         {agent.name}
+                        {isArchived && (
+                          <span className="text-xs text-[var(--fg)]/40">
+                            (archived)
+                          </span>
+                        )}
                       </span>
                       <span className="text-xs text-[var(--fg)]/50">
                         {formatRelativeTime(agent.updatedAt)}
@@ -139,6 +163,35 @@ export function AgentList(props: AgentListProps) {
                       </div>
                     )}
                   </button>
+                  
+                  {/* Archive/Unarchive button */}
+                  {(onArchive || onUnarchive) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isArchived && onUnarchive) {
+                          onUnarchive(agent.id);
+                        } else if (!isArchived && onArchive) {
+                          onArchive(agent.id);
+                        }
+                      }}
+                      className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--muted)] text-[var(--fg)]/60 hover:text-[var(--fg)]"
+                      aria-label={isArchived ? "Unarchive conversation" : "Archive conversation"}
+                      title={isArchived ? "Unarchive" : "Archive"}
+                    >
+                      {isArchived ? (
+                        // Unarchive icon (restore/inbox)
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      ) : (
+                        // Archive icon
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
                 </li>
               );
             })}
