@@ -14,7 +14,7 @@ export default function SignupPage() {
   const benefits = [
     'Spin up multi-board searches with prioritized role criteria in minutes.',
     'Review AI-curated job packets complete with pros, cons, and salary signals.',
-    'Approve applications once and let Enlist handle follow-ups automatically.',
+    'Approve applications once and let Job Enlist handle follow-ups automatically.',
   ];
 
   return (
@@ -32,7 +32,7 @@ export default function SignupPage() {
                 Build a job hunt that runs itself
               </h1>
               <p className="text-readable text-[var(--fg)]/70">
-                Create saved searches, collaborate on approvals, and dispatch polished applications without leaving the Enlist workspace.
+                Create saved searches, collaborate on approvals, and dispatch polished applications without leaving the Job Enlist workspace.
               </p>
               <ul className="space-y-3 text-left">
                 {benefits.map((benefit) => (

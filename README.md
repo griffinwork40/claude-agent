@@ -1,6 +1,6 @@
-# Enlist — Job Search Agent
+# Job Enlist — Job Search Agent
 
-Enlist is your job search agent—scouting roles, tailoring materials, and applying automatically. Visit `https://jobenlist.com`.
+Job Enlist is your job search agent—scouting roles, tailoring materials, and applying automatically. Visit `https://jobenlist.com`.
 
 ## Features
 

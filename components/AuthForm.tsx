@@ -42,7 +42,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       password:
         mode === 'signup'
           ? 'Use at least 8 characters to keep your account secure.'
-          : 'Enter the password linked to your Enlist account.',
+          : 'Enter the password linked to your Job Enlist account.',
     }),
     [mode],
   );
@@ -134,7 +134,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         <p className="text-readable text-[var(--fg)]/70">
           {mode === 'login'
             ? 'Log in to review curated roles, drafts, and application history.'
-            : 'Join Enlist to launch your AI-powered job search in minutes.'}
+            : 'Join Job Enlist to launch your AI-powered job search in minutes.'}
         </p>
       </div>
       <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>

@@ -47,7 +47,7 @@ export default function EnlistLanding() {
       {/* Landing-only footer */}
       <footer className="rounded-xl bg-[var(--card)] border-2 border-[var(--border)] p-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-readable text-[var(--fg)]/70">© {new Date().getFullYear()} Enlist. All rights reserved.</p>
+          <p className="text-readable text-[var(--fg)]/70">© {new Date().getFullYear()} {siteName}. All rights reserved.</p>
           <nav className="flex items-center gap-4 text-sm">
             <Link href="/" className="hover:underline">Home</Link>
             <Link href="/agent" className="hover:underline">Agents</Link>

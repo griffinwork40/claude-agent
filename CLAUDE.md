@@ -34,7 +34,7 @@ Environment
   - NEXT_PUBLIC_SUPABASE_ANON_KEY: Supabase anon key for browser/server helpers
   - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key (server-side admin ops in API routes)
 - Optional branding/site
-  - NEXT_PUBLIC_SITE_NAME (default: Enlist)
+  - NEXT_PUBLIC_SITE_NAME (default: Job Enlist)
   - NEXT_PUBLIC_SITE_URL (default: http://localhost:3000)
 - Test runner loads .env.local if present (see vitest.setup.ts)
 

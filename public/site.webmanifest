@@ -1,6 +1,6 @@
 {
-  "name": "Enlist",
-  "short_name": "Enlist",
+  "name": "Job Enlist",
+  "short_name": "Job Enlist",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0B1220",
