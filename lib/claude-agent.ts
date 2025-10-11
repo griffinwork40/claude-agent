@@ -256,7 +256,7 @@ export async function runClaudeAgentStream(
                 ];
                 
                 // Iteratively continue conversation until Claude stops using tools or we hit max iterations
-                const MAX_TOOL_ITERATIONS = 5;
+                const MAX_TOOL_ITERATIONS = 10;
                 let iteration = 0;
                 let shouldContinue = true;
                 
