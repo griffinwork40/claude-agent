@@ -99,8 +99,8 @@
 
 ### Planning & Roadmap
 - **Phase 1** - Visual refinement (✅ Complete)
-- **Phase 2** - Structured event stream (persistence, thought chips)
-- **Phase 3** - Replay & error recovery (retry, filtering, virtualization)
+- **Phase 2** - Structured event stream (persistence, thought chips) - [Design Prompt](./PHASE_2_UI_UX_PROMPT.md)
+- **Phase 3** - Replay & error recovery (retry, filtering, virtualization) - [Design Prompt](./PHASE_3_UI_UX_PROMPT.md)
 
 ---
 
@@ -116,7 +116,9 @@
 │   ├── UI_UX_DISCOVERY_SPRINT_SUMMARY.md        # Executive summary
 │   ├── CURSOR_STYLE_ACTIVITY_FEED.md            # Implementation guide
 │   ├── ACTIVITY_FEED_VISUAL_COMPARISON.md       # Before/after analysis
-│   └── activity-feed-cursor-style.plan.md       # Original plan
+│   ├── activity-feed-cursor-style.plan.md       # Original plan (Phase 1)
+│   ├── PHASE_2_UI_UX_PROMPT.md                  # Phase 2 design prompt
+│   └── PHASE_3_UI_UX_PROMPT.md                  # Phase 3 design prompt
 │
 └── progress.md                   # Project progress tracking
 ```
@@ -176,8 +178,9 @@
 
 ### "I need to plan next phases"
 1. Read: [`UI_UX_DISCOVERY_SPRINT_SUMMARY.md`](./UI_UX_DISCOVERY_SPRINT_SUMMARY.md) (Phase 2 & 3 overview)
-2. Read: [`CURSOR_STYLE_ACTIVITY_FEED.md`](./CURSOR_STYLE_ACTIVITY_FEED.md) (Future enhancements section)
-3. Plan: User feedback collection and Phase 2 kickoff
+2. Read: [`PHASE_2_UI_UX_PROMPT.md`](./PHASE_2_UI_UX_PROMPT.md) (Structured event stream design prompt)
+3. Read: [`PHASE_3_UI_UX_PROMPT.md`](./PHASE_3_UI_UX_PROMPT.md) (Replay & error recovery design prompt)
+4. Plan: User feedback collection and Phase 2 kickoff
 
 ---
 
