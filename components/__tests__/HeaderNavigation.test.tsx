@@ -32,7 +32,7 @@ describe('HeaderNavigation', () => {
     expect(nav).toHaveClass('hidden');
     expect(nav).toHaveClass('md:flex');
 
-    const desktopLinks = screen.getAllByRole('link', { name: /home|agents|docs/i });
+    const desktopLinks = screen.getAllByRole('link', { name: /home|agents|dashboard/i });
     expect(desktopLinks).toHaveLength(3);
   });
 
@@ -64,7 +64,7 @@ describe('HeaderNavigation', () => {
     const homeLink = screen.getByRole('link', { name: 'Home' });
     expect(homeLink).toHaveAttribute('aria-current', 'page');
 
-    const docsLink = screen.getByRole('link', { name: 'Docs' });
-    expect(docsLink).not.toHaveAttribute('aria-current');
+    const dashboardLink = screen.getByRole('link', { name: 'Dashboard' });
+    expect(dashboardLink).not.toHaveAttribute('aria-current');
   });
 });

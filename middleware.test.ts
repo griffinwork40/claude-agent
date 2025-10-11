@@ -27,10 +27,33 @@ describe('middleware', () => {
   });
 
   it('redirects unauthenticated user from /agent to /login', async () => {
+    // Mock environment variables to enable auth checks
+    const originalEnv = process.env;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-key';
+    
     const req = makeRequest('/agent');
     const res = await middleware(req);
     expect(res?.status).toBe(307);
     expect(res?.headers.get('location')).toContain('/login');
+    
+    // Restore original environment
+    process.env = originalEnv;
+  });
+
+  it('redirects unauthenticated user from /dashboard to /login', async () => {
+    // Mock environment variables to enable auth checks
+    const originalEnv = process.env;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-key';
+    
+    const req = makeRequest('/dashboard');
+    const res = await middleware(req);
+    expect(res?.status).toBe(307);
+    expect(res?.headers.get('location')).toContain('/login');
+    
+    // Restore original environment
+    process.env = originalEnv;
   });
 
   it('allows public path /login', async () => {
