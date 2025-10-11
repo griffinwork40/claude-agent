@@ -245,7 +245,7 @@ export default function AgentPage() {
           </div>
 
           {/* Tab Content */}
-          <div className="h-[calc(100%-3rem)]">
+          <div className="flex-1 overflow-hidden min-h-0">
             {activeTab === 'workspace' ? (
               <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} isMobile />
             ) : (

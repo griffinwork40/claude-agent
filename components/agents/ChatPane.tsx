@@ -503,7 +503,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
         </header>
       )}
 
-      <div className={`flex-1 overflow-auto ${isMobile ? 'p-4' : 'p-3'} flex flex-col`}>
+      <div className={`flex-1 overflow-auto ${isMobile ? 'p-4' : 'p-3'} flex flex-col min-h-0`}>
         {visibleMessages.length === 0 && !isStreaming ? (
           <div className="flex items-center justify-center h-full text-[var(--fg)]/60 text-sm">
             No messages yet. Start a conversation!
@@ -563,7 +563,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
         <div ref={endRef} />
       </div>
 
-      <footer className={`${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}>
+      <footer className={`flex-shrink-0 ${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
