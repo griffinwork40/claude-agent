@@ -30,10 +30,11 @@ export async function POST(request: NextRequest) {
     }
     console.log('✓ User authenticated:', session.user.id);
     
-    const { message, sessionId } = await request.json();
+    const { message, sessionId, agentId } = await request.json();
     console.log('Request data:', { 
       messageLength: message?.length, 
       sessionId,
+      agentId,
       hasMessage: !!message,
       requestHeaders: Object.fromEntries(request.headers.entries())
     });
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
         content: message, 
         sender: 'user',
         user_id: session.user.id,
+        session_id: agentId || 'default-agent',
         created_at: new Date().toISOString()
       }])
       .select()
@@ -103,6 +105,7 @@ export async function POST(request: NextRequest) {
 
           const reader = stream.getReader();
           // chunkCount declared above
+          let buffer = '';
           
           while (true) {
             const { done, value } = await reader.read();
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest) {
                   content: fullResponse,
                   sender: 'bot',
                   user_id: session.user.id,
+                  session_id: agentId || 'default-agent',
                   created_at: new Date().toISOString()
                 }])
                 .select()
@@ -141,18 +145,72 @@ export async function POST(request: NextRequest) {
               break;
             }
 
-            // Decode the chunk and add to full response
+            // Decode the chunk and add to buffer
             const chunk = new TextDecoder().decode(value);
+            buffer += chunk;
             console.log('Chunk received bytes:', value?.length ?? 0);
-            fullResponse += chunk;
-            chunkCount++;
-
-            // Send chunk as SSE
-            const event = `data: ${JSON.stringify({ 
-              type: 'chunk', 
-              content: chunk 
-            })}\n\n`;
-            controller.enqueue(encoder.encode(event));
+            
+            // Check for activity markers in the buffer
+            const activityMarkerStart = '__ACTIVITY__';
+            const activityMarkerEnd = '__END__';
+            let startIdx = buffer.indexOf(activityMarkerStart);
+            
+            while (startIdx !== -1) {
+              const endIdx = buffer.indexOf(activityMarkerEnd, startIdx);
+              
+              if (endIdx !== -1) {
+                // Extract the content before the activity marker
+                const beforeActivity = buffer.substring(0, startIdx);
+                if (beforeActivity) {
+                  fullResponse += beforeActivity;
+                  // Send as regular chunk
+                  const event = `data: ${JSON.stringify({ 
+                    type: 'chunk', 
+                    content: beforeActivity 
+                  })}\n\n`;
+                  controller.enqueue(encoder.encode(event));
+                  chunkCount++;
+                }
+                
+                // Extract and parse the activity event
+                const activityJson = buffer.substring(
+                  startIdx + activityMarkerStart.length, 
+                  endIdx
+                );
+                
+                try {
+                  const activityData = JSON.parse(activityJson);
+                  console.log('Activity event:', activityData.type, activityData);
+                  
+                  // Forward activity event as SSE
+                  const activityEvent = `data: ${JSON.stringify(activityData)}\n\n`;
+                  controller.enqueue(encoder.encode(activityEvent));
+                } catch (parseError) {
+                  console.error('Failed to parse activity JSON:', activityJson, parseError);
+                }
+                
+                // Remove processed content from buffer
+                buffer = buffer.substring(endIdx + activityMarkerEnd.length);
+                startIdx = buffer.indexOf(activityMarkerStart);
+              } else {
+                // Incomplete activity marker, wait for more data
+                break;
+              }
+            }
+            
+            // If no (more) activity markers, treat remaining buffer as regular content
+            if (startIdx === -1 && buffer) {
+              fullResponse += buffer;
+              
+              // Send buffer as SSE chunk
+              const event = `data: ${JSON.stringify({ 
+                type: 'chunk', 
+                content: buffer 
+              })}\n\n`;
+              controller.enqueue(encoder.encode(event));
+              chunkCount++;
+              buffer = '';
+            }
             
             if (chunkCount % 10 === 0) {
               console.log(`Processed ${chunkCount} chunks, response length: ${fullResponse.length}`);
@@ -214,19 +272,43 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    console.log('=== GET Messages API Request Started ===');
+    
+    // Check authentication
+    const routeClient = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await routeClient.auth.getSession();
+    
+    if (!session) {
+      console.error('❌ Unauthorized: No session found');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.log('✓ User authenticated:', session.user.id);
+    
+    // Get agentId from query parameters
+    const { searchParams } = new URL(request.url);
+    const agentId = searchParams.get('agentId');
+    
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
+    let query = supabase
       .from('messages')
       .select('*')
-      .order('created_at', { ascending: true });
+      .eq('user_id', session.user.id);
+    
+    // Filter by session_id if agentId is provided
+    if (agentId) {
+      query = query.eq('session_id', agentId);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) {
       console.error('Error fetching messages:', error);
       return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
     }
 
+    console.log(`✓ Fetched ${data?.length || 0} messages for user${agentId ? ` with agentId: ${agentId}` : ''}`);
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Error in GET messages API:', error);
