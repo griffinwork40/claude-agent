@@ -111,10 +111,11 @@ export async function runClaudeAgentStream(
     // Add user message to session
     session.messages.push({ role: 'user', content: userMessage });
 
-    // Create messages array for the API call
-    const messages = [
-      { role: 'user' as const, content: userMessage }
-    ];
+    // Create messages array for the API call using full conversation history
+    const messages = session.messages.map(msg => ({
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content
+    }));
 
     console.log('Starting Claude streaming with tools...');
     
@@ -149,6 +150,9 @@ export async function runClaudeAgentStream(
           // IMPORTANT: Capture the full assistant message content
           const assistantMessageContent: Array<TextBlockParam | ToolUseBlockParam> = [];
           
+          // Track the complete text response to save to session history
+          let fullAssistantResponse = '';
+          
           for await (const chunk of stream) {
             if (chunk.type === 'content_block_start') {
               if (chunk.content_block.type === 'text') {
@@ -181,6 +185,9 @@ export async function runClaudeAgentStream(
                   console.log(`✓ Streaming chunk: ${content.length} chars`);
                   const encoded = new TextEncoder().encode(content);
                   controller.enqueue(encoded);
+                  
+                  // Accumulate full response for session history
+                  fullAssistantResponse += content;
                   
                   // Add to the last text block in assistant message
                   const lastBlock = assistantMessageContent[assistantMessageContent.length - 1];
@@ -269,11 +276,27 @@ export async function runClaudeAgentStream(
                     if (content) {
                       const encoded = new TextEncoder().encode(content);
                       controller.enqueue(encoded);
+                      
+                      // Accumulate continuation response for session history
+                      fullAssistantResponse += content;
                     }
                   } else if (chunk.type === 'message_stop') {
                     break;
                   }
                 }
+              }
+              
+              // Save assistant's complete response to session history
+              if (fullAssistantResponse.trim()) {
+                session.messages.push({ 
+                  role: 'assistant', 
+                  content: fullAssistantResponse 
+                });
+                console.log('✓ Assistant response saved to session:', {
+                  sessionId,
+                  messageLength: fullAssistantResponse.length,
+                  totalMessages: session.messages.length
+                });
               }
               
               controller.close();
