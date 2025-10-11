@@ -4,12 +4,12 @@
  */
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Agent, Message, Activity } from '@/components/agents/types';
 import { AgentList, BrowserPane, ChatPane, BottomSheet } from '@/components/agents';
-import { mockMessages } from '@/components/agents/mockData';
 import { ResizablePane } from '@/components/ResizablePane';
+import { loadMessagesFromAPI } from '@/lib/message-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,15 +22,106 @@ export default function AgentPage() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(
     initialId ?? null
   );
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'workspace' | 'chat'>('workspace');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
 
   const selectedAgent: Agent | null = useMemo(() => {
     return agents.find((a) => a.id === selectedAgentId) ?? null;
   }, [agents, selectedAgentId]);
+
+  // Load messages from database on mount
+  useEffect(() => {
+    async function loadMessages() {
+      console.log('Loading messages from database...');
+      setIsLoadingMessages(true);
+      
+      try {
+        // Load all messages to create agents for existing conversations
+        const loadedMessages = await loadMessagesFromAPI();
+        console.log(`Loaded ${loadedMessages.length} messages from database`);
+        
+        if (loadedMessages.length > 0) {
+          // Group messages by agentId to create agents for each conversation
+          const messagesByAgent = loadedMessages.reduce((acc, message) => {
+            const agentId = message.agentId;
+            if (!acc[agentId]) {
+              acc[agentId] = [];
+            }
+            acc[agentId].push(message);
+            return acc;
+          }, {} as Record<string, typeof loadedMessages>);
+          
+          // Create agents for each conversation
+          const newAgents: Agent[] = Object.entries(messagesByAgent).map(([agentId, messages]) => {
+            const sortedMessages = messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            return {
+              id: agentId,
+              name: agentId === 'default-agent' ? 'Job Application Assistant' : `Conversation ${agentId.slice(-6)}`,
+              description: agentId === 'default-agent' ? 'Your AI assistant for job searching and applications' : 'Previous conversation',
+              createdAt: sortedMessages[0].createdAt,
+              updatedAt: sortedMessages[sortedMessages.length - 1].createdAt,
+            };
+          });
+          
+          setAgents(prev => {
+            // Merge with existing agents, avoiding duplicates
+            const existingIds = new Set(prev.map(a => a.id));
+            const newUniqueAgents = newAgents.filter(a => !existingIds.has(a.id));
+            return [...newUniqueAgents, ...prev];
+          });
+          
+          if (!selectedAgentId) {
+            // Select the most recently updated agent
+            const mostRecentAgent = newAgents.sort((a, b) => 
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            )[0];
+            
+            setSelectedAgentId(mostRecentAgent.id);
+            
+            // Update URL to include the selected agent
+            const params = new URLSearchParams(Array.from(search.entries()));
+            params.set('agentId', mostRecentAgent.id);
+            router.replace(`?${params.toString()}`);
+          }
+          
+          setMessages(loadedMessages);
+        }
+      } catch (error) {
+        console.error('Error loading messages:', error);
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    }
+    
+    // Only load messages on initial mount, not when search params change
+    loadMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally only run on mount
+  
+  // Listen for reload-messages events from ChatPane
+  useEffect(() => {
+    const handleReloadMessages = async () => {
+      console.log('Reload messages event received');
+      try {
+        // Load messages for the currently selected agent
+        const loadedMessages = await loadMessagesFromAPI(selectedAgentId || undefined);
+        console.log(`Reloaded ${loadedMessages.length} messages from database for agent ${selectedAgentId}`);
+        setMessages(loadedMessages);
+      } catch (error) {
+        console.error('Error reloading messages:', error);
+      }
+    };
+    
+    window.addEventListener('reload-messages', handleReloadMessages);
+    
+    return () => {
+      window.removeEventListener('reload-messages', handleReloadMessages);
+    };
+  }, [selectedAgentId]);
 
   function handleCreateAgent() {
     const now = new Date().toISOString();
@@ -44,53 +135,49 @@ export default function AgentPage() {
     setAgents((prev) => [newAgent, ...prev]);
     setSelectedAgentId(newAgent.id);
     
-    // Update URL
+    // Clear messages for the new conversation
+    setMessages([]);
+    
+    // Update URL without causing a page refresh
     const params = new URLSearchParams(Array.from(search.entries()));
     params.set('agentId', newAgent.id);
-    router.push(`?${params.toString()}`);
+    router.replace(`?${params.toString()}`);
     
     // On mobile, open the bottom sheet
     setIsBottomSheetOpen(true);
     setActiveTab('chat');
   }
 
-  function handleSelect(agentId: string) {
+  async function handleSelect(agentId: string) {
     setSelectedAgentId(agentId);
+    
+    // Load messages for the selected agent
+    try {
+      const loadedMessages = await loadMessagesFromAPI(agentId);
+      console.log(`Loaded ${loadedMessages.length} messages for agent ${agentId}`);
+      setMessages(loadedMessages);
+    } catch (error) {
+      console.error('Error loading messages for agent:', error);
+      setMessages([]);
+    }
+    
     const params = new URLSearchParams(Array.from(search.entries()));
     params.set('agentId', agentId);
-    router.push(`?${params.toString()}`);
+    router.replace(`?${params.toString()}`);
     
     // On mobile, open the bottom sheet when an agent is selected
     setIsBottomSheetOpen(true);
   }
 
-  // Function to refresh messages from the server
-  async function refreshMessages() {
-    try {
-      const response = await fetch('/api/chat');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data) {
-          interface ServerMessage {
-            id: string;
-            sender: string;
-            content: string;
-            created_at: string;
-          }
-          // Convert server messages to our Message format
-          const serverMessages: Message[] = data.data.map((msg: ServerMessage) => ({
-            id: msg.id,
-            agentId: selectedAgent?.id || 'default',
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content,
-            createdAt: msg.created_at,
-          }));
-          setMessages(serverMessages);
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing messages:', error);
-    }
+  // Function to add a new message to the state
+  function handleAddMessage(content: string, agentId: string, message: Message) {
+    console.log('Adding message:', { agentId, role: message.role, content: content.substring(0, 50) });
+    setMessages((prev) => {
+      console.log('Previous messages count:', prev.length);
+      const newMessages = [...prev, message];
+      console.log('New messages count:', newMessages.length);
+      return newMessages;
+    });
   }
 
   function handleCloseBottomSheet() {
@@ -104,6 +191,18 @@ export default function AgentPage() {
   const handleClearActivities = useCallback(() => {
     setActivities([]);
   }, []);
+
+  // Show loading state while messages are being loaded
+  if (isLoadingMessages) {
+    return (
+      <div className="h-[calc(100vh-4rem)] bg-[var(--bg)] text-[var(--fg)] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--accent)] mx-auto mb-4"></div>
+          <p className="text-sm text-[var(--fg)]/70">Loading conversations...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -150,7 +249,7 @@ export default function AgentPage() {
             {activeTab === 'workspace' ? (
               <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} isMobile />
             ) : (
-              <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} onActivity={handleActivity} isMobile />
+              <ChatPane agent={selectedAgent} messages={messages} onSend={handleAddMessage} onActivity={handleActivity} isMobile />
             )}
           </div>
         </BottomSheet>
@@ -217,7 +316,7 @@ export default function AgentPage() {
             {activeTab === 'workspace' ? (
               <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} />
             ) : (
-              <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} onActivity={handleActivity} />
+              <ChatPane agent={selectedAgent} messages={messages} onSend={handleAddMessage} onActivity={handleActivity} />
             )}
           </div>
         </div>
@@ -252,7 +351,7 @@ export default function AgentPage() {
           maxWidth={600}
           position="right"
         >
-          <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} onActivity={handleActivity} />
+          <ChatPane agent={selectedAgent} messages={messages} onSend={handleAddMessage} onActivity={handleActivity} />
         </ResizablePane>
       </div>
     </>

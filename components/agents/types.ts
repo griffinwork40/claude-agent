@@ -62,7 +62,7 @@ export interface BrowserPaneProps {
 export interface ChatPaneProps {
   agent: Agent | null;
   messages: Message[];
-  onSend: (content: string) => void;
+  onSend: (content: string, agentId: string, message: Message) => void;
   onActivity?: (activity: Activity) => void;
   isMobile?: boolean;
 }

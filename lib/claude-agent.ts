@@ -229,7 +229,7 @@ export async function runClaudeAgentStream(
             } else if (chunk.type === 'message_stop') {
               console.log('✓ Stream completed, executing tools...');
               
-              // Execute tools if any were requested
+              // Execute tools if any were requested - use iterative approach instead of recursion
               if (toolUses.length > 0) {
                 console.log(`🔧 Executing ${toolUses.length} tools...`);
                 sendActivity('thinking', {
@@ -237,12 +237,8 @@ export async function runClaudeAgentStream(
                 });
                 const toolResults = await executeTools(toolUses, userId, sendActivity);
                 
-                // Build the proper continuation messages
-                // 1. User's original message (already in messages array)
-                // 2. Assistant's message with tool_use blocks
-                // 3. User message with tool_result blocks
-                
-                const continuationMessages = [
+                // Build conversation history with tool use and results
+                let continuationMessages: MessageParam[] = [
                   ...messages,  // Original user message
                   {
                     role: 'assistant' as const,
@@ -259,7 +255,15 @@ export async function runClaudeAgentStream(
                   }
                 ];
                 
-                // Continue conversation with tool results
+                // Iteratively continue conversation until Claude stops using tools or we hit max iterations
+                const MAX_TOOL_ITERATIONS = 5;
+                let iteration = 0;
+                let shouldContinue = true;
+                
+                while (shouldContinue && iteration < MAX_TOOL_ITERATIONS) {
+                  iteration++;
+                  console.log(`🔄 Starting continuation iteration ${iteration}/${MAX_TOOL_ITERATIONS}...`);
+                  
                 const continuationStream = await client.messages.create({
                   model: 'claude-sonnet-4-5-20250929',
                   max_tokens: 4096,
@@ -268,22 +272,125 @@ export async function runClaudeAgentStream(
                   tools: browserTools,
                   stream: true
                 });
+                  
+                  // Track tool uses and text in this continuation
+                  const continuationToolUses: ToolUse[] = [];
+                  let continuationCurrentToolUse: ToolUse | null = null;
+                  let continuationToolInputJson = '';
+                  const continuationAssistantContent: Array<TextBlockParam | ToolUseBlockParam> = [];
+                  let hasText = false;
                 
                 // Stream the continuation response
                 for await (const chunk of continuationStream) {
-                  if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+                    if (chunk.type === 'content_block_start') {
+                      if (chunk.content_block.type === 'text') {
+                        continuationAssistantContent.push({
+                          type: 'text' as const,
+                          text: ''
+                        });
+                        console.log(`📝 Continuation ${iteration}: text block started`);
+                      } else if (chunk.content_block.type === 'tool_use') {
+                        continuationCurrentToolUse = {
+                          id: chunk.content_block.id,
+                          name: chunk.content_block.name,
+                          input: {}
+                        };
+                        continuationToolInputJson = '';
+                        console.log(`🔧 Continuation ${iteration} tool use started: ${chunk.content_block.name}`);
+                        
+                        sendActivity('tool_start', {
+                          tool: chunk.content_block.name,
+                          toolId: chunk.content_block.id
+                        });
+                      }
+                    } else if (chunk.type === 'content_block_delta') {
+                      if (chunk.delta.type === 'text_delta') {
                     const content = chunk.delta.text;
                     if (content) {
+                          hasText = true;
                       const encoded = new TextEncoder().encode(content);
                       controller.enqueue(encoded);
                       
                       // Accumulate continuation response for session history
                       fullAssistantResponse += content;
+                          
+                          // Add to last text block
+                          const lastBlock = continuationAssistantContent[continuationAssistantContent.length - 1];
+                          if (lastBlock && lastBlock.type === 'text') {
+                            lastBlock.text += content;
+                          }
+                        }
+                      } else if (chunk.delta.type === 'input_json_delta') {
+                        continuationToolInputJson += chunk.delta.partial_json;
+                      }
+                    } else if (chunk.type === 'content_block_stop' && continuationCurrentToolUse) {
+                      try {
+                        continuationCurrentToolUse.input = JSON.parse(continuationToolInputJson);
+                        continuationToolUses.push(continuationCurrentToolUse);
+                        
+                        continuationAssistantContent.push({
+                          type: 'tool_use' as const,
+                          id: continuationCurrentToolUse.id,
+                          name: continuationCurrentToolUse.name,
+                          input: continuationCurrentToolUse.input
+                        });
+                        
+                        console.log(`🔧 Continuation ${iteration} tool use completed: ${continuationCurrentToolUse.name}`, continuationCurrentToolUse.input);
+                        
+                        sendActivity('tool_params', {
+                          tool: continuationCurrentToolUse.name,
+                          toolId: continuationCurrentToolUse.id,
+                          params: continuationCurrentToolUse.input
+                        });
+                      } catch (error) {
+                        console.error('Error parsing continuation tool input JSON:', error);
+                      }
+                      continuationCurrentToolUse = null;
+                      continuationToolInputJson = '';
+                    } else if (chunk.type === 'message_stop') {
+                      console.log(`✓ Continuation ${iteration} completed. Text: ${hasText}, Tools: ${continuationToolUses.length}`);
+                      
+                      // Check if we should continue looping
+                      if (continuationToolUses.length > 0) {
+                        // Execute the tools from this continuation
+                        console.log(`🔧 Executing ${continuationToolUses.length} tools from continuation ${iteration}...`);
+                        sendActivity('thinking', {
+                          content: `Executing ${continuationToolUses.length} more tool${continuationToolUses.length > 1 ? 's' : ''}...`
+                        });
+                        const continuationToolResults = await executeTools(continuationToolUses, userId, sendActivity);
+                        
+                        // Update continuation messages for next iteration
+                        continuationMessages = [
+                          ...continuationMessages,
+                          {
+                            role: 'assistant' as const,
+                            content: continuationAssistantContent
+                          },
+                          {
+                            role: 'user' as const,
+                            content: continuationToolResults.map(result => ({
+                              type: 'tool_result' as const,
+                              tool_use_id: result.tool_use_id,
+                              content: result.content,
+                              is_error: result.is_error
+                            }))
+                          }
+                        ];
+                        
+                        // Continue loop for next iteration
+                        console.log(`✓ Tools executed, will continue to iteration ${iteration + 1}`);
+                      } else {
+                        // No more tools - we're done
+                        console.log(`✓ No more tools to execute, ending continuation loop`);
+                        shouldContinue = false;
+                      }
+                      
+                      break;
                     }
-                  } else if (chunk.type === 'message_stop') {
-                    break;
                   }
-                }
+                } // End of while loop
+                
+                console.log(`✓ Tool execution loop completed after ${iteration} iterations`);
               }
               
               // Save assistant's complete response to session history

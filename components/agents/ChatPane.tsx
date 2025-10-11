@@ -5,14 +5,9 @@
 'use client';
 
 import { useMemo, useRef, useState, useEffect, ReactNode } from 'react';
-import { ChatPaneProps, Activity } from './types';
+import { ChatPaneProps, Activity, Message } from './types';
 
-interface RenderMessage {
-  id: string;
-  agentId: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  createdAt: string;
+interface RenderMessage extends Message {
   isStreaming?: boolean;
 }
 
@@ -29,22 +24,19 @@ const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat(undefined, {
 
 const ROLE_THEMES = {
   user: {
-    bubble: 'bg-brand-600 text-white border-brand-500 shadow-sm',
-    timestamp: 'text-white/80',
-    badge: 'bg-brand-500 text-white',
-    avatar: 'bg-brand-600 text-white',
+    bubble: 'bg-brand-600 text-white',
+    timestamp: 'text-[var(--timestamp-subtle)]',
+    badge: 'bg-brand-600/10 text-brand-700',
   },
   assistant: {
-    bubble: 'bg-[var(--card)] text-[var(--fg)] border-brand-200 shadow-sm',
-    timestamp: 'text-[var(--fg)]/70',
-    badge: 'bg-brand-100 text-brand-800',
-    avatar: 'bg-brand-100 text-brand-800',
+    bubble: 'bg-transparent text-[var(--assistant-text)]',
+    timestamp: 'text-[var(--timestamp-subtle)]',
+    badge: 'bg-[var(--muted)] text-[var(--assistant-text)]',
   },
   system: {
-    bubble: 'bg-ink text-white border-ink/80 shadow-sm',
-    timestamp: 'text-white/80',
-    badge: 'bg-ink text-white',
-    avatar: 'bg-ink text-white',
+    bubble: 'bg-ink/5 text-ink',
+    timestamp: 'text-[var(--timestamp-subtle)]',
+    badge: 'bg-ink/10 text-ink',
   },
 } as const;
 
@@ -190,6 +182,44 @@ function renderMarkdown(content: string, keyPrefix: string): ReactNode {
       continue;
     }
 
+    // Check for headers (# ## ### #### ##### ######)
+    const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headerMatch) {
+      const level = headerMatch[1].length;
+      const text = headerMatch[2];
+      const HeaderTag = `h${level}` as keyof JSX.IntrinsicElements;
+      const sizeClasses = {
+        1: 'text-2xl font-bold',
+        2: 'text-xl font-bold', 
+        3: 'text-lg font-semibold',
+        4: 'text-base font-semibold',
+        5: 'text-sm font-semibold',
+        6: 'text-xs font-semibold'
+      };
+      
+      blocks.push(
+        <HeaderTag 
+          key={`${keyPrefix}-h${level}-${index}`} 
+          className={`${sizeClasses[level as keyof typeof sizeClasses]} mt-4 mb-2 first:mt-0`}
+        >
+          {renderInlineMarkdown(text, `${keyPrefix}-h${level}-${index}`)}
+        </HeaderTag>
+      );
+      index += 1;
+      i += 1;
+      continue;
+    }
+
+    // Check for horizontal rules (---, ***, ___)
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
+      blocks.push(
+        <hr key={`${keyPrefix}-hr-${index}`} className="my-4 border-t border-[var(--border)]" />
+      );
+      index += 1;
+      i += 1;
+      continue;
+    }
+
     if (/^(\*|-|\+)\s+/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^(\*|-|\+)\s+/.test(lines[i])) {
@@ -233,6 +263,8 @@ function renderMarkdown(content: string, keyPrefix: string): ReactNode {
     while (
       i < lines.length &&
       lines[i].trim() &&
+      !/^#{1,6}\s+/.test(lines[i]) &&
+      !/^(-{3,}|\*{3,}|_{3,})$/.test(lines[i]) &&
       !/^(\*|-|\+)\s+/.test(lines[i]) &&
       !/^\d+\.\s+/.test(lines[i])
     ) {
@@ -258,11 +290,31 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
   const [streamingMessage, setStreamingMessage] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamingStartedAt, setStreamingStartedAt] = useState<string | null>(null);
+  const [currentAgentId, setCurrentAgentId] = useState<string | null>(agent?.id ?? null);
   const endRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset session when agent changes
+  useEffect(() => {
+    if (agent?.id !== currentAgentId) {
+      console.log('Agent changed, resetting session', { from: currentAgentId, to: agent?.id });
+      setCurrentAgentId(agent?.id ?? null);
+      setSessionId(null);
+      setIsStreaming(false);
+      setStreamingMessage('');
+      setStreamingStartedAt(null);
+    }
+  }, [agent?.id, currentAgentId]);
 
   const visibleMessages = useMemo(() => {
     if (!agent) return [];
-    return messages.filter((m) => m.agentId === agent.id);
+    console.log('Filtering messages:', {
+      totalMessages: messages.length,
+      agentId: agent.id,
+      messages: messages.map(m => ({ id: m.id, agentId: m.agentId, role: m.role }))
+    });
+    const filtered = messages.filter((m) => m.agentId === agent.id);
+    console.log('Visible messages after filter:', filtered.length);
+    return filtered;
   }, [agent, messages]);
 
   const renderedMessages: RenderMessage[] = useMemo(() => {
@@ -298,6 +350,19 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
       isStreaming
     });
     
+    // Add user message to local state immediately
+    const userMessageId = `msg-${Date.now()}-user`;
+    const userMessage: Message = {
+      id: userMessageId,
+      agentId: agent.id,
+      role: 'user',
+      content: content,
+      createdAt: new Date().toISOString(),
+    };
+    
+    // Call onSend to add the user message to parent state
+    onSend(content, agent.id, userMessage);
+    
     setIsStreaming(true);
     setStreamingMessage('');
     setStreamingStartedAt(new Date().toISOString());
@@ -312,6 +377,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
         body: JSON.stringify({
           message: content,
           sessionId: sessionId,
+          agentId: agent.id,
         }),
       });
 
@@ -365,12 +431,18 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
                 setStreamingMessage(prev => prev + data.content);
               } else if (data.type === 'complete') {
                 console.log('✓ Stream completed, sessionId:', data.sessionId);
+                
+                // Clear streaming state - message is already saved to DB by API route
+                setStreamingMessage('');
                 setSessionId(data.sessionId);
                 setIsStreaming(false);
-                setStreamingMessage('');
                 setStreamingStartedAt(null);
-                // Trigger a refresh of messages from parent
-                onSend(content);
+                
+                // Reload messages from database to show the complete assistant response
+                // This prevents duplicates since we're using the DB as source of truth
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('reload-messages'));
+                }
               } else if (data.type === 'error') {
                 console.error('❌ Streaming error:', data.error);
                 setIsStreaming(false);
@@ -422,10 +494,10 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
   };
 
   return (
-    <section className={`h-full flex flex-col ${!isMobile ? 'border-l-2' : ''} border-[var(--border)] bg-[var(--bg)]`}>
+    <section className={`h-full flex flex-col ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
       {!isMobile && (
-        <header className="px-3 py-2 border-b-2 border-[var(--border)]">
-          <div className="text-sm text-[var(--fg)]">
+        <header className="px-4 py-3 border-b border-[var(--border)]">
+          <div className="text-sm font-medium text-[var(--fg)]">
             {agent ? `Chat — ${agent.name}` : 'Chat — no agent selected'}
           </div>
         </header>
@@ -446,61 +518,39 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
               const theme = ROLE_THEMES[message.role];
               const containerDirection = message.role === 'user' ? 'flex-row-reverse text-right' : 'flex-row text-left';
               const roleLabel = message.role === 'user' ? 'You' : message.role === 'assistant' ? (agent?.name ?? 'Assistant') : 'System';
-              const avatarLabel = message.role === 'assistant' ? (agent?.name?.[0]?.toUpperCase() ?? 'A') : message.role === 'user' ? 'Y' : 'S';
               const timestamp = formatAbsoluteTimestamp(message.createdAt);
               const relative = formatRelativeTimestamp(message.createdAt);
               const timestampLabel = relative ? `${timestamp} · ${relative}` : timestamp;
               const messageKeyPrefix = `${message.id}-${index}`;
-              const topCornerClass =
-                message.role === 'user'
-                  ? isFirstInGroup
-                    ? 'rounded-tr-2xl'
-                    : 'rounded-tr-md'
-                  : isFirstInGroup
-                    ? 'rounded-tl-2xl'
-                    : 'rounded-tl-md';
-              const bottomCornerClass =
-                message.role === 'user'
-                  ? isLastInGroup
-                    ? 'rounded-br-2xl'
-                    : 'rounded-br-md'
-                  : isLastInGroup
-                    ? 'rounded-bl-2xl'
-                    : 'rounded-bl-md';
-              const oppositeCornerClasses =
-                message.role === 'user'
-                  ? 'rounded-tl-2xl rounded-bl-2xl'
-                  : 'rounded-tr-2xl rounded-br-2xl';
+              
+              // User messages get rounded corners, assistant messages are borderless
+              const bubbleClasses = message.role === 'user' 
+                ? 'rounded-2xl px-4 py-3' 
+                : 'py-2 px-0';
 
               return (
                 <div
                   key={`${message.id}-${message.createdAt}`}
-                  className={`flex gap-3 ${containerDirection} ${isFirstInGroup ? 'mt-4' : 'mt-1'}`}
+                  className={`flex gap-2 ${containerDirection} ${isFirstInGroup ? 'mt-4' : 'mt-1'} animate-fadeIn`}
                 >
-                  <div
-                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase ${theme.avatar} ${isFirstInGroup ? '' : 'invisible'}`}
-                    aria-hidden={!isFirstInGroup}
-                  >
-                    {avatarLabel}
-                  </div>
-                  <div className={`flex max-w-[min(480px,80%)] flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} gap-1`}>
+                  <div className={`flex ${message.role === 'user' ? 'max-w-[75%]' : 'max-w-[90%]'} flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} gap-1`}>
                     {isFirstInGroup && (
                       <div className={`flex items-baseline gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <span className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide ${theme.badge}`}>
+                        <span className={`rounded-md px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider ${theme.badge}`}>
                           {roleLabel}
                         </span>
-                        <time className={`text-xs ${theme.timestamp}`} dateTime={new Date(message.createdAt).toISOString()}>
+                        <time className={`text-[0.6875rem] ${theme.timestamp}`} dateTime={new Date(message.createdAt).toISOString()}>
                           {timestampLabel}
                         </time>
                       </div>
                     )}
                     <div
-                      className={`w-full border px-4 py-3 text-left ${theme.bubble} ${oppositeCornerClasses} ${topCornerClass} ${bottomCornerClass}`}
+                      className={`w-full text-left ${theme.bubble} ${bubbleClasses}`}
                     >
                       {renderMarkdown(message.content, messageKeyPrefix)}
                       {message.isStreaming && (
-                        <span className={`ml-1 inline-block align-middle text-xs ${message.role === 'assistant' ? theme.timestamp : 'text-white/80'} animate-pulse`}>
-                          ▋
+                        <span className={`ml-1 inline-block align-middle text-sm ${message.role === 'assistant' ? 'text-[var(--assistant-text)]/60' : 'text-white/80'} animate-cursorPulse`}>
+                          █
                         </span>
                       )}
                     </div>
@@ -513,7 +563,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
         <div ref={endRef} />
       </div>
 
-      <footer className={`${isMobile ? 'p-4' : 'p-3'} border-t-2 border-[var(--border)] bg-[var(--bg)]`}>
+      <footer className={`${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -526,15 +576,23 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
           <textarea
             aria-label="Message"
             rows={isMobile ? 3 : 2}
-            className={`flex-1 resize-none rounded-md bg-[var(--muted)] text-[var(--fg)] placeholder-black/50 px-3 py-2 ${isMobile ? 'text-base' : 'text-sm'} border-2 border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-blue-600`}
+            className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 py-3 ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
             placeholder="Type a message..."
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!text.trim() || isStreaming) return;
+                handleStreamingSend(text.trim());
+                setText('');
+              }
+            }}
           />
           <button
             type="submit"
             disabled={isStreaming}
-            className={`self-stretch ${isMobile ? 'px-4 py-3' : 'px-3 py-2'} rounded-md bg-[var(--accent)] hover:bg-blue-700 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed`}
+            className={`self-stretch ${isMobile ? 'px-5 py-3' : 'px-4 py-2.5'} rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150`}
           >
             {isStreaming ? 'Sending...' : 'Send'}
           </button>
