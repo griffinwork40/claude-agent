@@ -11,6 +11,34 @@ import { AgentList, BrowserPane, ChatPane, BottomSheet } from '@/components/agen
 import { ResizablePane } from '@/components/ResizablePane';
 import { loadMessagesFromAPI } from '@/lib/message-utils';
 
+/**
+ * Generate a user-facing conversation title from the first user message.
+ */
+function buildConversationTitle(agentId: string, messages: Message[]): string {
+  const normalizedMessages = [...messages].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const firstUserMessage = normalizedMessages.find(
+    (msg) => msg.role === 'user' && msg.content.trim().length > 0
+  );
+  if (firstUserMessage) {
+    const condensedContent = firstUserMessage.content.replace(/\s+/g, ' ').trim();
+    if (condensedContent.length === 0) {
+      return 'Untitled conversation';
+    }
+    const MAX_LENGTH = 60;
+    return condensedContent.length <= MAX_LENGTH
+      ? condensedContent
+      : `${condensedContent.slice(0, MAX_LENGTH - 1).trim()}…`;
+  }
+
+  if (agentId === 'default-agent') {
+    return 'Job Application Assistant';
+  }
+
+  return `Conversation ${agentId.slice(-6)}`;
+}
+
 export const dynamic = 'force-dynamic';
 
 export default function AgentPage() {
@@ -56,12 +84,17 @@ export default function AgentPage() {
           }, {} as Record<string, typeof loadedMessages>);
           
           // Create agents for each conversation
-          const newAgents: Agent[] = Object.entries(messagesByAgent).map(([agentId, messages]) => {
-            const sortedMessages = messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+          const newAgents: Agent[] = Object.entries(messagesByAgent).map(([agentId, agentMessages]) => {
+            const sortedMessages = [...agentMessages].sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
             return {
               id: agentId,
-              name: agentId === 'default-agent' ? 'Job Application Assistant' : `Conversation ${agentId.slice(-6)}`,
-              description: agentId === 'default-agent' ? 'Your AI assistant for job searching and applications' : 'Previous conversation',
+              name: buildConversationTitle(agentId, sortedMessages),
+              description:
+                agentId === 'default-agent'
+                  ? 'Your AI assistant for job searching and applications'
+                  : 'Previous conversation',
               createdAt: sortedMessages[0].createdAt,
               updatedAt: sortedMessages[sortedMessages.length - 1].createdAt,
             };
@@ -172,12 +205,32 @@ export default function AgentPage() {
   // Function to add a new message to the state
   function handleAddMessage(content: string, agentId: string, message: Message) {
     console.log('Adding message:', { agentId, role: message.role, content: content.substring(0, 50) });
+    let agentMessagesForUpdate: Message[] = [];
     setMessages((prev) => {
       console.log('Previous messages count:', prev.length);
       const newMessages = [...prev, message];
+      agentMessagesForUpdate = newMessages.filter((msg) => msg.agentId === agentId);
       console.log('New messages count:', newMessages.length);
       return newMessages;
     });
+
+    setAgents((previousAgents) =>
+      previousAgents.map((agent) => {
+        if (agent.id !== agentId) {
+          return agent;
+        }
+
+        const updatedAgentMessages = [...agentMessagesForUpdate];
+        const updatedName =
+          message.role === 'user' ? buildConversationTitle(agentId, updatedAgentMessages) : agent.name;
+
+        return {
+          ...agent,
+          name: updatedName,
+          updatedAt: message.createdAt,
+        };
+      })
+    );
   }
 
   function handleCloseBottomSheet() {
