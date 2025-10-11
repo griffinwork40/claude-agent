@@ -13,6 +13,10 @@
 - [x] Add Logout button in UI shell
 - [x] Require session in API routes if sensitive
 
+Fixes (2025-10-11):
+
+- [x] Prevent bottom sheet from closing when scrolling chat (handle-only swipe)
+
 - [x] Create tables in Supabase (messages, jobs, applications)
 - [ ] Point env to multi-agent-reviews project and set SUPABASE_SERVICE_ROLE_KEY
 
