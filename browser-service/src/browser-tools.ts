@@ -58,31 +58,47 @@ export class BrowserJobService {
       const searchUrl = this.buildIndeedSearchUrl(params);
       console.log('Searching Indeed:', searchUrl);
       
-      await page.goto(searchUrl, { waitUntil: 'networkidle' });
-      await page.waitForSelector('.job_seen_beacon', { timeout: 10000 });
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       
-      // Extract job listings
-      const jobs = await page.$$eval('.job_seen_beacon', (elements) => {
-        return elements.slice(0, 10).map((el, index) => ({
-          id: `indeed_${Date.now()}_${index}`,
-          title: el.querySelector('.jobTitle a')?.textContent?.trim() || 
-                  el.querySelector('.jobTitle')?.textContent?.trim() || 'Unknown Title',
-          company: el.querySelector('.companyName')?.textContent?.trim() || 'Unknown Company',
-          location: el.querySelector('.companyLocation')?.textContent?.trim() || 'Unknown Location',
-          salary: el.querySelector('.salary-snippet')?.textContent?.trim() || undefined,
-          url: (el.querySelector('.jobTitle a') as HTMLAnchorElement | null)?.getAttribute('href') || 
-               (el.querySelector('.jobTitle') as HTMLAnchorElement | null)?.getAttribute('href') || '',
-          description: el.querySelector('.job-snippet')?.textContent?.trim() || '',
-          application_url: (el.querySelector('.jobTitle a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
-          source: 'indeed' as const,
-          skills: [],
-          experience_level: 'unknown',
-          job_type: 'full-time',
-          remote_type: 'unknown',
-          applied: false,
-          status: 'discovered' as const,
-          created_at: new Date().toISOString()
-        }));
+      // Wait for job listings with multiple possible selectors
+      await page.waitForSelector('.job_seen_beacon, .jobsearch-ResultsList li, [data-testid="job-card"]', { timeout: 15000 }).catch(() => {
+        console.log('Primary selector not found, trying alternative approach');
+      });
+      
+      // Wait a bit for dynamic content
+      await page.waitForTimeout(2000);
+      
+      // Extract job listings with multiple selector strategies
+      const jobs = await page.evaluate(() => {
+        const jobCards = Array.from(document.querySelectorAll('.job_seen_beacon, .jobsearch-ResultsList li, [data-testid="job-card"]'));
+        
+        return jobCards.slice(0, 10).map((el, index) => {
+          const titleEl = el.querySelector('.jobTitle a, .jobTitle span, h2 a, [data-testid="job-title"]');
+          const companyEl = el.querySelector('.companyName, [data-testid="company-name"], .company');
+          const locationEl = el.querySelector('.companyLocation, [data-testid="job-location"], .location');
+          const salaryEl = el.querySelector('.salary-snippet, [data-testid="salary"], .salary');
+          const descEl = el.querySelector('.job-snippet, [data-testid="job-snippet"], .description');
+          const linkEl = el.querySelector('a[href*="/rc/clk"], a[href*="/viewjob"], h2 a') as HTMLAnchorElement | null;
+          
+          return {
+            id: `indeed_${Date.now()}_${index}`,
+            title: titleEl?.textContent?.trim() || 'Unknown Title',
+            company: companyEl?.textContent?.trim() || 'Unknown Company',
+            location: locationEl?.textContent?.trim() || 'Unknown Location',
+            salary: salaryEl?.textContent?.trim() || undefined,
+            url: linkEl?.href || '',
+            description: descEl?.textContent?.trim() || '',
+            application_url: linkEl?.href || '',
+            source: 'indeed' as const,
+            skills: [],
+            experience_level: 'unknown',
+            job_type: 'full-time',
+            remote_type: 'unknown',
+            applied: false,
+            status: 'discovered' as const,
+            created_at: new Date().toISOString()
+          };
+        });
       });
 
       console.log(`Found ${jobs.length} jobs on Indeed`);
