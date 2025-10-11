@@ -65,3 +65,68 @@ export async function loadMessagesFromAPI(agentId?: string): Promise<Message[]> 
     return [];
   }
 }
+
+export interface Conversation {
+  id: string;
+  user_id: string;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Load conversations from the API
+ */
+export async function loadConversationsFromAPI(includeArchived: boolean = false): Promise<Conversation[]> {
+  try {
+    const url = `/api/conversations/archive?includeArchived=${includeArchived}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to load conversations:', response.status, response.statusText);
+      return [];
+    }
+
+    const result = await response.json();
+    if (!result.success || !result.data) {
+      console.error('Invalid response format:', result);
+      return [];
+    }
+
+    return result.data;
+  } catch (error) {
+    console.error('Error loading conversations:', error);
+    return [];
+  }
+}
+
+/**
+ * Archive or unarchive a conversation
+ */
+export async function archiveConversation(conversationId: string, archived: boolean): Promise<boolean> {
+  try {
+    const response = await fetch('/api/conversations/archive', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ conversationId, archived }),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to archive conversation:', response.status, response.statusText);
+      return false;
+    }
+
+    const result = await response.json();
+    return result.success === true;
+  } catch (error) {
+    console.error('Error archiving conversation:', error);
+    return false;
+  }
+}

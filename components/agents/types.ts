@@ -13,6 +13,7 @@ export interface Agent {
   id: string;
   name: string;
   description?: string;
+  archived?: boolean;
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
 }
@@ -36,6 +37,9 @@ export interface AgentListProps {
   selectedAgentId: string | null;
   onSelect: (agentId: string) => void;
   onCreate: () => void;
+  onArchive?: (agentId: string, archived: boolean) => void;
+  showArchived?: boolean;
+  onToggleShowArchived?: () => void;
 }
 
 export interface Activity {

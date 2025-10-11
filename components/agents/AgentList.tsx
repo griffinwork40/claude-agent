@@ -8,12 +8,16 @@ import { useMemo, useState } from 'react';
 import { Agent, AgentListProps } from './types';
 
 /**
- * Filter agents by search query and sort by most recent.
+ * Filter agents by search query, archived status, and sort by most recent.
  */
-function useFilteredAgents(agents: Agent[], query: string) {
+function useFilteredAgents(agents: Agent[], query: string, showArchived: boolean) {
   const normalized = query.trim().toLowerCase();
   return useMemo(() => {
     const filtered = agents.filter((a) => {
+      // Filter by archived status
+      if (!showArchived && a.archived) return false;
+      
+      // Filter by search query
       if (!normalized) return true;
       return (
         a.name.toLowerCase().includes(normalized) ||
@@ -24,7 +28,7 @@ function useFilteredAgents(agents: Agent[], query: string) {
     return filtered.sort((a, b) => 
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
-  }, [agents, normalized]);
+  }, [agents, normalized, showArchived]);
 }
 
 /**
@@ -49,14 +53,14 @@ function formatRelativeTime(isoString: string): string {
  * Renders the left navigation pane with search, empty state, and agent list.
  */
 export function AgentList(props: AgentListProps) {
-  const { agents, selectedAgentId, onSelect, onCreate } = props;
+  const { agents, selectedAgentId, onSelect, onCreate, onArchive, showArchived = false, onToggleShowArchived } = props;
   const [query, setQuery] = useState('');
-  const filteredAgents = useFilteredAgents(agents, query);
+  const filteredAgents = useFilteredAgents(agents, query, showArchived);
 
   return (
     <aside className="h-full overflow-y-auto border-r-2 border-[var(--border)] bg-[var(--bg)]">
       <div className="p-3 md:p-3 sticky top-0 bg-[var(--bg)] z-10">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-2">
           <input
             aria-label="Search agents"
             placeholder="Search agents..."
@@ -72,6 +76,18 @@ export function AgentList(props: AgentListProps) {
             New
           </button>
         </div>
+        {onToggleShowArchived && (
+          <button
+            onClick={onToggleShowArchived}
+            className="text-xs text-[var(--fg)]/70 hover:text-[var(--fg)] flex items-center gap-1"
+            aria-label={showArchived ? 'Hide archived' : 'Show archived'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+            {showArchived ? 'Hide archived' : 'Show archived'}
+          </button>
+        )}
       </div>
 
       {/* Empty State */}
@@ -114,7 +130,7 @@ export function AgentList(props: AgentListProps) {
             {filteredAgents.map((agent) => {
               const active = agent.id === selectedAgentId;
               return (
-                <li key={agent.id}>
+                <li key={agent.id} className="group relative">
                   <button
                     className={
                       'w-full text-left rounded-md px-3 py-3 md:py-2 transition border-2 touch-manipulation ' +
@@ -126,8 +142,11 @@ export function AgentList(props: AgentListProps) {
                     aria-current={active ? 'true' : undefined}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-[var(--fg)] text-base md:text-sm">
+                      <span className="font-medium text-[var(--fg)] text-base md:text-sm flex items-center gap-2">
                         {agent.name}
+                        {agent.archived && (
+                          <span className="text-xs text-[var(--fg)]/50">(Archived)</span>
+                        )}
                       </span>
                       <span className="text-xs text-[var(--fg)]/50">
                         {formatRelativeTime(agent.updatedAt)}
@@ -139,6 +158,21 @@ export function AgentList(props: AgentListProps) {
                       </div>
                     )}
                   </button>
+                  {onArchive && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onArchive(agent.id, !agent.archived);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-md bg-[var(--bg)] hover:bg-[var(--muted)] text-[var(--fg)]/70 hover:text-[var(--fg)] opacity-0 group-hover:opacity-100 transition-opacity border border-[var(--border)]"
+                      aria-label={agent.archived ? 'Unarchive conversation' : 'Archive conversation'}
+                      title={agent.archived ? 'Unarchive' : 'Archive'}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                    </button>
+                  )}
                 </li>
               );
             })}
