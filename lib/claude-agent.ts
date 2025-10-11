@@ -567,6 +567,20 @@ async function executeTools(
             };
             break;
             
+          case 'search_jobs_indeed':
+            const indeedJobsResult = await browserService.searchJobsIndeed({
+              keywords: input.keywords,
+              location: input.location,
+              experience_level: input.experience_level,
+              remote: input.remote
+            });
+            result = {
+              success: true,
+              data: indeedJobsResult,
+              message: `Found ${indeedJobsResult.length} jobs on Indeed`
+            };
+            break;
+            
           case 'search_jobs_google':
             const googleJobsResult = await browserService.searchJobsGoogle({
               keywords: input.keywords,
@@ -578,6 +592,21 @@ async function executeTools(
               success: true,
               data: googleJobsResult,
               message: `Found ${googleJobsResult.length} jobs on Google Jobs`
+            };
+            break;
+            
+          case 'search_jobs_linkedin':
+            const linkedinJobsResult = await browserService.searchJobsLinkedIn({
+              keywords: input.keywords,
+              location: input.location,
+              experience_level: input.experience_level,
+              remote: input.remote,
+              userId: input.userId || userId
+            });
+            result = {
+              success: true,
+              data: linkedinJobsResult,
+              message: `Found ${linkedinJobsResult.length} jobs on LinkedIn`
             };
             break;
             

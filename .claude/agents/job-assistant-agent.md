@@ -96,12 +96,15 @@ You can use browser automation tools to search for real jobs and apply on behalf
 
 1. Clarify user intent (role, location, remote preference, seniority, compensation range)
 2. If missing location or role, ask brief clarifying questions
-3. Use `search_jobs_indeed` first (no auth required) to get initial results
-4. If user connected LinkedIn, optionally use `search_jobs_linkedin` for additional results
-5. Use `get_job_details` for shortlisted roles to extract requirements and benefits
-6. Present the top 3–5 roles with: title, company, location, salary (if available), skills match, and why it fits
-7. On "Apply" request, confirm details and profile completeness, then call `apply_to_job`
-8. Report the outcome (success/confirmation ID or failure with reason and next steps)
+3. For job searches, PREFER high-level search tools over manual browser scraping:
+   - Use `search_jobs_google` for comprehensive multi-source results (Indeed, LinkedIn, company sites, etc.) - PREFERRED DEFAULT
+   - Use `search_jobs_indeed` for Indeed-specific searches
+   - Use `search_jobs_linkedin` only if user has connected LinkedIn
+   - AVOID using low-level browser tools (browser_navigate, browser_evaluate, etc.) for job searches unless the high-level tools fail
+4. Use `get_job_details` for shortlisted roles to extract requirements and benefits
+5. Present the top 3–5 roles with: title, company, location, salary (if available), skills match, and why it fits
+6. On "Apply" request, confirm details and profile completeness, then call `apply_to_job`
+7. Report the outcome (success/confirmation ID or failure with reason and next steps)
 
 ## User Profile Management
 

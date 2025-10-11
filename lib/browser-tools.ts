@@ -80,6 +80,16 @@ export class BrowserService {
     return this.request('/api/browser/close', { sessionId });
   }
 
+  // Search jobs on Indeed
+  async searchJobsIndeed(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[]> {
+    return this.request('/api/search-indeed', params);
+  }
+
   // Search jobs on Google Jobs
   async searchJobsGoogle(params: {
     keywords: string;
@@ -88,6 +98,17 @@ export class BrowserService {
     remote?: boolean;
   }): Promise<JobOpportunity[]> {
     return this.request('/api/search-google', params);
+  }
+
+  // Search jobs on LinkedIn
+  async searchJobsLinkedIn(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+    userId: string;
+  }): Promise<JobOpportunity[]> {
+    return this.request('/api/search-linkedin', params);
   }
 }
 
@@ -288,6 +309,33 @@ export const browserTools = [
     }
   },
   {
+    name: 'search_jobs_indeed',
+    description: 'Search Indeed for job listings. Returns real job postings from Indeed.com.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keywords: {
+          type: 'string',
+          description: 'Job search keywords (e.g., "software engineer", "marketing manager")'
+        },
+        location: {
+          type: 'string',
+          description: 'Job location (e.g., "San Francisco", "Remote", "New York")'
+        },
+        experience_level: {
+          type: 'string',
+          description: 'Experience level (entry, mid, senior, executive)',
+          enum: ['entry', 'mid', 'senior', 'executive']
+        },
+        remote: {
+          type: 'boolean',
+          description: 'Whether to include remote jobs'
+        }
+      },
+      required: ['keywords', 'location']
+    }
+  },
+  {
     name: 'search_jobs_google',
     description: 'Search Google Jobs for aggregated job listings from multiple sources (Indeed, LinkedIn, company sites, etc.)',
     input_schema: {
@@ -312,6 +360,37 @@ export const browserTools = [
         }
       },
       required: ['keywords', 'location']
+    }
+  },
+  {
+    name: 'search_jobs_linkedin',
+    description: 'Search LinkedIn for job listings. Requires authenticated LinkedIn session.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keywords: {
+          type: 'string',
+          description: 'Job search keywords (e.g., "software engineer", "marketing manager")'
+        },
+        location: {
+          type: 'string',
+          description: 'Job location (e.g., "San Francisco", "Remote", "New York")'
+        },
+        experience_level: {
+          type: 'string',
+          description: 'Experience level (entry, mid, senior, executive)',
+          enum: ['entry', 'mid', 'senior', 'executive']
+        },
+        remote: {
+          type: 'boolean',
+          description: 'Whether to include remote jobs'
+        },
+        userId: {
+          type: 'string',
+          description: 'User ID for session management'
+        }
+      },
+      required: ['keywords', 'location', 'userId']
     }
   }
 ];
