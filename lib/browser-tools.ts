@@ -1,94 +1,106 @@
 // lib/browser-tools.ts
-import { chromium, Browser, Page } from 'playwright';
+// HTTP client for LLM-controlled browser automation service
 import { JobOpportunity } from '@/types';
-import fs from 'fs/promises';
 
-const toRecord = (value: unknown): Record<string, unknown> =>
-  value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+// LLM-controlled browser automation client
+export class BrowserService {
+  private serviceUrl = process.env.BROWSER_SERVICE_URL || 'http://localhost:3001';
+  private apiKey = process.env.BROWSER_SERVICE_API_KEY || 'test-key-12345';
 
-// Browser automation service for job searching and application
-export class BrowserJobService {
-  private browser: Browser | null = null;
-  private sessionPath = './linkedin-sessions';
-
-  async initialize() {
-    if (this.browser) return;
-    
-    this.browser = await chromium.launch({
-      headless: process.env.NODE_ENV === 'production',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
+  private async request(endpoint: string, body: Record<string, unknown>) {
+    const response = await fetch(`${this.serviceUrl}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify(body)
     });
-  }
-
-  async close() {
-    if (this.browser) {
-      await this.browser.close();
-      this.browser = null;
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(error.error || response.statusText);
     }
+    
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Request failed');
+    }
+    
+    return result.data;
   }
 
-  // Search jobs on Indeed (no authentication required)
+  // Navigate to a URL
+  async navigate(sessionId: string, url: string): Promise<{ url: string }> {
+    return this.request('/api/browser/navigate', { sessionId, url });
+  }
+
+  // Get page snapshot (accessibility tree)
+  async snapshot(sessionId: string): Promise<{ snapshot: string; url: string }> {
+    return this.request('/api/browser/snapshot', { sessionId });
+  }
+
+  // Take screenshot
+  async screenshot(sessionId: string, fullPage: boolean = false): Promise<{ screenshot: string }> {
+    return this.request('/api/browser/screenshot', { sessionId, fullPage });
+  }
+
+  // Click element
+  async click(sessionId: string, selector: string): Promise<{ message: string }> {
+    return this.request('/api/browser/click', { sessionId, selector });
+  }
+
+  // Type into element
+  async type(sessionId: string, selector: string, text: string, submit: boolean = false): Promise<{ message: string }> {
+    return this.request('/api/browser/type', { sessionId, selector, text, submit });
+  }
+
+  // Select dropdown option
+  async select(sessionId: string, selector: string, value: string): Promise<{ message: string }> {
+    return this.request('/api/browser/select', { sessionId, selector, value });
+  }
+
+  // Wait for element or page load
+  async waitFor(sessionId: string, selector?: string, timeout: number = 10000): Promise<{ message: string }> {
+    return this.request('/api/browser/wait', { sessionId, selector, timeout });
+  }
+
+  // Evaluate JavaScript
+  async evaluate(sessionId: string, script: string): Promise<{ result: unknown }> {
+    return this.request('/api/browser/evaluate', { sessionId, script });
+  }
+
+  // Get page content
+  async getContent(sessionId: string): Promise<{ html: string; text: string; url: string }> {
+    return this.request('/api/browser/content', { sessionId });
+  }
+
+  // Close browser session
+  async closeSession(sessionId: string): Promise<{ message: string }> {
+    return this.request('/api/browser/close', { sessionId });
+  }
+
+  // Search jobs on Indeed
   async searchJobsIndeed(params: {
     keywords: string;
     location: string;
     experience_level?: string;
     remote?: boolean;
   }): Promise<JobOpportunity[]> {
-    if (!this.browser) {
-      await this.initialize();
-    }
-
-    const page = await this.browser!.newPage();
-    
-    try {
-      // Build Indeed search URL
-      const searchUrl = this.buildIndeedSearchUrl(params);
-      console.log('Searching Indeed:', searchUrl);
-      
-      await page.goto(searchUrl, { waitUntil: 'networkidle' });
-      await page.waitForSelector('.job_seen_beacon', { timeout: 10000 });
-      
-      // Extract job listings
-      const jobs = await page.$$eval('.job_seen_beacon', (elements) => {
-        return elements.slice(0, 10).map((el, index) => ({
-          id: `indeed_${Date.now()}_${index}`,
-          title: el.querySelector('.jobTitle a')?.textContent?.trim() || 
-                  el.querySelector('.jobTitle')?.textContent?.trim() || 'Unknown Title',
-          company: el.querySelector('.companyName')?.textContent?.trim() || 'Unknown Company',
-          location: el.querySelector('.companyLocation')?.textContent?.trim() || 'Unknown Location',
-          salary: el.querySelector('.salary-snippet')?.textContent?.trim() || undefined,
-          url: (el.querySelector('.jobTitle a') as HTMLAnchorElement | null)?.getAttribute('href') || 
-               (el.querySelector('.jobTitle') as HTMLAnchorElement | null)?.getAttribute('href') || '',
-          description: el.querySelector('.job-snippet')?.textContent?.trim() || '',
-          application_url: (el.querySelector('.jobTitle a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
-          source: 'indeed' as const,
-          skills: [],
-          experience_level: 'unknown',
-          job_type: 'full-time',
-          remote_type: 'unknown',
-          applied: false,
-          status: 'discovered' as const,
-          created_at: new Date().toISOString()
-        }));
-      });
-
-      console.log(`Found ${jobs.length} jobs on Indeed`);
-      return jobs;
-      
-    } catch (error: unknown) {
-      console.error('Error searching Indeed:', error);
-      const errMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`Indeed search failed: ${errMessage}`);
-    } finally {
-      await page.close();
-    }
+    return this.request('/api/search-indeed', params);
   }
 
-  // Search jobs on LinkedIn (requires authentication)
+  // Search jobs on Google Jobs
+  async searchJobsGoogle(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[]> {
+    return this.request('/api/search-google', params);
+  }
+
+  // Search jobs on LinkedIn
   async searchJobsLinkedIn(params: {
     keywords: string;
     location: string;
@@ -96,374 +108,255 @@ export class BrowserJobService {
     remote?: boolean;
     userId: string;
   }): Promise<JobOpportunity[]> {
-    if (!this.browser) {
-      await this.initialize();
-    }
-
-    const page = await this.initializeLinkedInSession(params.userId);
-    
-    try {
-      // Build LinkedIn search URL
-      const searchUrl = this.buildLinkedInSearchUrl(params);
-      console.log('Searching LinkedIn:', searchUrl);
-      
-      await page.goto(searchUrl, { waitUntil: 'networkidle' });
-      await page.waitForSelector('.jobs-search__results-list', { timeout: 10000 });
-      
-      // Extract job listings
-      const jobs = await page.$$eval('.job-card-container', (elements) => {
-        return elements.slice(0, 10).map((el, index) => ({
-          id: `linkedin_${Date.now()}_${index}`,
-          title: el.querySelector('.job-card-list__title')?.textContent?.trim() || 'Unknown Title',
-          company: el.querySelector('.job-card-container__company-name')?.textContent?.trim() || 'Unknown Company',
-          location: el.querySelector('.job-card-container__metadata-item')?.textContent?.trim() || 'Unknown Location',
-          salary: undefined, // LinkedIn doesn't show salary in search results
-          url: (el.querySelector('a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
-          description: el.querySelector('.job-card-list__description')?.textContent?.trim() || '',
-          application_url: (el.querySelector('a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
-          source: 'linkedin' as const,
-          skills: [],
-          experience_level: 'unknown',
-          job_type: 'full-time',
-          remote_type: 'unknown',
-          applied: false,
-          status: 'discovered' as const,
-          created_at: new Date().toISOString()
-        }));
-      });
-
-      console.log(`Found ${jobs.length} jobs on LinkedIn`);
-      return jobs;
-      
-    } catch (error: unknown) {
-      console.error('Error searching LinkedIn:', error);
-      const errMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`LinkedIn search failed: ${errMessage}`);
-    } finally {
-      await page.close();
-    }
-  }
-
-  // Get detailed information about a specific job
-  async getJobDetails(jobUrl: string): Promise<Partial<JobOpportunity>> {
-    if (!this.browser) {
-      await this.initialize();
-    }
-
-    const page = await this.browser!.newPage();
-    
-    try {
-      console.log('Getting job details from:', jobUrl);
-      await page.goto(jobUrl, { waitUntil: 'networkidle' });
-      
-      // Wait for job content to load
-      await page.waitForTimeout(2000);
-      
-      const jobDetails = await page.evaluate((currentUrl) => {
-        // Extract job description
-        const description = document.querySelector('.jobs-description-content__text')?.textContent?.trim() ||
-                          document.querySelector('.jobsearch-jobDescriptionText')?.textContent?.trim() ||
-                          document.querySelector('.job-description')?.textContent?.trim() || '';
-        
-        // Extract skills/requirements
-        const skills = Array.from(document.querySelectorAll('.jobs-unified-top-card__job-insight, .jobsearch-jobDescriptionText li'))
-          .map(el => el.textContent?.trim())
-          .filter(text => text && text.length > 0)
-          .slice(0, 10);
-        
-        // Extract salary if available
-        const salary = document.querySelector('.jobs-unified-top-card__job-insight--salary')?.textContent?.trim() ||
-                      document.querySelector('.salary-snippet')?.textContent?.trim() || undefined;
-        
-        // Extract application URL
-        const applicationUrl = (document.querySelector('.jobs-apply-button') as HTMLAnchorElement | null)?.getAttribute('href') ||
-                              (document.querySelector('a[href*="apply"]') as HTMLAnchorElement | null)?.getAttribute('href') ||
-                              currentUrl;
-        
-        return {
-          description,
-          skills,
-          salary,
-          application_url: applicationUrl
-        };
-      }, jobUrl);
-
-      return jobDetails;
-      
-    } catch (error: unknown) {
-      console.error('Error getting job details:', error);
-      const errMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to get job details: ${errMessage}`);
-    } finally {
-      await page.close();
-    }
-  }
-
-  // Apply to a job using user profile data
-  async applyToJob(jobUrl: string, userProfile: Record<string, unknown>): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
-    if (!this.browser) {
-      await this.initialize();
-    }
-
-    const page = await this.browser!.newPage();
-    
-    try {
-      console.log('Applying to job:', jobUrl);
-      await page.goto(jobUrl, { waitUntil: 'networkidle' });
-      
-      // Look for LinkedIn Easy Apply button
-      const easyApplyButton = await page.locator('.jobs-apply-button').first();
-      if (await easyApplyButton.isVisible()) {
-        await easyApplyButton.click();
-        await page.waitForTimeout(2000);
-        
-        // Fill out the application form
-        await this.fillLinkedInEasyApply(page, userProfile);
-        
-        // Submit the application
-        const submitButton = await page.locator('button[aria-label*="Submit"], button:has-text("Submit")').first();
-        if (await submitButton.isVisible()) {
-          await submitButton.click();
-          await page.waitForTimeout(3000);
-          
-          // Check for success confirmation
-          const successMessage = await page.locator('text=Application submitted, text=Thank you for applying').first();
-          if (await successMessage.isVisible()) {
-            return {
-              success: true,
-              message: 'Application submitted successfully via LinkedIn Easy Apply',
-              details: { url: jobUrl, method: 'linkedin_easy_apply' }
-            };
-          }
-        }
-      }
-      
-      // Fallback: try to find general application form
-      return await this.fillGeneralApplicationForm(page, userProfile);
-      
-    } catch (error: unknown) {
-      console.error('Error applying to job:', error);
-      const errMessage = error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        message: `Application failed: ${errMessage}`,
-        details: { url: jobUrl, error: errMessage }
-      };
-    } finally {
-      await page.close();
-    }
-  }
-
-  // Helper methods
-  private buildIndeedSearchUrl(params: {
-    keywords: string;
-    location: string;
-    experience_level?: string;
-    remote?: boolean;
-  }): string {
-    const baseUrl = 'https://www.indeed.com/jobs';
-    const urlParams = new URLSearchParams({
-      q: params.keywords,
-      l: params.location,
-      ...(params.remote && { remote: 'true' })
-    });
-    
-    return `${baseUrl}?${urlParams.toString()}`;
-  }
-
-  private buildLinkedInSearchUrl(params: {
-    keywords: string;
-    location: string;
-    experience_level?: string;
-    remote?: boolean;
-  }): string {
-    const baseUrl = 'https://www.linkedin.com/jobs/search';
-    const urlParams = new URLSearchParams({
-      keywords: params.keywords,
-      location: params.location,
-      ...(params.remote && { f_WT: '2' }), // Remote filter
-      ...(params.experience_level && { f_E: this.experienceLevelToCode(params.experience_level) })
-    });
-    
-    return `${baseUrl}?${urlParams.toString()}`;
-  }
-
-  private experienceLevelToCode(level: string): string {
-    const levels: { [key: string]: string } = {
-      'entry': '1',
-      'mid': '2', 
-      'senior': '3',
-      'executive': '4'
-    };
-    return levels[level.toLowerCase()] || '2';
-  }
-
-  private async initializeLinkedInSession(userId: string): Promise<Page> {
-    const sessionFile = `${this.sessionPath}/${userId}-linkedin.json`;
-    
-    // Ensure session directory exists
-    await fs.mkdir(this.sessionPath, { recursive: true });
-    
-    const context = await this.browser!.newContext({
-      storageState: await this.fileExists(sessionFile) ? sessionFile : undefined
-    });
-    
-    const page = await context.newPage();
-    
-    // Check if logged in
-    await page.goto('https://www.linkedin.com/jobs');
-    const isLoggedIn = await page.locator('[data-test="authentication-wall"]').count() === 0;
-    
-    if (!isLoggedIn) {
-      console.log('LinkedIn login required. Please login in the browser window...');
-      // In production, you might want to handle this differently
-      await page.waitForURL('**/jobs/**', { timeout: 120000 }); // Wait 2 minutes
-      
-      // Save session after successful login
-      await context.storageState({ path: sessionFile });
-      console.log('LinkedIn session saved!');
-    }
-    
-    return page;
-  }
-
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.access(filePath);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private async fillLinkedInEasyApply(page: Page, userProfile: Record<string, unknown>) {
-    // Fill personal information
-    const personalInfo = toRecord(userProfile.personal_info);
-    const fullName = typeof personalInfo.name === 'string' ? personalInfo.name : '';
-    const nameParts = fullName.split(' ');
-    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
-    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
-    await this.fillField(
-      page,
-      'input[name*="email"]',
-      typeof personalInfo.email === 'string' ? personalInfo.email : ''
-    );
-    await this.fillField(
-      page,
-      'input[name*="phone"]',
-      typeof personalInfo.phone === 'string' ? personalInfo.phone : ''
-    );
-
-    // Handle location
-    if (typeof personalInfo.location === 'string') {
-      await this.fillField(page, 'input[name*="city"], input[name*="location"]', personalInfo.location);
-    }
-    
-    // Handle work authorization
-    const authCheckbox = await page.locator('input[name*="authorized"], input[name*="eligible"]').first();
-    if (await authCheckbox.isVisible()) {
-      await authCheckbox.check();
-    }
-    
-    // Handle sponsorship
-    const workEligibility = toRecord(userProfile.work_eligibility);
-    const sponsorshipCheckbox = await page.locator('input[name*="sponsorship"], input[name*="visa"]').first();
-    const requiresSponsorship = workEligibility.require_sponsorship;
-    const canSkipSponsorship =
-      requiresSponsorship === false || requiresSponsorship === 'no' || requiresSponsorship === undefined;
-    if (await sponsorshipCheckbox.isVisible() && canSkipSponsorship) {
-      await sponsorshipCheckbox.check();
-    }
-  }
-
-  private async fillGeneralApplicationForm(page: Page, userProfile: Record<string, unknown>) {
-    // Generic form filling for non-LinkedIn sites
-    const personalInfo = toRecord(userProfile.personal_info);
-    const fullName = typeof personalInfo.name === 'string' ? personalInfo.name : '';
-    const nameParts = fullName.split(' ');
-    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
-    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
-    await this.fillField(
-      page,
-      'input[name*="email"]',
-      typeof personalInfo.email === 'string' ? personalInfo.email : ''
-    );
-    await this.fillField(
-      page,
-      'input[name*="phone"]',
-      typeof personalInfo.phone === 'string' ? personalInfo.phone : ''
-    );
-    
-    // Try to submit
-    const submitButton = await page.locator('button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply")').first();
-    if (await submitButton.isVisible()) {
-      await submitButton.click();
-      await page.waitForTimeout(3000);
-      
-      return {
-        success: true,
-        message: 'Application submitted successfully',
-        details: { method: 'general_form' }
-      };
-    }
-    
-    return {
-      success: false,
-      message: 'Could not find application form or submit button',
-      details: { method: 'general_form' }
-    };
-  }
-
-  private async fillField(page: Page, selector: string, value: string) {
-    if (!value) return;
-    
-    try {
-      const field = await page.locator(selector).first();
-      if (await field.isVisible()) {
-        await field.fill(value);
-        await page.waitForTimeout(500);
-      }
-    } catch (error: unknown) {
-      const errMessage = error instanceof Error ? error.message : String(error);
-      console.log(`Could not fill field ${selector}: ${errMessage}`);
-    }
+    return this.request('/api/search-linkedin', params);
   }
 }
 
 // Singleton instance
-let browserJobService: BrowserJobService | null = null;
+let browserService: BrowserService | null = null;
 
-export const getBrowserJobService = (): BrowserJobService => {
-  if (!browserJobService) {
-    browserJobService = new BrowserJobService();
+export const getBrowserService = (): BrowserService => {
+  if (!browserService) {
+    browserService = new BrowserService();
   }
-  return browserJobService;
+  return browserService;
 };
 
-// Tool definitions for Claude
+// Tool definitions for Claude - LLM-controlled browser
 export const browserTools = [
   {
-    name: 'search_jobs_indeed',
-    description: 'Search for jobs on Indeed.com with specific criteria. Indeed does not require authentication.',
+    name: 'browser_navigate',
+    description: 'Navigate the browser to a specific URL. This starts or continues a browser session.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        keywords: { 
-          type: 'string', 
-          description: 'Job title or keywords to search for' 
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID (use user ID or generate unique ID per conversation)'
         },
-        location: { 
-          type: 'string', 
-          description: 'Job location (city, state, or "remote")' 
+        url: {
+          type: 'string',
+          description: 'URL to navigate to'
+        }
+      },
+      required: ['sessionId', 'url']
+    }
+  },
+  {
+    name: 'browser_snapshot',
+    description: 'Get an accessibility tree snapshot of the current page. Shows page structure with interactive elements, useful for understanding what actions are available.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_screenshot',
+    description: 'Take a screenshot of the current page. Returns base64-encoded PNG image.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
         },
-        experience_level: { 
-          type: 'string', 
-          enum: ['entry', 'mid', 'senior', 'executive'],
-          description: 'Experience level filter'
+        fullPage: {
+          type: 'boolean',
+          description: 'Whether to capture full page (true) or just viewport (false)'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_click',
+    description: 'Click an element on the page using a CSS selector.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
         },
-        remote: { 
-          type: 'boolean', 
-          description: 'Filter for remote work opportunities' 
+        selector: {
+          type: 'string',
+          description: 'CSS selector for the element to click (e.g., "button.submit", "#login-btn")'
+        }
+      },
+      required: ['sessionId', 'selector']
+    }
+  },
+  {
+    name: 'browser_type',
+    description: 'Type text into an input field using a CSS selector.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        selector: {
+          type: 'string',
+          description: 'CSS selector for the input element (e.g., "input[name=email]", "#search")'
+        },
+        text: {
+          type: 'string',
+          description: 'Text to type into the field'
+        },
+        submit: {
+          type: 'boolean',
+          description: 'Whether to press Enter after typing (for forms)'
+        }
+      },
+      required: ['sessionId', 'selector', 'text']
+    }
+  },
+  {
+    name: 'browser_select',
+    description: 'Select an option from a dropdown menu.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        selector: {
+          type: 'string',
+          description: 'CSS selector for the select element'
+        },
+        value: {
+          type: 'string',
+          description: 'Value of the option to select'
+        }
+      },
+      required: ['sessionId', 'selector', 'value']
+    }
+  },
+  {
+    name: 'browser_wait',
+    description: 'Wait for an element to appear or for page to finish loading.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        selector: {
+          type: 'string',
+          description: 'CSS selector to wait for (optional, waits for page load if omitted)'
+        },
+        timeout: {
+          type: 'number',
+          description: 'Timeout in milliseconds (default: 10000)'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_evaluate',
+    description: 'Execute JavaScript code in the browser context. Use for extracting data or performing complex operations.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        script: {
+          type: 'string',
+          description: 'JavaScript code to execute (e.g., "document.title", "Array.from(document.querySelectorAll(\'a\')).map(a => a.href)")'
+        }
+      },
+      required: ['sessionId', 'script']
+    }
+  },
+  {
+    name: 'browser_get_content',
+    description: 'Get the full HTML and text content of the current page.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_close_session',
+    description: 'Close and cleanup a browser session when done.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID to close'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'search_jobs_indeed',
+    description: 'Search Indeed for job listings. Returns real job postings from Indeed.com.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keywords: {
+          type: 'string',
+          description: 'Job search keywords (e.g., "software engineer", "marketing manager")'
+        },
+        location: {
+          type: 'string',
+          description: 'Job location (e.g., "San Francisco", "Remote", "New York")'
+        },
+        experience_level: {
+          type: 'string',
+          description: 'Experience level (entry, mid, senior, executive)',
+          enum: ['entry', 'mid', 'senior', 'executive']
+        },
+        remote: {
+          type: 'boolean',
+          description: 'Whether to include remote jobs'
+        }
+      },
+      required: ['keywords', 'location']
+    }
+  },
+  {
+    name: 'search_jobs_google',
+    description: 'Search Google Jobs for aggregated job listings from multiple sources (Indeed, LinkedIn, company sites, etc.)',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keywords: {
+          type: 'string',
+          description: 'Job search keywords (e.g., "software engineer", "marketing manager")'
+        },
+        location: {
+          type: 'string',
+          description: 'Job location (e.g., "San Francisco", "Remote", "New York")'
+        },
+        experience_level: {
+          type: 'string',
+          description: 'Experience level (entry, mid, senior, executive)',
+          enum: ['entry', 'mid', 'senior', 'executive']
+        },
+        remote: {
+          type: 'boolean',
+          description: 'Whether to include remote jobs'
         }
       },
       required: ['keywords', 'location']
@@ -471,26 +364,26 @@ export const browserTools = [
   },
   {
     name: 'search_jobs_linkedin',
-    description: 'Search for jobs on LinkedIn with specific criteria. Requires LinkedIn authentication.',
+    description: 'Search LinkedIn for job listings. Requires authenticated LinkedIn session.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        keywords: { 
-          type: 'string', 
-          description: 'Job title or keywords to search for' 
+        keywords: {
+          type: 'string',
+          description: 'Job search keywords (e.g., "software engineer", "marketing manager")'
         },
-        location: { 
-          type: 'string', 
-          description: 'Job location (city, state, or "remote")' 
+        location: {
+          type: 'string',
+          description: 'Job location (e.g., "San Francisco", "Remote", "New York")'
         },
-        experience_level: { 
-          type: 'string', 
-          enum: ['entry', 'mid', 'senior', 'executive'],
-          description: 'Experience level filter'
+        experience_level: {
+          type: 'string',
+          description: 'Experience level (entry, mid, senior, executive)',
+          enum: ['entry', 'mid', 'senior', 'executive']
         },
-        remote: { 
-          type: 'boolean', 
-          description: 'Filter for remote work opportunities' 
+        remote: {
+          type: 'boolean',
+          description: 'Whether to include remote jobs'
         },
         userId: {
           type: 'string',
@@ -498,38 +391,6 @@ export const browserTools = [
         }
       },
       required: ['keywords', 'location', 'userId']
-    }
-  },
-  {
-    name: 'get_job_details',
-    description: 'Get detailed information about a specific job posting',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        job_url: { 
-          type: 'string', 
-          description: 'URL of the job posting to get details for' 
-        }
-      },
-      required: ['job_url']
-    }
-  },
-  {
-    name: 'apply_to_job',
-    description: 'Apply to a job using the user\'s profile data. Only use after getting explicit user confirmation.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        job_url: { 
-          type: 'string', 
-          description: 'URL of the job to apply to' 
-        },
-        user_profile: { 
-          type: 'object', 
-          description: 'User profile data for the application' 
-        }
-      },
-      required: ['job_url', 'user_profile']
     }
   }
 ];

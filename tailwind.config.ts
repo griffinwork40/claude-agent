@@ -6,19 +6,18 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        'dyslexic': ['OpenDyslexic', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-        'sans': ['OpenDyslexic', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        'sans': ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
       },
       fontSize: {
-        'xs': ['0.75rem', { lineHeight: '1.5', letterSpacing: '0.025em' }],
-        'sm': ['0.875rem', { lineHeight: '1.6', letterSpacing: '0.015em' }],
-        'base': ['1rem', { lineHeight: '1.6', letterSpacing: '0.01em' }],
-        'lg': ['1.125rem', { lineHeight: '1.7', letterSpacing: '0.015em' }],
-        'xl': ['1.25rem', { lineHeight: '1.8', letterSpacing: '0.02em' }],
-        '2xl': ['1.5rem', { lineHeight: '1.5', letterSpacing: '0.025em' }],
-        '3xl': ['1.875rem', { lineHeight: '1.4', letterSpacing: '0.025em' }],
-        '4xl': ['2.25rem', { lineHeight: '1.3', letterSpacing: '0.03em' }],
-        '5xl': ['3rem', { lineHeight: '1.2', letterSpacing: '0.03em' }],
+        'xs': ['0.75rem', { lineHeight: '1.5' }],
+        'sm': ['0.875rem', { lineHeight: '1.6' }],
+        'base': ['1rem', { lineHeight: '1.6' }],
+        'lg': ['1.125rem', { lineHeight: '1.7' }],
+        'xl': ['1.25rem', { lineHeight: '1.8' }],
+        '2xl': ['1.5rem', { lineHeight: '1.5' }],
+        '3xl': ['1.875rem', { lineHeight: '1.4' }],
+        '4xl': ['2.25rem', { lineHeight: '1.3' }],
+        '5xl': ['3rem', { lineHeight: '1.2' }],
       },
       colors: {
         brand: {
