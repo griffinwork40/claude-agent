@@ -33,3 +33,5 @@
 
 - 2025-10-11: **MAJOR: Playwright Production Migration** - Solved Vercel serverless incompatibility by separating browser automation into dedicated HTTP service. Created browser-service/ with Express API for Playwright execution, updated lib/browser-tools.ts to HTTP client, added Dockerfile + Railway config for deployment. Includes comprehensive testing guide and deployment docs. Ready for Railway deployment. Overall completion: 85% (implementation complete, testing/deployment pending).
 
+- 2025-10-11: **CRITICAL FIX: Conversation Memory Bug** - Fixed agent not remembering chat history. Root cause: `runClaudeAgentStream()` was only sending the latest user message to Claude API instead of full conversation history from the session. Now properly uses `session.messages` array to build complete message history, and saves assistant responses back to session after streaming completes. This enables true multi-turn conversations where context is preserved. Overall completion: 87%.
+
