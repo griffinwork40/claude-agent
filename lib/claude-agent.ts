@@ -1,6 +1,5 @@
 // lib/claude-agent.ts
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { browserTools, getBrowserJobService } from './browser-tools';
@@ -60,14 +59,13 @@ export async function initializeAgent(): Promise<{ client: Anthropic; instructio
   }
 }
 
-function getSupabaseAdmin() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(supabaseUrl, supabaseKey);
+interface AgentSession {
+  userId: string;
+  messages: Array<{ role: string; content: string }>;
 }
 
 // Session management for agent conversations
-const agentSessions = new Map<string, any>();
+const agentSessions = new Map<string, AgentSession>();
 
 export async function createAgentSession(userId: string): Promise<string> {
   const sessionId = `session_${Date.now()}_${userId}`;
@@ -97,10 +95,10 @@ export async function runClaudeAgentStream(
     console.log('✓ Agent initialized for streaming with tools');
     
     // Get or create session
-    let session;
+    let session: AgentSession;
     if (sessionId && agentSessions.has(sessionId)) {
       console.log('Using existing session:', sessionId);
-      session = agentSessions.get(sessionId);
+      session = agentSessions.get(sessionId)!;
     } else {
       console.log('Creating new session...');
       session = { userId, messages: [] };
@@ -136,7 +134,7 @@ export async function runClaudeAgentStream(
 
           console.log('✓ Anthropic stream with tools started');
           
-          let toolUses: ToolUse[] = [];
+          const toolUses: ToolUse[] = [];
           let currentToolUse: ToolUse | null = null;
           let toolInputJson = '';
           
@@ -324,7 +322,7 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
             } else {
               const applicationResult = await browserService.applyToJob(
                 (toolUse.input as { job_url: string }).job_url,
-                userProfile
+                userProfile as unknown as Record<string, unknown>
               );
               result = {
                 success: applicationResult.success,
@@ -384,7 +382,7 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
 }
 
 // Legacy function for backward compatibility (non-streaming)
-export async function runClaudeAgent(userMessage: string, userId: string) {
+export async function runClaudeAgent(userMessage: string) {
   try {
     const { client, instructions } = await initializeAgent();
     
@@ -397,9 +395,14 @@ export async function runClaudeAgent(userMessage: string, userId: string) {
       ]
     });
     
+    interface ContentBlock {
+      type: string;
+      text?: string;
+    }
+    
     // Extract plain text from content blocks
     const text = result.content
-      .map((block: any) => (block.type === 'text' ? block.text : ''))
+      .map((block: ContentBlock) => (block.type === 'text' ? block.text : ''))
       .join('');
     
     return {

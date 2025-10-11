@@ -1,8 +1,8 @@
 // app/api/test-claude/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { initializeAgent } from '@/lib/claude-agent';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   console.log('=== Testing Claude Agent SDK ===');
   
   try {
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     // Try to initialize the agent
     console.log('Attempting to initialize agent...');
-    const agent = await initializeAgent();
+    await initializeAgent();
     console.log('✓ Agent initialized successfully');
     
     return NextResponse.json({ 

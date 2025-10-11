@@ -2,7 +2,9 @@
 import { chromium, Browser, Page } from 'playwright';
 import { JobOpportunity } from '@/types';
 import fs from 'fs/promises';
-import path from 'path';
+
+const toRecord = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
 // Browser automation service for job searching and application
 export class BrowserJobService {
@@ -198,7 +200,7 @@ export class BrowserJobService {
   }
 
   // Apply to a job using user profile data
-  async applyToJob(jobUrl: string, userProfile: any): Promise<{ success: boolean; message: string; details?: any }> {
+  async applyToJob(jobUrl: string, userProfile: Record<string, unknown>): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
     if (!this.browser) {
       await this.initialize();
     }
@@ -334,16 +336,27 @@ export class BrowserJobService {
     }
   }
 
-  private async fillLinkedInEasyApply(page: Page, userProfile: any) {
+  private async fillLinkedInEasyApply(page: Page, userProfile: Record<string, unknown>) {
     // Fill personal information
-    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', userProfile.personal_info?.name?.split(' ')[0] || '');
-    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', userProfile.personal_info?.name?.split(' ').slice(1).join(' ') || '');
-    await this.fillField(page, 'input[name*="email"]', userProfile.personal_info?.email || '');
-    await this.fillField(page, 'input[name*="phone"]', userProfile.personal_info?.phone || '');
-    
+    const personalInfo = toRecord(userProfile.personal_info);
+    const fullName = typeof personalInfo.name === 'string' ? personalInfo.name : '';
+    const nameParts = fullName.split(' ');
+    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
+    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
+    await this.fillField(
+      page,
+      'input[name*="email"]',
+      typeof personalInfo.email === 'string' ? personalInfo.email : ''
+    );
+    await this.fillField(
+      page,
+      'input[name*="phone"]',
+      typeof personalInfo.phone === 'string' ? personalInfo.phone : ''
+    );
+
     // Handle location
-    if (userProfile.personal_info?.location) {
-      await this.fillField(page, 'input[name*="city"], input[name*="location"]', userProfile.personal_info.location);
+    if (typeof personalInfo.location === 'string') {
+      await this.fillField(page, 'input[name*="city"], input[name*="location"]', personalInfo.location);
     }
     
     // Handle work authorization
@@ -353,18 +366,33 @@ export class BrowserJobService {
     }
     
     // Handle sponsorship
+    const workEligibility = toRecord(userProfile.work_eligibility);
     const sponsorshipCheckbox = await page.locator('input[name*="sponsorship"], input[name*="visa"]').first();
-    if (await sponsorshipCheckbox.isVisible() && !userProfile.work_eligibility?.require_sponsorship) {
+    const requiresSponsorship = workEligibility.require_sponsorship;
+    const canSkipSponsorship =
+      requiresSponsorship === false || requiresSponsorship === 'no' || requiresSponsorship === undefined;
+    if (await sponsorshipCheckbox.isVisible() && canSkipSponsorship) {
       await sponsorshipCheckbox.check();
     }
   }
 
-  private async fillGeneralApplicationForm(page: Page, userProfile: any) {
+  private async fillGeneralApplicationForm(page: Page, userProfile: Record<string, unknown>) {
     // Generic form filling for non-LinkedIn sites
-    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', userProfile.personal_info?.name?.split(' ')[0] || '');
-    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', userProfile.personal_info?.name?.split(' ').slice(1).join(' ') || '');
-    await this.fillField(page, 'input[name*="email"]', userProfile.personal_info?.email || '');
-    await this.fillField(page, 'input[name*="phone"]', userProfile.personal_info?.phone || '');
+    const personalInfo = toRecord(userProfile.personal_info);
+    const fullName = typeof personalInfo.name === 'string' ? personalInfo.name : '';
+    const nameParts = fullName.split(' ');
+    await this.fillField(page, 'input[name*="firstName"], input[name*="first_name"]', nameParts[0] || '');
+    await this.fillField(page, 'input[name*="lastName"], input[name*="last_name"]', nameParts.slice(1).join(' ') || '');
+    await this.fillField(
+      page,
+      'input[name*="email"]',
+      typeof personalInfo.email === 'string' ? personalInfo.email : ''
+    );
+    await this.fillField(
+      page,
+      'input[name*="phone"]',
+      typeof personalInfo.phone === 'string' ? personalInfo.phone : ''
+    );
     
     // Try to submit
     const submitButton = await page.locator('button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply")').first();

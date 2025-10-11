@@ -3,11 +3,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { JobOpportunity } from '@/types';
 
 function getSupabaseAdmin() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase environment variables are not set');
+  }
+  
   return createClient(supabaseUrl, supabaseKey);
 }
 
@@ -79,8 +83,14 @@ export async function POST(request: NextRequest) {
 import { getPlaywrightService } from '@/lib/playwright-service';
 import { readFileSync } from 'fs';
 
+interface JobData {
+  application_url: string;
+  title: string;
+  company: string;
+}
+
 // Function to submit application using Playwright
-async function submitApplication(job: any) {
+async function submitApplication(job: JobData) {
   try {
     // Get profile data from griffin.json
     const profileData = JSON.parse(
@@ -108,12 +118,13 @@ async function submitApplication(job: any) {
     await playwrightService.close();
     
     return result;
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('Error submitting application:', error);
     return {
       success: false,
-      message: `Failed to apply to ${job.title} at ${job.company}: ${error.message}`,
-      error: error.message
+      message: `Failed to apply to ${job.title} at ${job.company}: ${errorMessage}`,
+      error: errorMessage
     };
   }
 }

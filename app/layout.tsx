@@ -1,5 +1,6 @@
 // app/layout.tsx
 import './globals.css';
+import Link from 'next/link';
 import { getSiteName, getSiteUrl } from '@/lib/site';
 import LayoutWrapper from '@/components/LayoutWrapper';
 import { getServerSupabase } from '@/lib/supabase/server';
@@ -33,13 +34,23 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const supabase = getServerSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
+  let session = null;
+  
+  if (supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+    } catch (error) {
+      console.warn('Failed to get session:', error);
+    }
+  }
+  
   return (
     <html lang="en">
       <body className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
         <header className="sticky top-0 z-40 bg-[var(--card)] border-b-2 border-[var(--border)] h-16">
           <div className="max-w-6xl mx-auto px-4 h-full flex items-center justify-between">
-            <a href="/" className="text-heading text-[var(--fg)]">Enlist</a>
+            <Link href="/" className="text-heading text-[var(--fg)]">Enlist</Link>
             <HeaderNavigation isAuthenticated={Boolean(session)} />
           </div>
         </header>

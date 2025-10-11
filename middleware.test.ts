@@ -3,20 +3,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { middleware } from './middleware';
 
-vi.mock('@supabase/auth-helpers-nextjs', async () => ({
-  updateSession: vi.fn(async () => {}),
-  createServerClient: vi.fn(() => ({
-    auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
-  })),
-  createMiddlewareClient: vi.fn(() => ({
-    auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
-  })),
-}));
+vi.mock('@supabase/auth-helpers-nextjs', async () => {
+  return {
+    updateSession: vi.fn(async () => {}),
+    createServerClient: vi.fn(() => ({
+      auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
+    })),
+    createMiddlewareClient: vi.fn(() => ({
+      auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
+    })),
+  };
+});
 
 function makeRequest(pathname: string) {
   // next/server NextRequest is complex; construct with URL
   const url = new URL(`http://localhost:3000${pathname}`);
-  // @ts-expect-error - minimal init for tests
   return new NextRequest(url);
 }
 

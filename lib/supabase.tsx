@@ -1,9 +1,13 @@
 "use client";
 // lib/supabase.tsx
 import { createContext, useContext, useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const SupabaseContext = createContext<any>(null);
+interface SupabaseContextType {
+  supabase: SupabaseClient | null;
+}
+
+const SupabaseContext = createContext<SupabaseContextType | null>(null);
 
 export const useSupabase = () => {
   const context = useContext(SupabaseContext);
@@ -18,7 +22,7 @@ interface SupabaseProviderProps {
 }
 
 export const SupabaseProvider = ({ children }: SupabaseProviderProps) => {
-  const [supabase, setSupabase] = useState<any | null>(null);
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

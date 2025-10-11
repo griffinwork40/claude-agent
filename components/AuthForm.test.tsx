@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('next/navigation', async (orig) => {
   const actual = await orig();
   return {
-    ...actual,
+    ...(actual as Record<string, unknown>),
     useRouter: () => ({ replace: vi.fn() }),
     useSearchParams: () => new URLSearchParams(),
   };
