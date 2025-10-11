@@ -132,7 +132,7 @@ export async function runClaudeAgentStream(
           };
           
           const stream = await client.messages.create({
-            model: 'claude-3-5-sonnet-latest',
+            model: 'claude-sonnet-4-5-20250929',
             max_tokens: 4096,
             system: instructions,
             messages: messages,
@@ -254,7 +254,7 @@ export async function runClaudeAgentStream(
                 
                 // Continue conversation with tool results
                 const continuationStream = await client.messages.create({
-                  model: 'claude-3-5-sonnet-latest',
+                  model: 'claude-sonnet-4-5-20250929',
                   max_tokens: 4096,
                   system: instructions,
                   messages: continuationMessages,
@@ -502,7 +502,7 @@ export async function runClaudeAgent(userMessage: string) {
     const { client, instructions } = await initializeAgent();
     
     const result = await client.messages.create({
-      model: 'claude-3-5-sonnet-latest',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1000,
       system: instructions,
       messages: [
