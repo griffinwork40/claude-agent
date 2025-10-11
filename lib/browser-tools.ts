@@ -1,212 +1,280 @@
 // lib/browser-tools.ts
-// HTTP client wrapper for browser automation service
+// HTTP client for LLM-controlled browser automation service
 import { JobOpportunity } from '@/types';
 
-// Browser automation service - HTTP client implementation
-export class BrowserJobService {
+// LLM-controlled browser automation client
+export class BrowserService {
   private serviceUrl = process.env.BROWSER_SERVICE_URL || 'http://localhost:3001';
   private apiKey = process.env.BROWSER_SERVICE_API_KEY || 'test-key-12345';
 
-  async initialize() {
-    // No-op for HTTP client, but kept for API compatibility
-  }
-
-  async close() {
-    // No-op for HTTP client
-  }
-
-  // Search jobs on Indeed (no authentication required)
-  async searchJobsIndeed(params: {
-    keywords: string;
-    location: string;
-    experience_level?: string;
-    remote?: boolean;
-  }): Promise<JobOpportunity[]> {
-    const response = await fetch(`${this.serviceUrl}/api/search-indeed`, {
+  private async request(endpoint: string, body: Record<string, unknown>) {
+    const response = await fetch(`${this.serviceUrl}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify(params)
+      body: JSON.stringify(body)
     });
     
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(`Indeed search failed: ${error.error || response.statusText}`);
+      throw new Error(error.error || response.statusText);
     }
     
     const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Request failed');
+    }
+    
     return result.data;
   }
 
-  // Search jobs on LinkedIn (requires authentication)
-  async searchJobsLinkedIn(params: {
-    keywords: string;
-    location: string;
-    experience_level?: string;
-    remote?: boolean;
-    userId: string;
-  }): Promise<JobOpportunity[]> {
-    const response = await fetch(`${this.serviceUrl}/api/search-linkedin`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(params)
-    });
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(`LinkedIn search failed: ${error.error || response.statusText}`);
-    }
-    
-    const result = await response.json();
-    return result.data;
+  // Navigate to a URL
+  async navigate(sessionId: string, url: string): Promise<{ url: string }> {
+    return this.request('/api/browser/navigate', { sessionId, url });
   }
 
-  // Get detailed information about a specific job
-  async getJobDetails(jobUrl: string): Promise<Partial<JobOpportunity>> {
-    const response = await fetch(`${this.serviceUrl}/api/job-details`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({ job_url: jobUrl })
-    });
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(`Get job details failed: ${error.error || response.statusText}`);
-    }
-    
-    const result = await response.json();
-    return result.data;
+  // Get page snapshot (accessibility tree)
+  async snapshot(sessionId: string): Promise<{ snapshot: string; url: string }> {
+    return this.request('/api/browser/snapshot', { sessionId });
   }
 
-  // Apply to a job using user profile data
-  async applyToJob(jobUrl: string, userProfile: Record<string, unknown>): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
-    const response = await fetch(`${this.serviceUrl}/api/apply-to-job`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({ job_url: jobUrl, user_profile: userProfile })
-    });
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(`Apply to job failed: ${error.error || response.statusText}`);
-    }
-    
-    const result = await response.json();
-    return result.data;
+  // Take screenshot
+  async screenshot(sessionId: string, fullPage: boolean = false): Promise<{ screenshot: string }> {
+    return this.request('/api/browser/screenshot', { sessionId, fullPage });
+  }
+
+  // Click element
+  async click(sessionId: string, selector: string): Promise<{ message: string }> {
+    return this.request('/api/browser/click', { sessionId, selector });
+  }
+
+  // Type into element
+  async type(sessionId: string, selector: string, text: string, submit: boolean = false): Promise<{ message: string }> {
+    return this.request('/api/browser/type', { sessionId, selector, text, submit });
+  }
+
+  // Select dropdown option
+  async select(sessionId: string, selector: string, value: string): Promise<{ message: string }> {
+    return this.request('/api/browser/select', { sessionId, selector, value });
+  }
+
+  // Wait for element or page load
+  async waitFor(sessionId: string, selector?: string, timeout: number = 10000): Promise<{ message: string }> {
+    return this.request('/api/browser/wait', { sessionId, selector, timeout });
+  }
+
+  // Evaluate JavaScript
+  async evaluate(sessionId: string, script: string): Promise<{ result: unknown }> {
+    return this.request('/api/browser/evaluate', { sessionId, script });
+  }
+
+  // Get page content
+  async getContent(sessionId: string): Promise<{ html: string; text: string; url: string }> {
+    return this.request('/api/browser/content', { sessionId });
+  }
+
+  // Close browser session
+  async closeSession(sessionId: string): Promise<{ message: string }> {
+    return this.request('/api/browser/close', { sessionId });
   }
 }
 
 // Singleton instance
-let browserJobService: BrowserJobService | null = null;
+let browserService: BrowserService | null = null;
 
-export const getBrowserJobService = (): BrowserJobService => {
-  if (!browserJobService) {
-    browserJobService = new BrowserJobService();
+export const getBrowserService = (): BrowserService => {
+  if (!browserService) {
+    browserService = new BrowserService();
   }
-  return browserJobService;
+  return browserService;
 };
 
-// Tool definitions for Claude
+// Tool definitions for Claude - LLM-controlled browser
 export const browserTools = [
   {
-    name: 'search_jobs_indeed',
-    description: 'Search for jobs on Indeed.com with specific criteria. Indeed does not require authentication.',
+    name: 'browser_navigate',
+    description: 'Navigate the browser to a specific URL. This starts or continues a browser session.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        keywords: { 
-          type: 'string', 
-          description: 'Job title or keywords to search for' 
-        },
-        location: { 
-          type: 'string', 
-          description: 'Job location (city, state, or "remote")' 
-        },
-        experience_level: { 
-          type: 'string', 
-          enum: ['entry', 'mid', 'senior', 'executive'],
-          description: 'Experience level filter'
-        },
-        remote: { 
-          type: 'boolean', 
-          description: 'Filter for remote work opportunities' 
-        }
-      },
-      required: ['keywords', 'location']
-    }
-  },
-  {
-    name: 'search_jobs_linkedin',
-    description: 'Search for jobs on LinkedIn with specific criteria. Requires LinkedIn authentication.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        keywords: { 
-          type: 'string', 
-          description: 'Job title or keywords to search for' 
-        },
-        location: { 
-          type: 'string', 
-          description: 'Job location (city, state, or "remote")' 
-        },
-        experience_level: { 
-          type: 'string', 
-          enum: ['entry', 'mid', 'senior', 'executive'],
-          description: 'Experience level filter'
-        },
-        remote: { 
-          type: 'boolean', 
-          description: 'Filter for remote work opportunities' 
-        },
-        userId: {
+        sessionId: {
           type: 'string',
-          description: 'User ID for session management'
-        }
-      },
-      required: ['keywords', 'location', 'userId']
-    }
-  },
-  {
-    name: 'get_job_details',
-    description: 'Get detailed information about a specific job posting',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        job_url: { 
-          type: 'string', 
-          description: 'URL of the job posting to get details for' 
-        }
-      },
-      required: ['job_url']
-    }
-  },
-  {
-    name: 'apply_to_job',
-    description: 'Apply to a job using the user\'s profile data. Only use after getting explicit user confirmation.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        job_url: { 
-          type: 'string', 
-          description: 'URL of the job to apply to' 
+          description: 'Browser session ID (use user ID or generate unique ID per conversation)'
         },
-        user_profile: { 
-          type: 'object', 
-          description: 'User profile data for the application' 
+        url: {
+          type: 'string',
+          description: 'URL to navigate to'
         }
       },
-      required: ['job_url', 'user_profile']
+      required: ['sessionId', 'url']
+    }
+  },
+  {
+    name: 'browser_snapshot',
+    description: 'Get an accessibility tree snapshot of the current page. Shows page structure with interactive elements, useful for understanding what actions are available.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_screenshot',
+    description: 'Take a screenshot of the current page. Returns base64-encoded PNG image.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        fullPage: {
+          type: 'boolean',
+          description: 'Whether to capture full page (true) or just viewport (false)'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_click',
+    description: 'Click an element on the page using a CSS selector.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        selector: {
+          type: 'string',
+          description: 'CSS selector for the element to click (e.g., "button.submit", "#login-btn")'
+        }
+      },
+      required: ['sessionId', 'selector']
+    }
+  },
+  {
+    name: 'browser_type',
+    description: 'Type text into an input field using a CSS selector.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        selector: {
+          type: 'string',
+          description: 'CSS selector for the input element (e.g., "input[name=email]", "#search")'
+        },
+        text: {
+          type: 'string',
+          description: 'Text to type into the field'
+        },
+        submit: {
+          type: 'boolean',
+          description: 'Whether to press Enter after typing (for forms)'
+        }
+      },
+      required: ['sessionId', 'selector', 'text']
+    }
+  },
+  {
+    name: 'browser_select',
+    description: 'Select an option from a dropdown menu.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        selector: {
+          type: 'string',
+          description: 'CSS selector for the select element'
+        },
+        value: {
+          type: 'string',
+          description: 'Value of the option to select'
+        }
+      },
+      required: ['sessionId', 'selector', 'value']
+    }
+  },
+  {
+    name: 'browser_wait',
+    description: 'Wait for an element to appear or for page to finish loading.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        selector: {
+          type: 'string',
+          description: 'CSS selector to wait for (optional, waits for page load if omitted)'
+        },
+        timeout: {
+          type: 'number',
+          description: 'Timeout in milliseconds (default: 10000)'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_evaluate',
+    description: 'Execute JavaScript code in the browser context. Use for extracting data or performing complex operations.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        script: {
+          type: 'string',
+          description: 'JavaScript code to execute (e.g., "document.title", "Array.from(document.querySelectorAll(\'a\')).map(a => a.href)")'
+        }
+      },
+      required: ['sessionId', 'script']
+    }
+  },
+  {
+    name: 'browser_get_content',
+    description: 'Get the full HTML and text content of the current page.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_close_session',
+    description: 'Close and cleanup a browser session when done.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID to close'
+        }
+      },
+      required: ['sessionId']
     }
   }
 ];

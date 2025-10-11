@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam, TextBlockParam, ToolUseBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { browserTools, getBrowserJobService } from './browser-tools';
+import { browserTools, getBrowserService } from './browser-tools';
 import { getOrCreateUserProfile } from './user-profile';
 import { ToolUse, ToolResult, BrowserToolResult } from '@/types';
 
@@ -124,6 +124,13 @@ export async function runClaudeAgentStream(
         try {
           console.log('Starting Anthropic streaming with tool calling...');
           
+          // Helper to send activity events
+          const sendActivity = (type: string, data: any) => {
+            const event = JSON.stringify({ type, ...data });
+            const marker = `__ACTIVITY__${event}__END__`;
+            controller.enqueue(new TextEncoder().encode(marker));
+          };
+          
           const stream = await client.messages.create({
             model: 'claude-3-5-sonnet-latest',
             max_tokens: 4096,
@@ -159,6 +166,12 @@ export async function runClaudeAgentStream(
                 };
                 toolInputJson = '';
                 console.log(`🔧 Tool use started: ${chunk.content_block.name}`);
+                
+                // Send activity event for tool start
+                sendActivity('tool_start', {
+                  tool: chunk.content_block.name,
+                  toolId: chunk.content_block.id
+                });
               }
             } else if (chunk.type === 'content_block_delta') {
               if (chunk.delta.type === 'text_delta') {
@@ -194,6 +207,13 @@ export async function runClaudeAgentStream(
                 });
                 
                 console.log(`🔧 Tool use completed: ${currentToolUse.name}`, currentToolUse.input);
+                
+                // Send activity event with tool parameters
+                sendActivity('tool_params', {
+                  tool: currentToolUse.name,
+                  toolId: currentToolUse.id,
+                  params: currentToolUse.input
+                });
               } catch (error) {
                 console.error('Error parsing tool input JSON:', error);
               }
@@ -205,7 +225,10 @@ export async function runClaudeAgentStream(
               // Execute tools if any were requested
               if (toolUses.length > 0) {
                 console.log(`🔧 Executing ${toolUses.length} tools...`);
-                const toolResults = await executeTools(toolUses, userId);
+                sendActivity('thinking', {
+                  content: `Executing ${toolUses.length} tool${toolUses.length > 1 ? 's' : ''}...`
+                });
+                const toolResults = await executeTools(toolUses, userId, sendActivity);
                 
                 // Build the proper continuation messages
                 // 1. User's original message (already in messages array)
@@ -294,79 +317,124 @@ export async function runClaudeAgentStream(
 }
 
 // Execute browser tools
-async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolResult[]> {
+async function executeTools(
+  toolUses: ToolUse[], 
+  userId: string, 
+  sendActivity?: (type: string, data: any) => void
+): Promise<ToolResult[]> {
   const results: ToolResult[] = [];
-  const browserService = getBrowserJobService();
-  
-  try {
-    await browserService.initialize();
+  const browserService = getBrowserService();
     
     for (const toolUse of toolUses) {
       console.log(`🔧 Executing tool: ${toolUse.name}`, toolUse.input);
       
+      // Send activity event for tool execution start
+      if (sendActivity) {
+        sendActivity('tool_executing', {
+          tool: toolUse.name,
+          toolId: toolUse.id,
+          params: toolUse.input
+        });
+      }
+      
       try {
         let result: BrowserToolResult;
+        const input = toolUse.input as Record<string, any>;
         
         switch (toolUse.name) {
-          case 'search_jobs_indeed':
-            const indeedJobs = await browserService.searchJobsIndeed(toolUse.input as {
-              keywords: string;
-              location: string;
-              experience_level?: string;
-              remote?: boolean;
-            });
+          case 'browser_navigate':
+            const navResult = await browserService.navigate(input.sessionId, input.url);
             result = {
               success: true,
-              data: indeedJobs,
-              message: `Found ${indeedJobs.length} jobs on Indeed`
+              data: navResult,
+              message: `Navigated to ${navResult.url}`
             };
             break;
             
-          case 'search_jobs_linkedin':
-            const linkedinJobs = await browserService.searchJobsLinkedIn({
-              ...(toolUse.input as {
-                keywords: string;
-                location: string;
-                experience_level?: string;
-                remote?: boolean;
-              }),
-              userId
-            });
+          case 'browser_snapshot':
+            const snapshotResult = await browserService.snapshot(input.sessionId);
             result = {
               success: true,
-              data: linkedinJobs,
-              message: `Found ${linkedinJobs.length} jobs on LinkedIn`
+              data: snapshotResult,
+              message: 'Page snapshot captured'
             };
             break;
             
-          case 'get_job_details':
-            const jobDetails = await browserService.getJobDetails((toolUse.input as { job_url: string }).job_url);
+          case 'browser_screenshot':
+            const screenshotResult = await browserService.screenshot(input.sessionId, input.fullPage);
             result = {
               success: true,
-              data: jobDetails,
-              message: 'Job details retrieved successfully'
+              data: { screenshot: screenshotResult.screenshot.slice(0, 100) + '... (truncated)' },
+              message: 'Screenshot captured'
             };
             break;
             
-          case 'apply_to_job':
-            // Get user profile for application
-            const userProfile = await getOrCreateUserProfile(userId);
-            if (!userProfile) {
-              result = {
-                success: false,
-                error: 'User profile not found. Please set up your profile first.'
-              };
-            } else {
-              const applicationResult = await browserService.applyToJob(
-                (toolUse.input as { job_url: string }).job_url,
-                userProfile as unknown as Record<string, unknown>
-              );
-              result = {
-                success: applicationResult.success,
-                data: applicationResult.details,
-                message: applicationResult.message
-              };
-            }
+          case 'browser_click':
+            const clickResult = await browserService.click(input.sessionId, input.selector);
+            result = {
+              success: true,
+              data: clickResult,
+              message: clickResult.message
+            };
+            break;
+            
+          case 'browser_type':
+            const typeResult = await browserService.type(input.sessionId, input.selector, input.text, input.submit);
+            result = {
+              success: true,
+              data: typeResult,
+              message: typeResult.message
+            };
+            break;
+            
+          case 'browser_select':
+            const selectResult = await browserService.select(input.sessionId, input.selector, input.value);
+            result = {
+              success: true,
+              data: selectResult,
+              message: selectResult.message
+            };
+            break;
+            
+          case 'browser_wait':
+            const waitResult = await browserService.waitFor(input.sessionId, input.selector, input.timeout);
+            result = {
+              success: true,
+              data: waitResult,
+              message: waitResult.message
+            };
+            break;
+            
+          case 'browser_evaluate':
+            const evalResult = await browserService.evaluate(input.sessionId, input.script);
+            result = {
+              success: true,
+              data: evalResult,
+              message: 'JavaScript executed successfully'
+            };
+            break;
+            
+          case 'browser_get_content':
+            const contentResult = await browserService.getContent(input.sessionId);
+            result = {
+              success: true,
+              data: {
+                url: contentResult.url,
+                textLength: contentResult.text.length,
+                htmlLength: contentResult.html.length,
+                textPreview: contentResult.text.slice(0, 500)
+              },
+              message: 'Page content retrieved'
+            };
+            break;
+            
+          case 'browser_close_session':
+            const closeResult = await browserService.closeSession(input.sessionId);
+            result = {
+              success: true,
+              data: closeResult,
+              message: closeResult.message
+            };
             break;
             
           default:
@@ -384,40 +452,46 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
         
         console.log(`✓ Tool ${toolUse.name} executed:`, result.success ? 'SUCCESS' : 'FAILED');
         
+        // Send activity event for tool execution complete
+        if (sendActivity) {
+          sendActivity('tool_result', {
+            tool: toolUse.name,
+            toolId: toolUse.id,
+            success: result.success,
+            result: result,
+            message: result.message
+          });
+        }
+        
       } catch (error: unknown) {
         console.error(`❌ Error executing tool ${toolUse.name}:`, error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         const errorStack = error instanceof Error ? error.stack : undefined;
         
+        const errorResult = {
+          success: false,
+          error: `Tool execution failed: ${errorMessage}`,
+          details: process.env.NODE_ENV === 'development' ? errorStack : undefined
+        };
+        
         results.push({
           tool_use_id: toolUse.id,
-          content: JSON.stringify({
-            success: false,
-            error: `Tool execution failed: ${errorMessage}`,
-            details: process.env.NODE_ENV === 'development' ? errorStack : undefined
-          }),
+          content: JSON.stringify(errorResult),
           is_error: true
         });
+        
+        // Send activity event for tool error
+        if (sendActivity) {
+          sendActivity('tool_result', {
+            tool: toolUse.name,
+            toolId: toolUse.id,
+            success: false,
+            error: errorMessage,
+            message: `Failed: ${errorMessage}`
+          });
+        }
       }
     }
-    
-  } catch (error: unknown) {
-    console.error('❌ Error in executeTools:', error);
-    // Return error for all tools
-    for (const toolUse of toolUses) {
-      results.push({
-        tool_use_id: toolUse.id,
-        content: JSON.stringify({
-          success: false,
-          error: `Tool execution failed: ${error instanceof Error ? error.message : String(error)}`
-        }),
-        is_error: true
-      });
-    }
-  } finally {
-    // Don't close browser here as it might be needed for multiple tools
-    // await browserService.close();
-  }
   
   return results;
 }
