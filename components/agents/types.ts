@@ -38,8 +38,24 @@ export interface AgentListProps {
   onCreate: () => void;
 }
 
+export interface Activity {
+  id: string;
+  type: 'tool_start' | 'tool_params' | 'tool_executing' | 'tool_result' | 'thinking' | 'status';
+  tool?: string;
+  toolId?: string;
+  params?: any;
+  result?: any;
+  success?: boolean;
+  message?: string;
+  content?: string;
+  error?: string;
+  timestamp: string;
+}
+
 export interface BrowserPaneProps {
   agent: Agent | null;
+  activities: Activity[];
+  onClearActivities?: () => void;
   isMobile?: boolean;
 }
 
@@ -47,6 +63,7 @@ export interface ChatPaneProps {
   agent: Agent | null;
   messages: Message[];
   onSend: (content: string) => void;
+  onActivity?: (activity: Activity) => void;
   isMobile?: boolean;
 }
 

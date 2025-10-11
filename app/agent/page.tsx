@@ -4,9 +4,9 @@
  */
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Agent, Message } from '@/components/agents/types';
+import { Agent, Message, Activity } from '@/components/agents/types';
 import { AgentList, BrowserPane, ChatPane, BottomSheet } from '@/components/agents';
 import { mockMessages } from '@/components/agents/mockData';
 import { ResizablePane } from '@/components/ResizablePane';
@@ -23,6 +23,7 @@ export default function AgentPage() {
     initialId ?? null
   );
   const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'workspace' | 'chat'>('workspace');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -96,6 +97,14 @@ export default function AgentPage() {
     setIsBottomSheetOpen(false);
   }
 
+  const handleActivity = useCallback((activity: Activity) => {
+    setActivities(prev => [...prev, activity]);
+  }, []);
+
+  const handleClearActivities = useCallback(() => {
+    setActivities([]);
+  }, []);
+
   return (
     <>
       {/* Mobile Layout (< 768px) */}
@@ -139,9 +148,9 @@ export default function AgentPage() {
           {/* Tab Content */}
           <div className="h-[calc(100%-3rem)]">
             {activeTab === 'workspace' ? (
-              <BrowserPane agent={selectedAgent} isMobile />
+              <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} isMobile />
             ) : (
-              <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} isMobile />
+              <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} onActivity={handleActivity} isMobile />
             )}
           </div>
         </BottomSheet>
@@ -206,9 +215,9 @@ export default function AgentPage() {
           {/* Tab content */}
           <div className="flex-1 overflow-hidden">
             {activeTab === 'workspace' ? (
-              <BrowserPane agent={selectedAgent} />
+              <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} />
             ) : (
-              <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} />
+              <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} onActivity={handleActivity} />
             )}
           </div>
         </div>
@@ -233,7 +242,7 @@ export default function AgentPage() {
         
         {/* Center workspace - flexible, takes remaining space */}
         <div className="flex-1 min-w-0">
-          <BrowserPane agent={selectedAgent} />
+          <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} />
         </div>
         
         {/* Right chat pane - resizable */}
@@ -243,7 +252,7 @@ export default function AgentPage() {
           maxWidth={600}
           position="right"
         >
-          <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} />
+          <ChatPane agent={selectedAgent} messages={messages} onSend={refreshMessages} onActivity={handleActivity} />
         </ResizablePane>
       </div>
     </>

@@ -5,7 +5,7 @@
 'use client';
 
 import { useMemo, useRef, useState, useEffect, ReactNode } from 'react';
-import { ChatPaneProps } from './types';
+import { ChatPaneProps, Activity } from './types';
 
 interface RenderMessage {
   id: string;
@@ -252,7 +252,7 @@ function renderMarkdown(content: string, keyPrefix: string): ReactNode {
 /**
  * Chat pane listing messages for the selected agent and a simple input box.
  */
-export function ChatPane({ agent, messages, onSend, isMobile = false }: ChatPaneProps) {
+export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false }: ChatPaneProps) {
   const [text, setText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>('');
@@ -359,7 +359,7 @@ export function ChatPane({ agent, messages, onSend, isMobile = false }: ChatPane
             eventCount++;
             try {
               const data = JSON.parse(line.slice(6));
-              console.log(`Event ${eventCount}:`, data.type, data.content?.substring(0, 50) + '...');
+              console.log(`Event ${eventCount}:`, data.type, data.content?.substring(0, 50) || data.tool || '...');
               
               if (data.type === 'chunk') {
                 setStreamingMessage(prev => prev + data.content);
@@ -376,6 +376,29 @@ export function ChatPane({ agent, messages, onSend, isMobile = false }: ChatPane
                 setIsStreaming(false);
                 setStreamingMessage('');
                 setStreamingStartedAt(null);
+              } else if (onActivity && (
+                data.type === 'tool_start' || 
+                data.type === 'tool_params' || 
+                data.type === 'tool_executing' || 
+                data.type === 'tool_result' || 
+                data.type === 'thinking' ||
+                data.type === 'status'
+              )) {
+                // Forward activity event to parent
+                const activity: Activity = {
+                  id: `activity-${Date.now()}-${Math.random()}`,
+                  type: data.type,
+                  tool: data.tool,
+                  toolId: data.toolId,
+                  params: data.params,
+                  result: data.result,
+                  success: data.success,
+                  message: data.message,
+                  content: data.content,
+                  error: data.error,
+                  timestamp: new Date().toISOString()
+                };
+                onActivity(activity);
               }
             } catch (e) {
               console.error('❌ Error parsing SSE data:', e, 'Line:', line);
