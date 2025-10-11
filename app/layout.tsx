@@ -50,7 +50,7 @@ export default async function RootLayout({
       <body className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
         <header className="sticky top-0 z-40 bg-[var(--card)] border-b-2 border-[var(--border)] h-16">
           <div className="max-w-6xl mx-auto px-4 h-full flex items-center justify-between">
-            <Link href="/" className="text-heading text-[var(--fg)]">Enlist</Link>
+            <Link href="/" className="text-heading text-[var(--fg)]">{siteName}</Link>
             <HeaderNavigation isAuthenticated={Boolean(session)} />
           </div>
         </header>

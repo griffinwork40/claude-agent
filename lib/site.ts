@@ -4,7 +4,7 @@
  */
 
 export function getSiteName(): string {
-  return process.env.NEXT_PUBLIC_SITE_NAME || 'Enlist';
+  return process.env.NEXT_PUBLIC_SITE_NAME || 'Job Enlist';
 }
 
 export function getSiteUrl(): URL {
