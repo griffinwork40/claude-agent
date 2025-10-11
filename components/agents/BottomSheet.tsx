@@ -21,6 +21,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
   const sheetRef = useRef<HTMLDivElement>(null);
   const startY = useRef<number>(0);
   const currentY = useRef<number>(0);
+  const isDragGesture = useRef<boolean>(false);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
@@ -47,10 +48,20 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
   }, [isOpen]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement | null;
+    // Only start a drag gesture if the touch begins on the handle area
+    const startedOnHandle = !!target?.closest('[data-drag-handle="true"]');
+    isDragGesture.current = startedOnHandle;
+    if (!startedOnHandle) {
+      startY.current = 0;
+      currentY.current = 0;
+      return;
+    }
     startY.current = e.touches[0].clientY;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragGesture.current) return;
     currentY.current = e.touches[0].clientY;
     const diff = currentY.current - startY.current;
     
@@ -61,6 +72,12 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
   };
 
   const handleTouchEnd = () => {
+    if (!isDragGesture.current) {
+      // Not a drag-close gesture; ignore
+      startY.current = 0;
+      currentY.current = 0;
+      return;
+    }
     const diff = currentY.current - startY.current;
     
     // Close if swiped down more than 100px
@@ -75,6 +92,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
     
     startY.current = 0;
     currentY.current = 0;
+    isDragGesture.current = false;
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -139,7 +157,10 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
         onKeyDown={handleKeyDown}
       >
         {/* Handle bar for swipe indicator */}
-        <div className="flex justify-center py-3 border-b border-[var(--border)]">
+        <div
+          className="flex justify-center py-3 border-b border-[var(--border)] touch-none"
+          data-drag-handle="true"
+        >
           <div className="w-12 h-1.5 rounded-full bg-[var(--fg)]/30" />
         </div>
 
