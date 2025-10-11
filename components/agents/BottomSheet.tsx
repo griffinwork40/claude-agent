@@ -127,8 +127,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
       {/* Bottom Sheet */}
       <div
         ref={sheetRef}
-        className="fixed inset-x-0 bottom-0 z-50 bg-[var(--bg)] rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out"
-        style={{ height: '90dvh' }}
+        className="fixed inset-x-0 bottom-0 z-50 bg-[var(--bg)] rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out max-h-[90dvh] flex flex-col"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -164,7 +163,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
         </div>
 
         {/* Content */}
-        <div className="h-[calc(100%-3rem)] overflow-hidden">
+        <div className="flex-1 overflow-hidden min-h-0">
           {children}
         </div>
       </div>
