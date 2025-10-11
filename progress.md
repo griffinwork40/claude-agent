@@ -31,3 +31,5 @@
 - 2025-10-09: Optimized mobile auth layout so login and signup cards render first, reducing scroll friction for new and returning users. Overall completion: 56%.
 - 2025-10-09: Implemented responsive header navigation with hamburger trigger, focus-trapped mobile menu, route-aware highlighting, and unit tests covering mobile/desktop breakpoints. Overall completion: 55%.
 
+- 2025-10-11: **MAJOR: Playwright Production Migration** - Solved Vercel serverless incompatibility by separating browser automation into dedicated HTTP service. Created browser-service/ with Express API for Playwright execution, updated lib/browser-tools.ts to HTTP client, added Dockerfile + Railway config for deployment. Includes comprehensive testing guide and deployment docs. Ready for Railway deployment. Overall completion: 85% (implementation complete, testing/deployment pending).
+
