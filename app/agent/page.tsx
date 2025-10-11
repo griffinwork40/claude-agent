@@ -49,8 +49,19 @@ export default function AgentPage() {
         // Load sessions first to get archived status
         const sessionsResponse = await fetch('/api/sessions?includeArchived=true');
         const sessionsResult = await sessionsResponse.json();
-        const sessions = sessionsResult.success ? sessionsResult.data : [];
-        const sessionMap = new Map(sessions.map((s: any) => [s.id, s]));
+        
+        interface SessionData {
+          id: string;
+          user_id: string;
+          name?: string;
+          description?: string;
+          archived: boolean;
+          created_at: string;
+          updated_at: string;
+        }
+        
+        const sessions: SessionData[] = sessionsResult.success ? sessionsResult.data : [];
+        const sessionMap = new Map<string, SessionData>(sessions.map((s) => [s.id, s]));
         
         // Load all messages to create agents for existing conversations
         const loadedMessages = await loadMessagesFromAPI();
