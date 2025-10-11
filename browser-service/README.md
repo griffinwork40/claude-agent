@@ -89,6 +89,27 @@ Search for jobs on Indeed.com.
 }
 ```
 
+### POST /api/search-google
+Search for jobs on Google Jobs (aggregated from multiple sources).
+
+**Request:**
+```json
+{
+  "keywords": "frontend developer",
+  "location": "San Francisco",
+  "experience_level": "mid",
+  "remote": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [/* JobOpportunity[] */]
+}
+```
+
 ### POST /api/search-linkedin
 Search for jobs on LinkedIn (requires authenticated session).
 

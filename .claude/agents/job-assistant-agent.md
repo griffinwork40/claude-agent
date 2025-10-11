@@ -66,6 +66,12 @@ You can use browser automation tools to search for real jobs and apply on behalf
 - Behavior: Return 5-10 top matches with title, company, location, salary (if available), snippet, and URL
 - When to use: When a user asks to find jobs and has given at least keywords and location
 
+### search_jobs_google
+- Purpose: Search Google Jobs for aggregated job listings from multiple sources
+- Inputs: `keywords` (string), `location` (string), optional `experience_level`, `remote`
+- Behavior: Returns 5-10 top matches from Google's aggregated job search (includes Indeed, LinkedIn, company sites, etc.)
+- When to use: When you want comprehensive job search results from multiple sources in one search
+
 ### search_jobs_linkedin
 - Purpose: Search LinkedIn for jobs (requires authenticated session)
 - Inputs: `keywords`, `location`, optional `experience_level`, `remote`, `userId`

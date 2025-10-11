@@ -79,6 +79,16 @@ export class BrowserService {
   async closeSession(sessionId: string): Promise<{ message: string }> {
     return this.request('/api/browser/close', { sessionId });
   }
+
+  // Search jobs on Google Jobs
+  async searchJobsGoogle(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[]> {
+    return this.request('/api/search-google', params);
+  }
 }
 
 // Singleton instance
@@ -275,6 +285,33 @@ export const browserTools = [
         }
       },
       required: ['sessionId']
+    }
+  },
+  {
+    name: 'search_jobs_google',
+    description: 'Search Google Jobs for aggregated job listings from multiple sources (Indeed, LinkedIn, company sites, etc.)',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keywords: {
+          type: 'string',
+          description: 'Job search keywords (e.g., "software engineer", "marketing manager")'
+        },
+        location: {
+          type: 'string',
+          description: 'Job location (e.g., "San Francisco", "Remote", "New York")'
+        },
+        experience_level: {
+          type: 'string',
+          description: 'Experience level (entry, mid, senior, executive)',
+          enum: ['entry', 'mid', 'senior', 'executive']
+        },
+        remote: {
+          type: 'boolean',
+          description: 'Whether to include remote jobs'
+        }
+      },
+      required: ['keywords', 'location']
     }
   }
 ];

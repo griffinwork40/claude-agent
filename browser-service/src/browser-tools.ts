@@ -113,6 +113,98 @@ export class BrowserJobService {
     }
   }
 
+  // Search jobs on Google Jobs (no authentication required)
+  async searchJobsGoogle(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[]> {
+    if (!this.browser) {
+      await this.initialize();
+    }
+
+    const page = await this.browser!.newPage();
+    
+    try {
+      // Build Google Jobs search URL
+      const searchUrl = this.buildGoogleJobsSearchUrl(params);
+      console.log('Searching Google Jobs:', searchUrl);
+      
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      
+      // Wait for Google Jobs results to load
+      await page.waitForSelector('[data-ved], .g, .jobsearch-ResultsList', { timeout: 15000 }).catch(() => {
+        console.log('Primary selector not found, trying alternative approach');
+      });
+      
+      // Wait a bit for dynamic content
+      await page.waitForTimeout(3000);
+      
+      // Extract job listings from Google Jobs
+      const jobs = await page.evaluate(() => {
+        // Google Jobs can appear in different formats, so we try multiple selectors
+        const jobCards = Array.from(document.querySelectorAll(
+          '[data-ved] .g, .jobsearch-ResultsList li, [data-testid="job-card"], .g[data-ved]'
+        ));
+        
+        return jobCards.slice(0, 10).map((el, index) => {
+          // Try multiple selectors for job title
+          const titleEl = el.querySelector('h3 a, h2 a, .jobTitle a, [data-testid="job-title"], .g h3 a') ||
+                         el.querySelector('h3, h2, .jobTitle, [data-testid="job-title"]');
+          
+          // Try multiple selectors for company
+          const companyEl = el.querySelector('.companyName, [data-testid="company-name"], .company, .g .company') ||
+                           el.querySelector('.company, .companyName');
+          
+          // Try multiple selectors for location
+          const locationEl = el.querySelector('.companyLocation, [data-testid="job-location"], .location, .g .location') ||
+                            el.querySelector('.location, .companyLocation');
+          
+          // Try multiple selectors for salary
+          const salaryEl = el.querySelector('.salary-snippet, [data-testid="salary"], .salary, .g .salary') ||
+                          el.querySelector('.salary, .salary-snippet');
+          
+          // Try multiple selectors for description
+          const descEl = el.querySelector('.job-snippet, [data-testid="job-snippet"], .description, .g .snippet') ||
+                        el.querySelector('.snippet, .job-snippet, .description');
+          
+          // Try multiple selectors for job link
+          const linkEl = el.querySelector('a[href*="/rc/clk"], a[href*="/viewjob"], h3 a, h2 a, .g a') as HTMLAnchorElement | null;
+          
+          return {
+            id: `google_${Date.now()}_${index}`,
+            title: titleEl?.textContent?.trim() || 'Unknown Title',
+            company: companyEl?.textContent?.trim() || 'Unknown Company',
+            location: locationEl?.textContent?.trim() || 'Unknown Location',
+            salary: salaryEl?.textContent?.trim() || undefined,
+            url: linkEl?.href || '',
+            description: descEl?.textContent?.trim() || '',
+            application_url: linkEl?.href || '',
+            source: 'google' as const,
+            skills: [],
+            experience_level: 'unknown',
+            job_type: 'full-time',
+            remote_type: 'unknown',
+            applied: false,
+            status: 'discovered' as const,
+            created_at: new Date().toISOString()
+          };
+        });
+      });
+
+      console.log(`Found ${jobs.length} jobs on Google Jobs`);
+      return jobs;
+      
+    } catch (error: unknown) {
+      console.error('Error searching Google Jobs:', error);
+      const errMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Google Jobs search failed: ${errMessage}`);
+    } finally {
+      await page.close();
+    }
+  }
+
   // Search jobs on LinkedIn (requires authentication)
   async searchJobsLinkedIn(params: {
     keywords: string;
@@ -291,6 +383,36 @@ export class BrowserJobService {
       q: params.keywords,
       l: params.location,
       ...(params.remote && { remote: 'true' })
+    });
+    
+    return `${baseUrl}?${urlParams.toString()}`;
+  }
+
+  private buildGoogleJobsSearchUrl(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): string {
+    // Build search query for Google Jobs
+    let query = `${params.keywords} jobs`;
+    
+    if (params.location && params.location.toLowerCase() !== 'remote') {
+      query += ` near ${params.location}`;
+    }
+    
+    if (params.remote) {
+      query += ' remote';
+    }
+    
+    if (params.experience_level) {
+      query += ` ${params.experience_level} level`;
+    }
+    
+    const baseUrl = 'https://www.google.com/search';
+    const urlParams = new URLSearchParams({
+      q: query,
+      ibp: 'htl;jobs' // This parameter tells Google to show job results
     });
     
     return `${baseUrl}?${urlParams.toString()}`;

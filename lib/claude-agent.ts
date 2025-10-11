@@ -567,6 +567,20 @@ async function executeTools(
             };
             break;
             
+          case 'search_jobs_google':
+            const googleJobsResult = await browserService.searchJobsGoogle({
+              keywords: input.keywords,
+              location: input.location,
+              experience_level: input.experience_level,
+              remote: input.remote
+            });
+            result = {
+              success: true,
+              data: googleJobsResult,
+              message: `Found ${googleJobsResult.length} jobs on Google Jobs`
+            };
+            break;
+            
           default:
             result = {
               success: false,

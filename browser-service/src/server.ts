@@ -265,6 +265,31 @@ app.post('/api/search-indeed', authenticate, async (req: Request, res: Response)
   }
 });
 
+// Search jobs on Google Jobs
+app.post('/api/search-google', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { keywords, location, experience_level, remote } = req.body;
+    console.log('🔍 Google Jobs search request:', { keywords, location, experience_level, remote });
+    
+    const browserService = getBrowserJobService();
+    const results = await browserService.searchJobsGoogle({
+      keywords, 
+      location, 
+      experience_level, 
+      remote
+    });
+    
+    console.log(`✓ Found ${results.length} jobs on Google Jobs`);
+    res.json({ success: true, data: results });
+  } catch (error: any) {
+    console.error('❌ Error searching Google Jobs:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred'
+    });
+  }
+});
+
 // Search jobs on LinkedIn
 app.post('/api/search-linkedin', authenticate, async (req: Request, res: Response) => {
   try {
