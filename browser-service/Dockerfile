@@ -23,13 +23,18 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-RUN npm ci --production
+
+# Install all dependencies (including dev deps for build)
+RUN npm ci
 
 # Copy source
 COPY . .
 
 # Build TypeScript
 RUN npm run build
+
+# Remove dev dependencies after build
+RUN npm prune --production
 
 # Use system chromium instead of downloading Playwright's
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
