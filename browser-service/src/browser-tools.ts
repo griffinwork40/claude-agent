@@ -16,7 +16,8 @@ export class BrowserJobService {
     if (this.browser) return;
     
     const launchOptions: any = {
-      headless: process.env.NODE_ENV === 'production',
+      // Always run headless unless explicitly set to false
+      headless: process.env.HEADLESS !== 'false',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
