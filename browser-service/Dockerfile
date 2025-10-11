@@ -36,9 +36,10 @@ RUN npm run build
 # Remove dev dependencies after build
 RUN npm prune --production
 
-# Use system chromium instead of downloading Playwright's
+# Set environment variables for Playwright
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
 
 # Create directory for LinkedIn sessions
 RUN mkdir -p /app/linkedin-sessions

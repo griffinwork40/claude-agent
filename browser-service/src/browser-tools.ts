@@ -15,14 +15,21 @@ export class BrowserJobService {
   async initialize() {
     if (this.browser) return;
     
-    this.browser = await chromium.launch({
+    const launchOptions: any = {
       headless: process.env.NODE_ENV === 'production',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
       ],
-    });
+    };
+    
+    // Use system chromium if available (Docker/Railway)
+    if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+      launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+    }
+    
+    this.browser = await chromium.launch(launchOptions);
   }
 
   async close() {
