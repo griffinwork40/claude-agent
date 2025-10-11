@@ -13,6 +13,58 @@ import { loadMessagesFromAPI } from '@/lib/message-utils';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Normalize whitespace and trim a message for display.
+ */
+function summarizeContent(content: string, maxLength: number): string {
+  const normalized = content.trim().replace(/\s+/g, ' ');
+  if (!normalized) {
+    return 'Untitled conversation';
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+/**
+ * Determine the display name for an agent based on its messages.
+ */
+function deriveAgentName(agentId: string, messages: Message[]): string {
+  if (agentId === 'default-agent') {
+    return 'Job Application Assistant';
+  }
+
+  const firstUserMessage = messages.find((message) => message.role === 'user' && message.content.trim());
+  if (firstUserMessage) {
+    return summarizeContent(firstUserMessage.content, 60);
+  }
+
+  return `Conversation ${agentId.slice(-6)}`;
+}
+
+/**
+ * Determine the subtitle/description for an agent based on its latest message.
+ */
+function deriveAgentDescription(agentId: string, messages: Message[]): string | undefined {
+  if (agentId === 'default-agent') {
+    return 'Your AI assistant for job searching and applications';
+  }
+
+  if (messages.length === 0) {
+    return undefined;
+  }
+
+  const latestMessage = messages[messages.length - 1];
+  if (!latestMessage.content.trim()) {
+    return undefined;
+  }
+
+  return summarizeContent(latestMessage.content, 80);
+}
+
 export default function AgentPage() {
   const search = useSearchParams();
   const router = useRouter();
@@ -56,22 +108,31 @@ export default function AgentPage() {
           }, {} as Record<string, typeof loadedMessages>);
           
           // Create agents for each conversation
-          const newAgents: Agent[] = Object.entries(messagesByAgent).map(([agentId, messages]) => {
-            const sortedMessages = messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+          const newAgents: Agent[] = Object.entries(messagesByAgent).map(([agentId, agentMessages]) => {
+            const sortedMessages = [...agentMessages].sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+
             return {
               id: agentId,
-              name: agentId === 'default-agent' ? 'Job Application Assistant' : `Conversation ${agentId.slice(-6)}`,
-              description: agentId === 'default-agent' ? 'Your AI assistant for job searching and applications' : 'Previous conversation',
+              name: deriveAgentName(agentId, sortedMessages),
+              description: deriveAgentDescription(agentId, sortedMessages),
               createdAt: sortedMessages[0].createdAt,
               updatedAt: sortedMessages[sortedMessages.length - 1].createdAt,
             };
           });
           
-          setAgents(prev => {
-            // Merge with existing agents, avoiding duplicates
-            const existingIds = new Set(prev.map(a => a.id));
-            const newUniqueAgents = newAgents.filter(a => !existingIds.has(a.id));
-            return [...newUniqueAgents, ...prev];
+          setAgents((prev) => {
+            const existingIds = new Set(prev.map((agent) => agent.id));
+
+            const updatedExisting = prev.map((agent) => {
+              const replacement = newAgents.find((candidate) => candidate.id === agent.id);
+              return replacement ? { ...agent, ...replacement } : agent;
+            });
+
+            const newUniqueAgents = newAgents.filter((agent) => !existingIds.has(agent.id));
+
+            return [...newUniqueAgents, ...updatedExisting];
           });
           
           if (!selectedAgentId) {
@@ -111,6 +172,27 @@ export default function AgentPage() {
         const loadedMessages = await loadMessagesFromAPI(selectedAgentId || undefined);
         console.log(`Reloaded ${loadedMessages.length} messages from database for agent ${selectedAgentId}`);
         setMessages(loadedMessages);
+
+        if (selectedAgentId && loadedMessages.length > 0) {
+          const sortedMessages = [...loadedMessages].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+
+          setAgents((prevAgents) =>
+            prevAgents.map((agent) => {
+              if (agent.id !== selectedAgentId) {
+                return agent;
+              }
+
+              return {
+                ...agent,
+                name: agent.id === 'default-agent' ? agent.name : deriveAgentName(agent.id, sortedMessages),
+                description: deriveAgentDescription(agent.id, sortedMessages),
+                updatedAt: sortedMessages[sortedMessages.length - 1].createdAt,
+              };
+            })
+          );
+        }
       } catch (error) {
         console.error('Error reloading messages:', error);
       }
@@ -172,12 +254,37 @@ export default function AgentPage() {
   // Function to add a new message to the state
   function handleAddMessage(content: string, agentId: string, message: Message) {
     console.log('Adding message:', { agentId, role: message.role, content: content.substring(0, 50) });
+    const hadUserMessage = messages.some((existing) => existing.agentId === agentId && existing.role === 'user');
     setMessages((prev) => {
       console.log('Previous messages count:', prev.length);
       const newMessages = [...prev, message];
       console.log('New messages count:', newMessages.length);
       return newMessages;
     });
+
+    setAgents((prevAgents) =>
+      prevAgents.map((agent) => {
+        if (agent.id !== agentId) {
+          return agent;
+        }
+
+        const nextAgent: Agent = {
+          ...agent,
+          updatedAt: message.createdAt,
+        };
+
+        const normalizedContent = message.content.trim().replace(/\s+/g, ' ');
+        if (normalizedContent) {
+          nextAgent.description = summarizeContent(normalizedContent, 80);
+        }
+
+        if (message.role === 'user' && agentId !== 'default-agent' && !hadUserMessage && normalizedContent) {
+          nextAgent.name = summarizeContent(normalizedContent, 60);
+        }
+
+        return nextAgent;
+      })
+    );
   }
 
   function handleCloseBottomSheet() {
