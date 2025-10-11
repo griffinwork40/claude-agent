@@ -275,7 +275,7 @@ function renderMarkdown(content: string, keyPrefix: string): ReactNode {
   }
 
   return (
-    <div className="space-y-2 text-sm leading-relaxed [&_a]:underline [&_a]:decoration-brand-500 [&_a]:decoration-2">
+    <div className="space-y-2 text-sm leading-relaxed break-words overflow-x-hidden [&_a]:underline [&_a]:decoration-brand-500 [&_a]:decoration-2">
       {blocks}
     </div>
   );
@@ -494,7 +494,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
   };
 
   return (
-    <section className={`h-full flex flex-col ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
+    <section className={`h-full flex flex-col overflow-hidden ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
       {!isMobile && (
         <header className="px-4 py-3 border-b border-[var(--border)]">
           <div className="text-sm font-medium text-[var(--fg)]">
@@ -503,7 +503,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
         </header>
       )}
 
-      <div className={`flex-1 overflow-auto ${isMobile ? 'p-4' : 'p-3'} flex flex-col`}>
+      <div className={`flex-1 overflow-y-auto overflow-x-hidden touch-pan-y ${isMobile ? 'p-4' : 'p-3'} flex flex-col`}>
         {visibleMessages.length === 0 && !isStreaming ? (
           <div className="flex items-center justify-center h-full text-[var(--fg)]/60 text-sm">
             No messages yet. Start a conversation!
@@ -545,7 +545,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
                       </div>
                     )}
                     <div
-                      className={`w-full text-left ${theme.bubble} ${bubbleClasses}`}
+                      className={`w-full text-left ${theme.bubble} ${bubbleClasses} break-words`}
                     >
                       {renderMarkdown(message.content, messageKeyPrefix)}
                       {message.isStreaming && (

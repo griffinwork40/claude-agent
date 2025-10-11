@@ -178,7 +178,7 @@ export function BrowserPane({ agent, activities, onClearActivities, isMobile = f
         </div>
 
         {/* Content */}
-        <div className={`${isMobile ? 'p-4' : 'p-6'} h-[calc(100%-49px)] overflow-auto`}>
+        <div className={`${isMobile ? 'p-4' : 'p-6'} h-[calc(100%-49px)] overflow-y-auto overflow-x-hidden touch-pan-y`}>
           {activities.length === 0 ? (
             // No activities state
             <div className="h-full flex items-center justify-center">
@@ -208,7 +208,7 @@ export function BrowserPane({ agent, activities, onClearActivities, isMobile = f
             </div>
           ) : (
             // Activity feed
-            <div className="space-y-0">
+            <div className="space-y-0 break-words">
               {activities.map((activity, index) => (
                 <ActivityItem 
                   key={activity.id} 
