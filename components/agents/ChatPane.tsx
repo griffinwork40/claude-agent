@@ -791,8 +791,16 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
               // Check if this is an activity or message
               if (item.itemType === 'activity') {
                 // Only render activities that have valid content
-                const hasValidContent = item.tool || item.content || item.message || item.params || item.result;
-                if (!hasValidContent) {
+                const hasDisplayableContent = Boolean(
+                  item.tool ||
+                    item.content ||
+                    item.message ||
+                    item.params ||
+                    item.result ||
+                    item.type === 'thinking' ||
+                    item.type === 'status'
+                );
+                if (!hasDisplayableContent) {
                   console.warn('Skipping activity with no content:', item);
                   return null;
                 }
