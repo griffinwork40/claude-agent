@@ -341,6 +341,13 @@ function getActivityTitle(activity: Activity): string {
 
 /**
  * Activity card component - Cursor-style lightweight inline display
+ * 
+ * Design principles:
+ * - Borderless, flat design with no card styling
+ * - Single line focus: icon + text + timestamp
+ * - Muted colors with opacity (never bright)
+ * - Progressive disclosure: details on hover/click
+ * - Minimal spacing: blends seamlessly with messages
  */
 function ActivityCard({ activity }: { activity: Activity }) {
   const [expanded, setExpanded] = useState(false);
@@ -350,61 +357,63 @@ function ActivityCard({ activity }: { activity: Activity }) {
   const hasDetails = activity.params || activity.result;
   const timestamp = formatAbsoluteTimestamp(activity.timestamp);
   
-  // For thinking/status types, use even more minimal styling
+  // For thinking/status types, use even more minimal styling (no icon, smaller font)
   const isSubtle = activity.type === 'thinking' || activity.type === 'status';
   
   return (
     <div 
-      className="my-1.5 py-1 animate-fadeIn w-full"
+      className="my-1 py-0.5 animate-fadeIn w-full"
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
       {/* Single line: icon + text + timestamp */}
       <div className="flex items-center gap-2">
-        {/* Icon - smaller and more subtle */}
+        {/* Icon - 14px, muted with opacity, hidden for subtle types */}
         {!isSubtle && (
           <div className={`flex-shrink-0 ${color}`}>
-            <Icon size={14} strokeWidth={2} />
+            <Icon size={14} strokeWidth={1.5} />
           </div>
         )}
         
-        {/* Content */}
+        {/* Content - truncates with ellipsis if too long */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <span 
-            className={`${isSubtle ? 'text-[11px]' : 'text-xs'} text-[var(--fg)]/70 truncate`} 
+            className={`${isSubtle ? 'text-[11px]' : 'text-xs'} text-[var(--fg)]/70 truncate block`} 
             title={title}
           >
             {title}
           </span>
           {activity.error && (
-            <span className="text-[11px] text-red-400/70 ml-2 truncate">
+            <span className="text-[11px] text-red-400/80 ml-2 truncate">
               {activity.error}
             </span>
           )}
         </div>
         
-        {/* Timestamp */}
-        <time className="text-xs text-[var(--fg)]/40 whitespace-nowrap flex-shrink-0">
+        {/* Timestamp - always visible, right-aligned */}
+        <time className="text-[11px] text-[var(--fg)]/40 whitespace-nowrap flex-shrink-0">
           {timestamp}
         </time>
       </div>
       
       {/* Show/Hide details link - only shows on hover or when expanded */}
       {hasDetails && (hovering || expanded) && (
-        <div className="ml-5 mt-1">
+        <div className="ml-5 mt-0.5">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-[11px] text-[var(--fg)]/50 hover:text-[var(--fg)]/70 transition-colors"
+            className="text-[11px] text-[var(--fg)]/50 hover:text-[var(--fg)]/70 transition-colors focus:outline-none focus:text-[var(--fg)]/70"
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Hide details' : 'Show details'}
           >
             {expanded ? '▼ Hide details' : '▶ Show details'}
           </button>
         </div>
       )}
       
-      {/* Expandable details - simple indented text */}
+      {/* Expandable details - simple indented text, no background */}
       {hasDetails && expanded && (
-        <div className="ml-5 mt-1">
-          <pre className="text-[11px] text-[var(--fg)]/60 font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
+        <div className="ml-5 mt-1 animate-fadeIn">
+          <pre className="text-[11px] text-[var(--fg)]/60 font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto leading-relaxed">
             {JSON.stringify(activity.params || activity.result, null, 2)}
           </pre>
         </div>

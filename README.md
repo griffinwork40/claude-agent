@@ -4,11 +4,19 @@ Enlist is your job search agent—scouting roles, tailoring materials, and apply
 
 ## Features
 
-- Multi-platform job search (LinkedIn, Indeed, Glassdoor, etc.)
+- Multi-platform job search (LinkedIn, Indeed, Google Jobs, etc.)
 - Smart job curation based on your profile and preferences
 - Human-in-the-loop approval before applying
 - Automated application submission
 - Application tracking and reporting
+- **Live activity feed** - See tool execution in real-time with Cursor-inspired UI
+
+## Recent Updates
+
+- **October 11, 2025**: Cursor-style activity feed with lightweight, borderless design ([see docs](./ACTIVITY_FEED_INDEX.md))
+- **October 11, 2025**: Fixed tool execution hanging bug with iterative continuation loop
+- **October 11, 2025**: Added missing job search tools (Indeed, LinkedIn, Google Jobs)
+- **October 11, 2025**: Fixed duplicate messages, conversation persistence, and memory bugs
 
 ## Architecture
 
