@@ -1,5 +1,6 @@
 // lib/claude-agent.ts
 import Anthropic from '@anthropic-ai/sdk';
+import type { MessageParam, TextBlockParam, ToolUseBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { browserTools, getBrowserJobService } from './browser-tools';
@@ -138,44 +139,66 @@ export async function runClaudeAgentStream(
           let currentToolUse: ToolUse | null = null;
           let toolInputJson = '';
           
+          // IMPORTANT: Capture the full assistant message content
+          const assistantMessageContent: Array<TextBlockParam | ToolUseBlockParam> = [];
+          
           for await (const chunk of stream) {
-            if (chunk.type === 'content_block_start' && chunk.content_block.type === 'tool_use') {
-              // Start of a tool use
-              currentToolUse = {
-                id: chunk.content_block.id,
-                name: chunk.content_block.name,
-                input: {}
-              };
-              toolInputJson = '';
-              console.log(`🔧 Tool use started: ${chunk.content_block.name}`);
-            } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'input_json_delta') {
-              // Collect tool input JSON
-              toolInputJson += chunk.delta.partial_json;
+            if (chunk.type === 'content_block_start') {
+              if (chunk.content_block.type === 'text') {
+                // Start of text block
+                assistantMessageContent.push({
+                  type: 'text' as const,
+                  text: ''
+                });
+              } else if (chunk.content_block.type === 'tool_use') {
+                // Start of a tool use
+                currentToolUse = {
+                  id: chunk.content_block.id,
+                  name: chunk.content_block.name,
+                  input: {}
+                };
+                toolInputJson = '';
+                console.log(`🔧 Tool use started: ${chunk.content_block.name}`);
+              }
+            } else if (chunk.type === 'content_block_delta') {
+              if (chunk.delta.type === 'text_delta') {
+                // Regular text content
+                const content = chunk.delta.text;
+                if (content) {
+                  console.log(`✓ Streaming chunk: ${content.length} chars`);
+                  const encoded = new TextEncoder().encode(content);
+                  controller.enqueue(encoded);
+                  
+                  // Add to the last text block in assistant message
+                  const lastBlock = assistantMessageContent[assistantMessageContent.length - 1];
+                  if (lastBlock && lastBlock.type === 'text') {
+                    lastBlock.text += content;
+                  }
+                }
+              } else if (chunk.delta.type === 'input_json_delta') {
+                // Collect tool input JSON
+                toolInputJson += chunk.delta.partial_json;
+              }
             } else if (chunk.type === 'content_block_stop' && currentToolUse) {
-              // End of tool use, parse input and execute
+              // End of tool use, parse input and save
               try {
                 currentToolUse.input = JSON.parse(toolInputJson);
                 toolUses.push(currentToolUse);
+                
+                // Add to assistant message content
+                assistantMessageContent.push({
+                  type: 'tool_use' as const,
+                  id: currentToolUse.id,
+                  name: currentToolUse.name,
+                  input: currentToolUse.input
+                });
+                
                 console.log(`🔧 Tool use completed: ${currentToolUse.name}`, currentToolUse.input);
               } catch (error) {
                 console.error('Error parsing tool input JSON:', error);
-                // Add error result for malformed tool input
-                toolUses.push({
-                  id: currentToolUse.id,
-                  name: currentToolUse.name,
-                  input: {}
-                });
               }
               currentToolUse = null;
               toolInputJson = '';
-            } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-              // Regular text content
-              const content = chunk.delta.text;
-              if (content) {
-                console.log(`✓ Streaming chunk: ${content.length} chars`);
-                const encoded = new TextEncoder().encode(content);
-                controller.enqueue(encoded);
-              }
             } else if (chunk.type === 'message_stop') {
               console.log('✓ Stream completed, executing tools...');
               
@@ -184,26 +207,34 @@ export async function runClaudeAgentStream(
                 console.log(`🔧 Executing ${toolUses.length} tools...`);
                 const toolResults = await executeTools(toolUses, userId);
                 
-                // Add tool results to messages and continue conversation
-                const toolResultMessages = toolResults.map(result => ({
-                  role: 'user' as const,
-                  content: [{
-                    type: 'tool_result' as const,
-                    tool_use_id: result.tool_use_id,
-                    content: result.content,
-                    is_error: result.is_error
-                  }]
-                }));
+                // Build the proper continuation messages
+                // 1. User's original message (already in messages array)
+                // 2. Assistant's message with tool_use blocks
+                // 3. User message with tool_result blocks
+                
+                const continuationMessages = [
+                  ...messages,  // Original user message
+                  {
+                    role: 'assistant' as const,
+                    content: assistantMessageContent  // Text + tool_use blocks
+                  },
+                  {
+                    role: 'user' as const,
+                    content: toolResults.map(result => ({
+                      type: 'tool_result' as const,
+                      tool_use_id: result.tool_use_id,
+                      content: result.content,
+                      is_error: result.is_error
+                    }))
+                  }
+                ];
                 
                 // Continue conversation with tool results
                 const continuationStream = await client.messages.create({
                   model: 'claude-3-5-sonnet-latest',
                   max_tokens: 4096,
                   system: instructions,
-                  messages: [
-                    ...messages,
-                    ...toolResultMessages
-                  ],
+                  messages: continuationMessages,
                   tools: browserTools,
                   stream: true
                 });
