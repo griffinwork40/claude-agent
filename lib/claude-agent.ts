@@ -44,7 +44,7 @@ export async function initializeAgent(): Promise<{ client: Anthropic; instructio
 
     agentInstructions = instructions;
     console.log('✓ Claude agent initialized successfully');
-    return { client: anthropic, instructions: agentInstructions };
+    return { client: anthropic, instructions: instructions };
   } catch (error: unknown) {
     console.error('Failed to initialize Claude agent:', error);
     const errMessage = error instanceof Error ? error.message : String(error);
@@ -159,6 +159,12 @@ export async function runClaudeAgentStream(
                 console.log(`🔧 Tool use completed: ${currentToolUse.name}`, currentToolUse.input);
               } catch (error) {
                 console.error('Error parsing tool input JSON:', error);
+                // Add error result for malformed tool input
+                toolUses.push({
+                  id: currentToolUse.id,
+                  name: currentToolUse.name,
+                  input: {}
+                });
               }
               currentToolUse = null;
               toolInputJson = '';
@@ -349,11 +355,15 @@ async function executeTools(toolUses: ToolUse[], userId: string): Promise<ToolRe
         
       } catch (error: unknown) {
         console.error(`❌ Error executing tool ${toolUse.name}:`, error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        
         results.push({
           tool_use_id: toolUse.id,
           content: JSON.stringify({
             success: false,
-            error: error instanceof Error ? error.message : String(error)
+            error: `Tool execution failed: ${errorMessage}`,
+            details: process.env.NODE_ENV === 'development' ? errorStack : undefined
           }),
           is_error: true
         });
