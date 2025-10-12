@@ -108,14 +108,24 @@ export async function POST(request: NextRequest) {
               agentId: agentId || 'default-agent',
             };
 
-            // Add timing for executable activities that have completion
+            // Add timing for executable activities while ensuring valid_timing constraint
+            // The constraint requires: (started_at IS NULL) = (completed_at IS NULL)
             const executableTypes = ['tool_start', 'tool_executing', 'tool_result', 'batch_start', 'batch_progress', 'batch_complete'];
             if (executableTypes.includes(activityData.type)) {
-              activity.startedAt = new Date().toISOString();
+              // For start and executing activities, set both timestamps initially
+              // They will be updated when the activity completes
+              if (activityData.type === 'tool_start' || activityData.type === 'tool_executing' ||
+                  activityData.type === 'batch_start' || activityData.type === 'batch_progress') {
+                const now = new Date().toISOString();
+                activity.startedAt = now;
+                activity.completedAt = now; // Same timestamp initially, will be updated on completion
+              }
 
-              // Add completion time for completed activities
+              // For completed activities, set both timestamps
               if (activityData.type === 'tool_result' || activityData.type === 'batch_complete') {
-                activity.completedAt = new Date().toISOString();
+                const now = new Date().toISOString();
+                activity.startedAt = now;
+                activity.completedAt = now;
               }
             }
 
