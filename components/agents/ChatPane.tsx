@@ -292,7 +292,10 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
   const [streamingStartedAt, setStreamingStartedAt] = useState<string | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(agent?.id ?? null);
   const endRef = useRef<HTMLDivElement | null>(null);
-  const composerPadding = isMobile ? '1rem' : '0.75rem';
+  const composerPadding = isMobile ? '0.5rem' : '0.75rem';
+  const composerTextAreaPadding = isMobile ? 'py-2' : 'py-3';
+  const composerButtonPadding = isMobile ? 'px-4 py-2' : 'px-4 py-2.5';
+  const composerRows = isMobile ? 1 : 2;
 
   // Reset session when agent changes
   useEffect(() => {
@@ -565,9 +568,11 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
       </div>
 
       <footer
-        className={`flex-shrink-0 ${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}
+        className={`flex-shrink-0 ${isMobile ? 'px-4 pt-3' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}
         style={{
-          paddingBottom: `calc(${composerPadding} + (env(safe-area-inset-bottom, 0px) / 2))`,
+          paddingBottom: isMobile
+            ? `calc(${composerPadding} + env(safe-area-inset-bottom, 0px))`
+            : composerPadding,
         }}
       >
         <form
@@ -581,8 +586,8 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
         >
           <textarea
             aria-label="Message"
-            rows={isMobile ? 3 : 2}
-            className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 py-3 ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
+            rows={composerRows}
+            className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 ${composerTextAreaPadding} ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
             placeholder="Type a message..."
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -598,7 +603,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
           <button
             type="submit"
             disabled={isStreaming}
-            className={`self-stretch ${isMobile ? 'px-5 py-3' : 'px-4 py-2.5'} rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150`}
+            className={`self-stretch ${composerButtonPadding} rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150`}
           >
             {isStreaming ? 'Sending...' : 'Send'}
           </button>
