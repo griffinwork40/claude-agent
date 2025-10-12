@@ -425,14 +425,21 @@ function ActivityCard({ activity }: { activity: Activity }) {
 /**
  * Chat pane listing messages for the selected agent and a simple input box.
  */
-export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false }: ChatPaneProps) {
+export function ChatPane({
+  agent,
+  messages,
+  activities: externalActivities,
+  onSend,
+  onActivity,
+  isMobile = false,
+}: ChatPaneProps) {
   const [text, setText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamingStartedAt, setStreamingStartedAt] = useState<string | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(agent?.id ?? null);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<Activity[]>(externalActivities);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   // Reset session when agent changes
@@ -447,6 +454,11 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
       setActivities([]);
     }
   }, [agent?.id, currentAgentId]);
+
+  // Sync local activity list with the parent-provided history so unmounts/remounts keep state.
+  useEffect(() => {
+    setActivities(externalActivities);
+  }, [externalActivities]);
 
   const visibleMessages = useMemo(() => {
     if (!agent) return [];

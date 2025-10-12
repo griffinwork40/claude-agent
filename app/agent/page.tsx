@@ -249,7 +249,14 @@ export default function AgentPage() {
             {activeTab === 'workspace' ? (
               <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} isMobile />
             ) : (
-              <ChatPane agent={selectedAgent} messages={messages} onSend={handleAddMessage} onActivity={handleActivity} isMobile />
+              <ChatPane
+                agent={selectedAgent}
+                messages={messages}
+                activities={activities}
+                onSend={handleAddMessage}
+                onActivity={handleActivity}
+                isMobile
+              />
             )}
           </div>
         </BottomSheet>
@@ -316,7 +323,13 @@ export default function AgentPage() {
             {activeTab === 'workspace' ? (
               <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} />
             ) : (
-              <ChatPane agent={selectedAgent} messages={messages} onSend={handleAddMessage} onActivity={handleActivity} />
+              <ChatPane
+                agent={selectedAgent}
+                messages={messages}
+                activities={activities}
+                onSend={handleAddMessage}
+                onActivity={handleActivity}
+              />
             )}
           </div>
         </div>
@@ -351,7 +364,13 @@ export default function AgentPage() {
           maxWidth={600}
           position="right"
         >
-          <ChatPane agent={selectedAgent} messages={messages} onSend={handleAddMessage} onActivity={handleActivity} />
+          <ChatPane
+            agent={selectedAgent}
+            messages={messages}
+            activities={activities}
+            onSend={handleAddMessage}
+            onActivity={handleActivity}
+          />
         </ResizablePane>
       </div>
     </>
