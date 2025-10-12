@@ -47,3 +47,7 @@
 
 - 2025-10-11: Fixed bottom sheet closing on scroll. Root cause: swipe-to-close initiated anywhere inside sheet, conflicting with chat scroll. Solution: restrict drag-to-close to the handle area only and ignore touch moves from content. Lint and build clean. Overall completion: 98%.
 
+- 2025-10-12: Ensured chat composer respects iOS Safari safe-area inset so input and send button are fully visible above the home indicator. Overall completion: 99%.
+- 2025-10-12: Tuned iOS Safari safe-area offset to halve the additional padding, keeping controls visible without excessive footer height. Overall completion: 99%.
+- 2025-10-12: Slimmed iOS Safari composer controls by reducing mobile rows/padding while keeping safe-area protection, bringing the footer to a more compact height. Overall completion: 99%.
+
