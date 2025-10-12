@@ -396,8 +396,8 @@ function ActivityCard({ activity }: { activity: Activity }) {
         </time>
       </div>
       
-      {/* Show/Hide details link - only shows on hover or when expanded */}
-      {hasDetails && (hovering || expanded) && (
+      {/* Show/Hide details link - always available so touch users can expand */}
+      {hasDetails && (
         <div className="ml-5 mt-0.5">
           <button
             onClick={() => setExpanded(!expanded)}
