@@ -170,7 +170,17 @@ export async function runClaudeAgentStream(
                 };
                 toolInputJson = '';
                 console.log(`🔧 Tool use started: ${chunk.content_block.name}`);
-                
+
+                // Send thought preview before tool start (Phase 2)
+                sendActivity('thinking_preview', {
+                  content: `Planning to use ${chunk.content_block.name.replace(/_/g, ' ')}...`,
+                  tool: chunk.content_block.name,
+                  toolId: chunk.content_block.id
+                });
+
+                // Small delay to let the thought preview be visible
+                await new Promise(resolve => setTimeout(resolve, 200));
+
                 // Send activity event for tool start
                 sendActivity('tool_start', {
                   tool: chunk.content_block.name,
@@ -297,7 +307,17 @@ export async function runClaudeAgentStream(
                         };
                         continuationToolInputJson = '';
                         console.log(`🔧 Continuation ${iteration} tool use started: ${chunk.content_block.name}`);
-                        
+
+                        // Send thought preview before tool start (Phase 2)
+                        sendActivity('thinking_preview', {
+                          content: `Planning to use ${chunk.content_block.name.replace(/_/g, ' ')}...`,
+                          tool: chunk.content_block.name,
+                          toolId: chunk.content_block.id
+                        });
+
+                        // Small delay to let the thought preview be visible
+                        await new Promise(resolve => setTimeout(resolve, 200));
+
                         sendActivity('tool_start', {
                           tool: chunk.content_block.name,
                           toolId: chunk.content_block.id
@@ -448,26 +468,51 @@ export async function runClaudeAgentStream(
 
 // Execute browser tools
 async function executeTools(
-  toolUses: ToolUse[], 
-  userId: string, 
+  toolUses: ToolUse[],
+  userId: string,
   sendActivity?: (type: string, data: any) => void
 ): Promise<ToolResult[]> {
   const results: ToolResult[] = [];
   const browserService = getBrowserService();
-    
-    for (const toolUse of toolUses) {
-      console.log(`🔧 Executing tool: ${toolUse.name}`, toolUse.input);
-      
-      // Send activity event for tool execution start
-      if (sendActivity) {
-        sendActivity('tool_executing', {
-          tool: toolUse.name,
-          toolId: toolUse.id,
-          params: toolUse.input
-        });
-      }
-      
-      try {
+
+  // Generate batch ID for multiple tools (Phase 2)
+  const batchId = toolUses.length > 1 ? `batch_${Date.now()}_${Math.random().toString(36).substring(2, 11)}` : undefined;
+
+  // Send batch start event if multiple tools
+  if (batchId && sendActivity) {
+    sendActivity('batch_start', {
+      batchId,
+      batchTotal: toolUses.length,
+      tools: toolUses.map(t => t.name),
+      content: `Starting batch execution of ${toolUses.length} tools...`
+    });
+  }
+
+  let completedCount = 0;
+
+  for (const toolUse of toolUses) {
+    // Add batch context to tool activities
+    const batchContext = batchId ? {
+      batchId,
+      batchTotal: toolUses.length,
+      batchCompleted: completedCount
+    } : {};
+
+    console.log(`🔧 Executing tool: ${toolUse.name}`, toolUse.input);
+
+    // Send activity event for tool execution start
+    if (sendActivity) {
+      sendActivity('tool_executing', {
+        tool: toolUse.name,
+        toolId: toolUse.id,
+        params: toolUse.input,
+        ...batchContext
+      });
+    }
+
+    completedCount++;
+
+    try {
         let result: BrowserToolResult;
         const input = toolUse.input as Record<string, any>;
         
@@ -625,14 +670,15 @@ async function executeTools(
         
         console.log(`✓ Tool ${toolUse.name} executed:`, result.success ? 'SUCCESS' : 'FAILED');
         
-        // Send activity event for tool execution complete
+        // Send activity event for tool execution complete with batch context
         if (sendActivity) {
           sendActivity('tool_result', {
             tool: toolUse.name,
             toolId: toolUse.id,
             success: result.success,
             result: result,
-            message: result.message
+            message: result.message,
+            ...batchContext
           });
         }
         
@@ -653,19 +699,36 @@ async function executeTools(
           is_error: true
         });
         
-        // Send activity event for tool error
+        // Send activity event for tool error with batch context
         if (sendActivity) {
           sendActivity('tool_result', {
             tool: toolUse.name,
             toolId: toolUse.id,
             success: false,
             error: errorMessage,
-            message: `Failed: ${errorMessage}`
+            message: `Failed: ${errorMessage}`,
+            ...batchContext
           });
         }
       }
     }
-  
+
+  // Send batch completion event if this was a batch execution
+  if (batchId && sendActivity) {
+    const successCount = results.filter(r => !r.is_error).length;
+    const failureCount = results.length - successCount;
+
+    sendActivity('batch_complete', {
+      batchId,
+      batchTotal: toolUses.length,
+      batchCompleted: toolUses.length,
+      success: failureCount === 0,
+      content: failureCount === 0
+        ? `Completed ${toolUses.length} tools successfully`
+        : `Completed ${toolUses.length} tools with ${failureCount} error${failureCount > 1 ? 's' : ''}`
+    });
+  }
+
   return results;
 }
 

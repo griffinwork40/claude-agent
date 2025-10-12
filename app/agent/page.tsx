@@ -10,6 +10,7 @@ import { Agent, Message, Activity } from '@/components/agents/types';
 import { AgentList, BrowserPane, ChatPane, BottomSheet } from '@/components/agents';
 import { ResizablePane } from '@/components/ResizablePane';
 import { loadMessagesFromAPI } from '@/lib/message-utils';
+import { loadActivitiesFromAPI, createActivity, mergeActivities } from '@/lib/activity-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,7 @@ export default function AgentPage() {
   const [activeTab, setActiveTab] = useState<'workspace' | 'chat'>('workspace');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
 
   const selectedAgent: Agent | null = useMemo(() => {
     return agents.find((a) => a.id === selectedAgentId) ?? null;
@@ -97,6 +99,24 @@ export default function AgentPage() {
           }
           
           setMessages(loadedMessages);
+
+          // Load activities for the most recent agent if we have an initial agent
+          if (newAgents.length > 0) {
+            const mostRecentAgent = newAgents[0];
+            try {
+              setIsLoadingActivities(true);
+              const loadedActivities = await loadActivitiesFromAPI(mostRecentAgent.id);
+              console.log(`Loaded ${loadedActivities.activities.length} activities for initial agent ${mostRecentAgent.id}`);
+              setActivitiesByAgent(prev => ({
+                ...prev,
+                [mostRecentAgent.id]: loadedActivities.activities
+              }));
+            } catch (error) {
+              console.error('Error loading activities for initial agent:', error);
+            } finally {
+              setIsLoadingActivities(false);
+            }
+          }
         }
       } catch (error) {
         console.error('Error loading messages:', error);
@@ -104,7 +124,7 @@ export default function AgentPage() {
         setIsLoadingMessages(false);
       }
     }
-    
+
     // Only load messages on initial mount, not when search params change
     loadMessages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,26 +159,36 @@ export default function AgentPage() {
       createdAt: now,
       updatedAt: now,
     };
-    
+
     setAgents((prev) => [newAgent, ...prev]);
     setSelectedAgentId(newAgent.id);
-    
-    // Clear messages for the new conversation
+
+    // Clear messages and activities for the new conversation
     setMessages([]);
-    
+    setActivitiesByAgent(prev => ({
+      ...prev,
+      [newAgent.id]: []
+    }));
+
     // Update URL without causing a page refresh
     const params = new URLSearchParams(Array.from(search.entries()));
     params.set('agentId', newAgent.id);
     router.replace(`?${params.toString()}`);
-    
+
     // On mobile, open the bottom sheet
     setIsBottomSheetOpen(true);
     setActiveTab('chat');
   }
 
   async function handleSelect(agentId: string) {
+    // Only load if switching to a different agent
+    if (agentId === selectedAgentId) {
+      setIsBottomSheetOpen(true);
+      return;
+    }
+
     setSelectedAgentId(agentId);
-    
+
     // Load messages for the selected agent
     try {
       const loadedMessages = await loadMessagesFromAPI(agentId);
@@ -168,11 +198,33 @@ export default function AgentPage() {
       console.error('Error loading messages for agent:', error);
       setMessages([]);
     }
-    
+
+    // Load activities for the selected agent (only if not already loaded)
+    const hasActivities = activitiesByAgent[agentId]?.length > 0;
+    if (!hasActivities) {
+      try {
+        setIsLoadingActivities(true);
+        const loadedActivities = await loadActivitiesFromAPI(agentId);
+        console.log(`Loaded ${loadedActivities.activities.length} activities for agent ${agentId}`);
+        setActivitiesByAgent(prev => ({
+          ...prev,
+          [agentId]: loadedActivities.activities
+        }));
+      } catch (error) {
+        console.error('Error loading activities for agent:', error);
+        setActivitiesByAgent(prev => ({
+          ...prev,
+          [agentId]: []
+        }));
+      } finally {
+        setIsLoadingActivities(false);
+      }
+    }
+
     const params = new URLSearchParams(Array.from(search.entries()));
     params.set('agentId', agentId);
     router.replace(`?${params.toString()}`);
-    
+
     // On mobile, open the bottom sheet when an agent is selected
     setIsBottomSheetOpen(true);
   }
@@ -192,17 +244,31 @@ export default function AgentPage() {
     setIsBottomSheetOpen(false);
   }
 
-  const handleActivity = useCallback((activity: Activity) => {
+  const handleActivity = useCallback(async (activity: Activity) => {
     if (!activity.agentId) {
       console.warn('Received activity without agentId, skipping', activity);
       return;
     }
 
+    // Persist activity to database
+    try {
+      await createActivity(activity);
+      console.log('Activity persisted to database:', activity.type, activity.tool);
+    } catch (error) {
+      console.error('Failed to persist activity:', error);
+      // Continue with local state update even if DB persistence fails
+    }
+
+    // Update local state with the new activity
     setActivitiesByAgent(prev => {
       const existing = prev[activity.agentId] ?? [];
+
+      // Merge with existing activities to avoid duplicates
+      const mergedActivities = mergeActivities(existing, [activity]);
+
       return {
         ...prev,
-        [activity.agentId]: [...existing, activity]
+        [activity.agentId]: mergedActivities
       };
     });
   }, []);
@@ -212,6 +278,8 @@ export default function AgentPage() {
       return;
     }
 
+    // Clear activities from local state only
+    // Note: Database cleanup would require API modification to support agent-based deletion
     setActivitiesByAgent(prev => {
       if (!prev[selectedAgentId]) {
         return prev;
@@ -223,13 +291,15 @@ export default function AgentPage() {
     });
   }, [selectedAgentId]);
 
-  // Show loading state while messages are being loaded
-  if (isLoadingMessages) {
+  // Show loading state while messages or activities are being loaded
+  if (isLoadingMessages || (selectedAgentId && isLoadingActivities)) {
     return (
       <div className="h-[calc(100vh-4rem)] bg-[var(--bg)] text-[var(--fg)] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--accent)] mx-auto mb-4"></div>
-          <p className="text-sm text-[var(--fg)]/70">Loading conversations...</p>
+          <p className="text-sm text-[var(--fg)]/70">
+            {isLoadingMessages ? 'Loading conversations...' : 'Loading activity history...'}
+          </p>
         </div>
       </div>
     );
