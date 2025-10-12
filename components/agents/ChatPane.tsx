@@ -292,6 +292,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
   const [streamingStartedAt, setStreamingStartedAt] = useState<string | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(agent?.id ?? null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const composerPadding = isMobile ? '1rem' : '0.75rem';
 
   // Reset session when agent changes
   useEffect(() => {
@@ -563,7 +564,10 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
         <div ref={endRef} />
       </div>
 
-      <footer className={`flex-shrink-0 ${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}>
+      <footer
+        className={`flex-shrink-0 ${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}
+        style={{ paddingBottom: `calc(${composerPadding} + env(safe-area-inset-bottom, 0px))` }}
+      >
         <form
           onSubmit={(e) => {
             e.preventDefault();
