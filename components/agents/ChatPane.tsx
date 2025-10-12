@@ -439,7 +439,13 @@ export function ChatPane({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamingStartedAt, setStreamingStartedAt] = useState<string | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(agent?.id ?? null);
-  const [activities, setActivities] = useState<Activity[]>(externalActivities);
+  const [activities, setActivities] = useState<Activity[]>(() => {
+    if (!agent?.id) {
+      return [];
+    }
+
+    return externalActivities.filter((activity) => activity.agentId === agent.id);
+  });
   const endRef = useRef<HTMLDivElement | null>(null);
 
   // Reset session when agent changes
@@ -457,8 +463,13 @@ export function ChatPane({
 
   // Sync local activity list with the parent-provided history so unmounts/remounts keep state.
   useEffect(() => {
-    setActivities(externalActivities);
-  }, [externalActivities]);
+    if (!agent?.id) {
+      setActivities([]);
+      return;
+    }
+
+    setActivities(externalActivities.filter((activity) => activity.agentId === agent.id));
+  }, [agent?.id, externalActivities]);
 
   const visibleMessages = useMemo(() => {
     if (!agent) return [];
@@ -640,9 +651,15 @@ export function ChatPane({
                 data.type === 'thinking' ||
                 data.type === 'status'
               ) {
+                const targetAgentId = agent?.id ?? currentAgentId;
+                if (!targetAgentId) {
+                  console.warn('Skipping activity with no agent context', data);
+                  continue;
+                }
                 // Store activity locally for inline display
                 const activity: Activity = {
                   id: `activity-${Date.now()}-${Math.random()}`,
+                  agentId: targetAgentId,
                   type: data.type,
                   tool: data.tool,
                   toolId: data.toolId,
@@ -662,8 +679,10 @@ export function ChatPane({
                   hasContent: !!activity.content,
                   message: activity.message
                 });
-                setActivities(prev => [...prev, activity]);
-                
+                if (activity.agentId === (agent?.id ?? currentAgentId)) {
+                  setActivities(prev => [...prev, activity]);
+                }
+
                 // Also forward to parent if callback exists
                 if (onActivity) {
                   onActivity(activity);

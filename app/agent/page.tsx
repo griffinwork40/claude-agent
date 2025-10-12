@@ -23,7 +23,7 @@ export default function AgentPage() {
     initialId ?? null
   );
   const [messages, setMessages] = useState<Message[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activitiesByAgent, setActivitiesByAgent] = useState<Record<string, Activity[]>>({});
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'workspace' | 'chat'>('workspace');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -32,6 +32,14 @@ export default function AgentPage() {
   const selectedAgent: Agent | null = useMemo(() => {
     return agents.find((a) => a.id === selectedAgentId) ?? null;
   }, [agents, selectedAgentId]);
+
+  const selectedAgentActivities = useMemo(() => {
+    if (!selectedAgentId) {
+      return [] as Activity[];
+    }
+
+    return activitiesByAgent[selectedAgentId] ?? [];
+  }, [activitiesByAgent, selectedAgentId]);
 
   // Load messages from database on mount
   useEffect(() => {
@@ -185,12 +193,35 @@ export default function AgentPage() {
   }
 
   const handleActivity = useCallback((activity: Activity) => {
-    setActivities(prev => [...prev, activity]);
+    if (!activity.agentId) {
+      console.warn('Received activity without agentId, skipping', activity);
+      return;
+    }
+
+    setActivitiesByAgent(prev => {
+      const existing = prev[activity.agentId] ?? [];
+      return {
+        ...prev,
+        [activity.agentId]: [...existing, activity]
+      };
+    });
   }, []);
 
   const handleClearActivities = useCallback(() => {
-    setActivities([]);
-  }, []);
+    if (!selectedAgentId) {
+      return;
+    }
+
+    setActivitiesByAgent(prev => {
+      if (!prev[selectedAgentId]) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[selectedAgentId];
+      return next;
+    });
+  }, [selectedAgentId]);
 
   // Show loading state while messages are being loaded
   if (isLoadingMessages) {
@@ -247,12 +278,17 @@ export default function AgentPage() {
           {/* Tab Content */}
           <div className="h-[calc(100%-3rem)]">
             {activeTab === 'workspace' ? (
-              <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} isMobile />
+              <BrowserPane
+                agent={selectedAgent}
+                activities={selectedAgentActivities}
+                onClearActivities={handleClearActivities}
+                isMobile
+              />
             ) : (
               <ChatPane
                 agent={selectedAgent}
                 messages={messages}
-                activities={activities}
+                activities={selectedAgentActivities}
                 onSend={handleAddMessage}
                 onActivity={handleActivity}
                 isMobile
@@ -321,12 +357,16 @@ export default function AgentPage() {
           {/* Tab content */}
           <div className="flex-1 overflow-hidden">
             {activeTab === 'workspace' ? (
-              <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} />
+              <BrowserPane
+                agent={selectedAgent}
+                activities={selectedAgentActivities}
+                onClearActivities={handleClearActivities}
+              />
             ) : (
               <ChatPane
                 agent={selectedAgent}
                 messages={messages}
-                activities={activities}
+                activities={selectedAgentActivities}
                 onSend={handleAddMessage}
                 onActivity={handleActivity}
               />
@@ -354,7 +394,11 @@ export default function AgentPage() {
         
         {/* Center workspace - flexible, takes remaining space */}
         <div className="flex-1 min-w-0">
-          <BrowserPane agent={selectedAgent} activities={activities} onClearActivities={handleClearActivities} />
+          <BrowserPane
+            agent={selectedAgent}
+            activities={selectedAgentActivities}
+            onClearActivities={handleClearActivities}
+          />
         </div>
         
         {/* Right chat pane - resizable */}
@@ -367,7 +411,7 @@ export default function AgentPage() {
           <ChatPane
             agent={selectedAgent}
             messages={messages}
-            activities={activities}
+            activities={selectedAgentActivities}
             onSend={handleAddMessage}
             onActivity={handleActivity}
           />

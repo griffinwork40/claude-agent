@@ -40,6 +40,7 @@ export interface AgentListProps {
 
 export interface Activity {
   id: string;
+  agentId: string;
   type: 'tool_start' | 'tool_params' | 'tool_executing' | 'tool_result' | 'thinking' | 'status';
   tool?: string;
   toolId?: string;
