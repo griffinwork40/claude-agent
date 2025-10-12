@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
             const activity = {
               ...activityData,
               agentId: agentId || 'default-agent',
-              timestamp: new Date().toISOString(),
+              startedAt: new Date().toISOString(),
             };
 
             // Add timing for completed activities
