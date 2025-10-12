@@ -106,12 +106,17 @@ export async function POST(request: NextRequest) {
             const activity = {
               ...activityData,
               agentId: agentId || 'default-agent',
-              startedAt: new Date().toISOString(),
             };
 
-            // Add timing for completed activities
-            if (activityData.type === 'tool_result' || activityData.type === 'batch_complete') {
-              activity.completedAt = new Date().toISOString();
+            // Add timing for executable activities that have completion
+            const executableTypes = ['tool_start', 'tool_executing', 'tool_result', 'batch_start', 'batch_progress', 'batch_complete'];
+            if (executableTypes.includes(activityData.type)) {
+              activity.startedAt = new Date().toISOString();
+
+              // Add completion time for completed activities
+              if (activityData.type === 'tool_result' || activityData.type === 'batch_complete') {
+                activity.completedAt = new Date().toISOString();
+              }
             }
 
             const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activities`, {
