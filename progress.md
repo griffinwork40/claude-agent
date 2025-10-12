@@ -51,3 +51,5 @@
 - 2025-10-12: Tuned iOS Safari safe-area offset to halve the additional padding, keeping controls visible without excessive footer height. Overall completion: 99%.
 - 2025-10-12: Slimmed iOS Safari composer controls by reducing mobile rows/padding while keeping safe-area protection, bringing the footer to a more compact height. Overall completion: 99%.
 
+- 2025-10-12: Integrated Gmail OAuth with Supabase storage, dashboard controls, Claude tools, and regression tests covering token refresh and persistence. Overall completion: 100%.
+

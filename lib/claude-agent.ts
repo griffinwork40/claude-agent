@@ -4,6 +4,7 @@ import type { MessageParam, TextBlockParam, ToolUseBlockParam } from '@anthropic
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { browserTools, getBrowserService } from './browser-tools';
+import { listGmailThreads, sendGmailMessage, markGmailThreadRead } from '@/lib/gmail/client';
 import { getOrCreateUserProfile } from './user-profile';
 import { ToolUse, ToolResult, BrowserToolResult } from '@/types';
 
@@ -14,6 +15,59 @@ console.log('Anthropic class:', Anthropic);
 // Initialize the Anthropic client
 let anthropic: Anthropic | null = null;
 let agentInstructions: string | null = null;
+
+const gmailToolDefinitions = [
+  {
+    name: 'gmail_list_threads',
+    description: 'List recent Gmail threads for the authenticated user with optional query filters.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Optional Gmail search query (e.g., "from:recruiter@example.com is:unread")'
+        },
+        labelIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional Gmail label IDs to filter by.'
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of threads to return (1-50).'
+        }
+      }
+    }
+  },
+  {
+    name: 'gmail_send_email',
+    description: 'Send a plain text email using the connected Gmail account.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        to: { type: 'string', description: 'Recipient email address(es). Separate multiple with commas.' },
+        subject: { type: 'string', description: 'Email subject line.' },
+        body: { type: 'string', description: 'Email body as plain text.' },
+        cc: { type: 'string', description: 'Optional CC recipients (comma separated).' },
+        bcc: { type: 'string', description: 'Optional BCC recipients (comma separated).' }
+      },
+      required: ['to', 'subject', 'body']
+    }
+  },
+  {
+    name: 'gmail_mark_thread_read',
+    description: 'Remove the UNREAD label from a Gmail thread.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        threadId: { type: 'string', description: 'The Gmail thread ID to mark as read.' }
+      },
+      required: ['threadId']
+    }
+  }
+];
+
+const agentTools = [...browserTools, ...gmailToolDefinitions];
 
 export async function initializeAgent(): Promise<{ client: Anthropic; instructions: string }> {
   if (anthropic && agentInstructions) {
@@ -63,6 +117,89 @@ export async function initializeAgent(): Promise<{ client: Anthropic; instructio
 interface AgentSession {
   userId: string;
   messages: Array<{ role: string; content: string }>;
+}
+
+interface GmailListThreadsToolInput {
+  query?: string;
+  labelIds?: string[];
+  maxResults?: number;
+}
+
+interface GmailSendEmailToolInput {
+  to: string;
+  subject: string;
+  body: string;
+  cc?: string;
+  bcc?: string;
+}
+
+interface GmailMarkThreadReadToolInput {
+  threadId: string;
+}
+
+function sanitizeString(value: string, maxLength: number, field: string): string {
+  if (typeof value !== 'string') {
+    throw new Error(`${field} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${field} cannot be empty`);
+  }
+  return trimmed.slice(0, maxLength);
+}
+
+function validateListThreadsInput(raw: Record<string, unknown>): GmailListThreadsToolInput {
+  const input: GmailListThreadsToolInput = {};
+
+  if (raw.query !== undefined) {
+    if (typeof raw.query !== 'string') {
+      throw new Error('gmail_list_threads.query must be a string');
+    }
+    input.query = raw.query.trim().slice(0, 1024);
+  }
+
+  if (raw.labelIds !== undefined) {
+    if (!Array.isArray(raw.labelIds) || raw.labelIds.some(label => typeof label !== 'string')) {
+      throw new Error('gmail_list_threads.labelIds must be an array of strings');
+    }
+    input.labelIds = (raw.labelIds as string[]).slice(0, 10).map(label => label.trim()).filter(Boolean);
+  }
+
+  if (raw.maxResults !== undefined) {
+    const parsed = Number(raw.maxResults);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 50) {
+      throw new Error('gmail_list_threads.maxResults must be an integer between 1 and 50');
+    }
+    input.maxResults = parsed;
+  }
+
+  return input;
+}
+
+function validateSendEmailInput(raw: Record<string, unknown>): GmailSendEmailToolInput {
+  const to = sanitizeString(String(raw.to ?? ''), 512, 'gmail_send_email.to');
+  if (!to.includes('@')) {
+    throw new Error('gmail_send_email.to must contain at least one email address');
+  }
+
+  const subject = sanitizeString(String(raw.subject ?? ''), 256, 'gmail_send_email.subject');
+  const bodyValue = sanitizeString(String(raw.body ?? ''), 5000, 'gmail_send_email.body');
+
+  const cc = raw.cc ? sanitizeString(String(raw.cc), 512, 'gmail_send_email.cc') : undefined;
+  const bcc = raw.bcc ? sanitizeString(String(raw.bcc), 512, 'gmail_send_email.bcc') : undefined;
+
+  return {
+    to,
+    subject,
+    body: bodyValue,
+    cc,
+    bcc
+  };
+}
+
+function validateMarkThreadReadInput(raw: Record<string, unknown>): GmailMarkThreadReadToolInput {
+  const threadId = sanitizeString(String(raw.threadId ?? ''), 256, 'gmail_mark_thread_read.threadId');
+  return { threadId };
 }
 
 // Session management for agent conversations
@@ -137,7 +274,7 @@ export async function runClaudeAgentStream(
             max_tokens: 4096,
             system: instructions,
             messages: messages,
-            tools: browserTools, // Add tools support
+            tools: agentTools, // Add tools support
             stream: true
           });
 
@@ -269,7 +406,7 @@ export async function runClaudeAgentStream(
                   max_tokens: 4096,
                   system: instructions,
                   messages: continuationMessages,
-                  tools: browserTools,
+                  tools: agentTools,
                   stream: true
                 });
                   
@@ -472,6 +609,43 @@ async function executeTools(
         const input = toolUse.input as Record<string, any>;
         
         switch (toolUse.name) {
+          case 'gmail_list_threads': {
+            const listInput = validateListThreadsInput(input);
+            const threads = await listGmailThreads(userId, listInput);
+            result = {
+              success: true,
+              data: {
+                count: threads.length,
+                threads: threads.map(thread => ({
+                  id: thread.id,
+                  historyId: thread.historyId,
+                  snippet: thread.snippet
+                }))
+              },
+              message: `Retrieved ${threads.length} Gmail thread${threads.length === 1 ? '' : 's'}`
+            };
+            break;
+          }
+          case 'gmail_send_email': {
+            const emailInput = validateSendEmailInput(input);
+            const sendResult = await sendGmailMessage(userId, emailInput);
+            result = {
+              success: true,
+              data: { id: sendResult.id },
+              message: 'Email sent with Gmail'
+            };
+            break;
+          }
+          case 'gmail_mark_thread_read': {
+            const markInput = validateMarkThreadReadInput(input);
+            await markGmailThreadRead(userId, markInput.threadId);
+            result = {
+              success: true,
+              data: { threadId: markInput.threadId },
+              message: 'Thread marked as read'
+            };
+            break;
+          }
           case 'browser_navigate':
             const navResult = await browserService.navigate(input.sessionId, input.url);
             result = {
