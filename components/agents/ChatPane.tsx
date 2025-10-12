@@ -566,7 +566,9 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
 
       <footer
         className={`flex-shrink-0 ${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}
-        style={{ paddingBottom: `calc(${composerPadding} + env(safe-area-inset-bottom, 0px))` }}
+        style={{
+          paddingBottom: `calc(${composerPadding} + (env(safe-area-inset-bottom, 0px) / 2))`,
+        }}
       >
         <form
           onSubmit={(e) => {
