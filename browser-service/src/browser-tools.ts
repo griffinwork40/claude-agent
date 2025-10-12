@@ -91,7 +91,7 @@ export class BrowserJobService {
       window.navigator.permissions.query = (parameters) => (
         parameters.name === 'notifications' ?
           Promise.resolve({ state: Notification.permission }) :
-          originalQuery(parameters)
+          originalQuery.call(window.navigator.permissions, parameters)
       );
     });
     
