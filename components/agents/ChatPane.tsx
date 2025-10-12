@@ -797,6 +797,7 @@ export function ChatPane({ agent, messages, onSend, onActivity, isMobile = false
                     item.message ||
                     item.params ||
                     item.result ||
+                    item.error ||
                     item.type === 'thinking' ||
                     item.type === 'status'
                 );
