@@ -767,7 +767,7 @@ export function ChatPane({
         </header>
       )}
 
-      <div className={`flex-1 overflow-auto ${isMobile ? 'p-4' : 'p-3'} flex flex-col`}>
+      <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isMobile ? 'p-4' : 'p-3'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
         {timelineItems.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="w-full max-w-xl px-4">

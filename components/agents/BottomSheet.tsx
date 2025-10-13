@@ -184,7 +184,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden">
           {children}
         </div>
       </div>
