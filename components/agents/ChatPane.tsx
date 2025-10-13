@@ -6,15 +6,17 @@
 
 import { useMemo, useRef, useState, useEffect, ReactNode } from 'react';
 import { ChatPaneProps, Activity, Message } from './types';
-import { 
-  Wrench, 
-  FileText, 
-  Zap, 
-  CheckCircle, 
-  XCircle, 
-  Brain, 
-  Info 
+import {
+  Wrench,
+  FileText,
+  Zap,
+  CheckCircle,
+  XCircle,
+  Brain,
+  Info
 } from 'lucide-react';
+import { ThoughtPreviewChip } from './ThoughtPreviewChip';
+import { BatchProgressIndicator } from './BatchProgressIndicator';
 
 interface RenderMessage extends Message {
   isStreaming?: boolean;
@@ -300,7 +302,7 @@ function getActivityIcon(activity: Activity): { Icon: typeof Wrench; color: stri
     }
     return { Icon: CheckCircle, color: 'text-green-500/60' };
   }
-  
+
   switch (activity.type) {
     case 'tool_start':
       return { Icon: Wrench, color: 'text-blue-400/60' };
@@ -308,10 +310,18 @@ function getActivityIcon(activity: Activity): { Icon: typeof Wrench; color: stri
       return { Icon: FileText, color: 'text-purple-400/60' };
     case 'tool_executing':
       return { Icon: Zap, color: 'text-amber-400/60' };
+    case 'thinking_preview':
+      return { Icon: Brain, color: 'text-gray-300/60' };
     case 'thinking':
       return { Icon: Brain, color: 'text-gray-400' };
     case 'status':
       return { Icon: Info, color: 'text-blue-400/60' };
+    case 'batch_start':
+      return { Icon: Wrench, color: 'text-blue-400/60' };
+    case 'batch_progress':
+      return { Icon: Zap, color: 'text-amber-400/60' };
+    case 'batch_complete':
+      return { Icon: CheckCircle, color: activity.success ? 'text-green-500/60' : 'text-red-400/70' };
     default:
       return { Icon: Info, color: 'text-gray-400' };
   }
@@ -330,10 +340,18 @@ function getActivityTitle(activity: Activity): string {
       return `Executing ${activity.tool?.replace(/_/g, ' ') || 'tool'}`;
     case 'tool_result':
       return activity.message || `${activity.tool?.replace(/_/g, ' ') || 'Tool'} ${activity.success ? 'completed' : 'failed'}`;
+    case 'thinking_preview':
+      return activity.content || 'Thinking...';
     case 'thinking':
       return activity.content || 'Processing...';
     case 'status':
       return activity.content || 'Status update';
+    case 'batch_start':
+      return `Starting batch of ${activity.batchTotal || 1} tools`;
+    case 'batch_progress':
+      return `Progress: ${activity.batchCompleted || 0}/${activity.batchTotal || 1} tools completed`;
+    case 'batch_complete':
+      return activity.content || `Batch completed ${activity.success ? 'successfully' : 'with errors'}`;
     default:
       return 'Activity';
   }
@@ -341,31 +359,38 @@ function getActivityTitle(activity: Activity): string {
 
 /**
  * Activity card component - Cursor-style lightweight inline display
- * 
+ *
  * Design principles:
  * - Borderless, flat design with no card styling
  * - Single line focus: icon + text + timestamp
  * - Muted colors with opacity (never bright)
  * - Progressive disclosure: details on hover/click
  * - Minimal spacing: blends seamlessly with messages
+ * - Phase 2: Handle thinking previews and batch progress indicators
  */
 function ActivityCard({ activity }: { activity: Activity }) {
   const [expanded, setExpanded] = useState(false);
-  const [hovering, setHovering] = useState(false);
   const { Icon, color } = getActivityIcon(activity);
   const title = getActivityTitle(activity);
   const hasDetails = activity.params || activity.result;
   const timestamp = formatAbsoluteTimestamp(activity.timestamp);
-  
+
+  // For thinking_preview, use the dedicated ThoughtPreviewChip component
+  if (activity.type === 'thinking_preview') {
+    return <ThoughtPreviewChip activity={activity} />;
+  }
+
+  // For batch events, use the BatchProgressIndicator if we have multiple tools
+  if (activity.type === 'batch_start' || activity.type === 'batch_progress' || activity.type === 'batch_complete') {
+    // Don't render individual batch events - they're handled by BatchProgressIndicator
+    return null;
+  }
+
   // For thinking/status types, use even more minimal styling (no icon, smaller font)
   const isSubtle = activity.type === 'thinking' || activity.type === 'status';
-  
+
   return (
-    <div 
-      className="my-1 py-0.5 animate-fadeIn w-full"
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-    >
+    <div className="my-1 py-0.5 animate-fadeIn w-full">
       {/* Single line: icon + text + timestamp */}
       <div className="flex items-center gap-2">
         {/* Icon - 14px, muted with opacity, hidden for subtle types */}
@@ -374,11 +399,11 @@ function ActivityCard({ activity }: { activity: Activity }) {
             <Icon size={14} strokeWidth={1.5} />
           </div>
         )}
-        
+
         {/* Content - truncates with ellipsis if too long */}
         <div className="flex-1 min-w-0 overflow-hidden">
-          <span 
-            className={`${isSubtle ? 'text-[11px]' : 'text-xs'} text-[var(--fg)]/70 truncate block`} 
+          <span
+            className={`${isSubtle ? 'text-[11px]' : 'text-xs'} text-[var(--fg)]/70 truncate block`}
             title={title}
           >
             {title}
@@ -389,13 +414,13 @@ function ActivityCard({ activity }: { activity: Activity }) {
             </span>
           )}
         </div>
-        
+
         {/* Timestamp - always visible, right-aligned */}
         <time className="text-[11px] text-[var(--fg)]/40 whitespace-nowrap flex-shrink-0">
           {timestamp}
         </time>
       </div>
-      
+
       {/* Show/Hide details link - always available so touch users can expand */}
       {hasDetails && (
         <div className="ml-5 mt-0.5">
@@ -409,7 +434,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
           </button>
         </div>
       )}
-      
+
       {/* Expandable details - simple indented text, no background */}
       {hasDetails && expanded && (
         <div className="ml-5 mt-1 animate-fadeIn">
@@ -485,22 +510,22 @@ export function ChatPane({
 
   // Merge messages and activities, sorted by timestamp
   type TimelineItem = (RenderMessage & { itemType: 'message' }) | (Activity & { itemType: 'activity' });
-  
+
   const timelineItems: TimelineItem[] = useMemo(() => {
     if (!agent) return [];
-    
+
     const items: TimelineItem[] = [];
-    
+
     // Add visible messages
     visibleMessages.forEach((message) => {
       items.push({ ...message, itemType: 'message' as const });
     });
-    
+
     // Add activities
     activities.forEach((activity) => {
       items.push({ ...activity, itemType: 'activity' as const });
     });
-    
+
     // Add streaming message if applicable
     if (isStreaming) {
       items.push({
@@ -513,22 +538,38 @@ export function ChatPane({
         itemType: 'message' as const,
       });
     }
-    
+
     // Sort by timestamp
     items.sort((a, b) => {
       const aTime = new Date(a.itemType === 'message' ? a.createdAt : a.timestamp).getTime();
       const bTime = new Date(b.itemType === 'message' ? b.createdAt : b.timestamp).getTime();
       return aTime - bTime;
     });
-    
+
     console.log('📋 Timeline items:', {
       total: items.length,
       messages: items.filter(i => i.itemType === 'message').length,
       activities: items.filter(i => i.itemType === 'activity').length
     });
-    
+
     return items;
   }, [agent, visibleMessages, activities, isStreaming, streamingMessage, streamingStartedAt]);
+
+  // Group activities by batch for batch progress indicators
+  const activitiesByBatch = useMemo(() => {
+    const batches = new Map<string, Activity[]>();
+
+    activities.forEach(activity => {
+      if (activity.batchId) {
+        if (!batches.has(activity.batchId)) {
+          batches.set(activity.batchId, []);
+        }
+        batches.get(activity.batchId)!.push(activity);
+      }
+    });
+
+    return batches;
+  }, [activities]);
 
   // Auto-scroll to bottom when new messages arrive or streaming updates
   useEffect(() => {
@@ -644,12 +685,16 @@ export function ChatPane({
                 setStreamingMessage('');
                 setStreamingStartedAt(null);
               } else if (
-                data.type === 'tool_start' || 
-                data.type === 'tool_params' || 
-                data.type === 'tool_executing' || 
-                data.type === 'tool_result' || 
+                data.type === 'tool_start' ||
+                data.type === 'tool_params' ||
+                data.type === 'tool_executing' ||
+                data.type === 'tool_result' ||
+                data.type === 'thinking_preview' ||
                 data.type === 'thinking' ||
-                data.type === 'status'
+                data.type === 'status' ||
+                data.type === 'batch_start' ||
+                data.type === 'batch_progress' ||
+                data.type === 'batch_complete'
               ) {
                 const targetAgentId = agent?.id ?? currentAgentId;
                 if (!targetAgentId) {
@@ -669,6 +714,9 @@ export function ChatPane({
                   message: data.message,
                   content: data.content,
                   error: data.error,
+                  batchId: data.batchId,
+                  batchTotal: data.batchTotal,
+                  batchCompleted: data.batchCompleted,
                   timestamp: new Date().toISOString()
                 };
                 console.log('📊 Activity created:', {
@@ -821,6 +869,17 @@ export function ChatPane({
             {timelineItems.map((item, index) => {
               // Check if this is an activity or message
               if (item.itemType === 'activity') {
+                // Handle batch progress indicators separately
+                if (item.batchId && activitiesByBatch.has(item.batchId)) {
+                  const batchActivities = activitiesByBatch.get(item.batchId)!;
+                  // Only render batch progress indicator once per batch, at the first activity
+                  if (batchActivities[0]?.id === item.id) {
+                    return <BatchProgressIndicator key={item.batchId} activities={batchActivities} />;
+                  }
+                  // Skip individual batch activities since they're handled by the indicator
+                  return null;
+                }
+
                 // Only render activities that have valid content
                 const hasDisplayableContent = Boolean(
                   item.tool ||
@@ -830,7 +889,8 @@ export function ChatPane({
                     item.result ||
                     item.error ||
                     item.type === 'thinking' ||
-                    item.type === 'status'
+                    item.type === 'status' ||
+                    item.type === 'thinking_preview'
                 );
                 if (!hasDisplayableContent) {
                   console.warn('Skipping activity with no content:', item);
