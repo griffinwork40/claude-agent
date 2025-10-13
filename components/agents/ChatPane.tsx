@@ -1015,7 +1015,7 @@ export function ChatPane({
             <div className="flex flex-1 items-end gap-2">
               <textarea
                 aria-label="Message"
-                rows={isMobile ? 3 : 2}
+                rows={isMobile ? 1 : 2}
                 className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 py-3 ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
                 placeholder="Type a message..."
                 value={text}
