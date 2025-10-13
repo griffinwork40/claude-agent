@@ -4,4 +4,4 @@ dist/
 .env
 linkedin-sessions/
 *.log
-
+tsconfig.tsbuildinfo
