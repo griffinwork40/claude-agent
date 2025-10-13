@@ -10,7 +10,7 @@ export interface JobOpportunity {
   salary?: string;
   url?: string;
   application_url: string;
-  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google';
+  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google' | 'manual';
   skills: string[];
   experience_level: string;
   job_type: string;
@@ -18,7 +18,9 @@ export interface JobOpportunity {
   match_percentage?: number;
   applied: boolean;
   applied_at?: string;
-  status: 'discovered' | 'interested' | 'applied' | 'rejected';
+  status: 'discovered' | 'interested' | 'applied' | 'rejected' | 'error' | 'fallback';
+  error?: string;
+  fallback_url?: string;
   raw_data?: Record<string, unknown>;
   created_at: string;
 }

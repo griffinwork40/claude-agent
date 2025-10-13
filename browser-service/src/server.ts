@@ -244,6 +244,16 @@ app.post('/api/browser/close', authenticate, async (req: Request, res: Response)
 app.post('/api/search-indeed', authenticate, async (req: Request, res: Response) => {
   try {
     const { keywords, location, experience_level, remote } = req.body;
+    
+    // Validate required parameters
+    if (!keywords || !location) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameters: keywords and location are required',
+        details: { keywords: !!keywords, location: !!location }
+      });
+    }
+    
     console.log('🔍 Indeed search request:', { keywords, location, experience_level, remote });
     
     const browserService = getBrowserJobService();
@@ -260,7 +270,8 @@ app.post('/api/search-indeed', authenticate, async (req: Request, res: Response)
     console.error('❌ Error searching Indeed:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message || 'Unknown error occurred'
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -269,6 +280,16 @@ app.post('/api/search-indeed', authenticate, async (req: Request, res: Response)
 app.post('/api/search-google', authenticate, async (req: Request, res: Response) => {
   try {
     const { keywords, location, experience_level, remote } = req.body;
+    
+    // Validate required parameters
+    if (!keywords || !location) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameters: keywords and location are required',
+        details: { keywords: !!keywords, location: !!location }
+      });
+    }
+    
     console.log('🔍 Google Jobs search request:', { keywords, location, experience_level, remote });
     
     const browserService = getBrowserJobService();
@@ -285,7 +306,8 @@ app.post('/api/search-google', authenticate, async (req: Request, res: Response)
     console.error('❌ Error searching Google Jobs:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message || 'Unknown error occurred'
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -294,6 +316,16 @@ app.post('/api/search-google', authenticate, async (req: Request, res: Response)
 app.post('/api/search-linkedin', authenticate, async (req: Request, res: Response) => {
   try {
     const { keywords, location, experience_level, remote, userId } = req.body;
+    
+    // Validate required parameters
+    if (!keywords || !location || !userId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameters: keywords, location, and userId are required',
+        details: { keywords: !!keywords, location: !!location, userId: !!userId }
+      });
+    }
+    
     console.log('🔍 LinkedIn search request:', { keywords, location, experience_level, remote, userId });
     
     const browserService = getBrowserJobService();
@@ -311,7 +343,8 @@ app.post('/api/search-linkedin', authenticate, async (req: Request, res: Respons
     console.error('❌ Error searching LinkedIn:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message || 'Unknown error occurred'
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });

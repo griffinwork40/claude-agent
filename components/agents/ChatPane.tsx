@@ -18,8 +18,6 @@ import {
   Square,
   Loader2
 } from 'lucide-react';
-import { ThoughtPreviewChip } from './ThoughtPreviewChip';
-import { BatchProgressIndicator } from './BatchProgressIndicator';
 
 interface RenderMessage extends Message {
   isStreaming?: boolean;
@@ -305,7 +303,7 @@ function getActivityIcon(activity: Activity): { Icon: typeof Wrench; color: stri
     }
     return { Icon: CheckCircle, color: 'text-green-500/60' };
   }
-
+  
   switch (activity.type) {
     case 'tool_start':
       return { Icon: Wrench, color: 'text-blue-400/60' };
@@ -313,18 +311,10 @@ function getActivityIcon(activity: Activity): { Icon: typeof Wrench; color: stri
       return { Icon: FileText, color: 'text-purple-400/60' };
     case 'tool_executing':
       return { Icon: Zap, color: 'text-amber-400/60' };
-    case 'thinking_preview':
-      return { Icon: Brain, color: 'text-gray-300/60' };
     case 'thinking':
       return { Icon: Brain, color: 'text-gray-400' };
     case 'status':
       return { Icon: Info, color: 'text-blue-400/60' };
-    case 'batch_start':
-      return { Icon: Wrench, color: 'text-blue-400/60' };
-    case 'batch_progress':
-      return { Icon: Zap, color: 'text-amber-400/60' };
-    case 'batch_complete':
-      return { Icon: CheckCircle, color: activity.success ? 'text-green-500/60' : 'text-red-400/70' };
     default:
       return { Icon: Info, color: 'text-gray-400' };
   }
@@ -343,18 +333,10 @@ function getActivityTitle(activity: Activity): string {
       return `Executing ${activity.tool?.replace(/_/g, ' ') || 'tool'}`;
     case 'tool_result':
       return activity.message || `${activity.tool?.replace(/_/g, ' ') || 'Tool'} ${activity.success ? 'completed' : 'failed'}`;
-    case 'thinking_preview':
-      return activity.content || 'Thinking...';
     case 'thinking':
       return activity.content || 'Processing...';
     case 'status':
       return activity.content || 'Status update';
-    case 'batch_start':
-      return `Starting batch of ${activity.batchTotal || 1} tools`;
-    case 'batch_progress':
-      return `Progress: ${activity.batchCompleted || 0}/${activity.batchTotal || 1} tools completed`;
-    case 'batch_complete':
-      return activity.content || `Batch completed ${activity.success ? 'successfully' : 'with errors'}`;
     default:
       return 'Activity';
   }
@@ -362,38 +344,31 @@ function getActivityTitle(activity: Activity): string {
 
 /**
  * Activity card component - Cursor-style lightweight inline display
- *
+ * 
  * Design principles:
  * - Borderless, flat design with no card styling
  * - Single line focus: icon + text + timestamp
  * - Muted colors with opacity (never bright)
  * - Progressive disclosure: details on hover/click
  * - Minimal spacing: blends seamlessly with messages
- * - Phase 2: Handle thinking previews and batch progress indicators
  */
 function ActivityCard({ activity }: { activity: Activity }) {
   const [expanded, setExpanded] = useState(false);
+  const [hovering, setHovering] = useState(false);
   const { Icon, color } = getActivityIcon(activity);
   const title = getActivityTitle(activity);
   const hasDetails = activity.params || activity.result;
   const timestamp = formatAbsoluteTimestamp(activity.timestamp);
-
-  // For thinking_preview, use the dedicated ThoughtPreviewChip component
-  if (activity.type === 'thinking_preview') {
-    return <ThoughtPreviewChip activity={activity} />;
-  }
-
-  // For batch events, use the BatchProgressIndicator if we have multiple tools
-  if (activity.type === 'batch_start' || activity.type === 'batch_progress' || activity.type === 'batch_complete') {
-    // Don't render individual batch events - they're handled by BatchProgressIndicator
-    return null;
-  }
-
+  
   // For thinking/status types, use even more minimal styling (no icon, smaller font)
   const isSubtle = activity.type === 'thinking' || activity.type === 'status';
-
+  
   return (
-    <div className="my-1 py-0.5 animate-fadeIn w-full">
+    <div 
+      className="my-1 py-0.5 animate-fadeIn w-full"
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
       {/* Single line: icon + text + timestamp */}
       <div className="flex items-center gap-2">
         {/* Icon - 14px, muted with opacity, hidden for subtle types */}
@@ -402,11 +377,11 @@ function ActivityCard({ activity }: { activity: Activity }) {
             <Icon size={14} strokeWidth={1.5} />
           </div>
         )}
-
+        
         {/* Content - truncates with ellipsis if too long */}
         <div className="flex-1 min-w-0 overflow-hidden">
-          <span
-            className={`${isSubtle ? 'text-[11px]' : 'text-xs'} text-[var(--fg)]/70 truncate block`}
+          <span 
+            className={`${isSubtle ? 'text-[11px]' : 'text-xs'} text-[var(--fg)]/70 truncate block`} 
             title={title}
           >
             {title}
@@ -416,14 +391,24 @@ function ActivityCard({ activity }: { activity: Activity }) {
               {activity.error}
             </span>
           )}
+          {activity.fallback_url && (
+            <a 
+              href={activity.fallback_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-blue-400/80 ml-2 hover:text-blue-300/90 underline"
+            >
+              Manual Search →
+            </a>
+          )}
         </div>
-
+        
         {/* Timestamp - always visible, right-aligned */}
         <time className="text-[11px] text-[var(--fg)]/40 whitespace-nowrap flex-shrink-0">
           {timestamp}
         </time>
       </div>
-
+      
       {/* Show/Hide details link - always available so touch users can expand */}
       {hasDetails && (
         <div className="ml-5 mt-0.5">
@@ -437,7 +422,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
           </button>
         </div>
       )}
-
+      
       {/* Expandable details - simple indented text, no background */}
       {hasDetails && expanded && (
         <div className="ml-5 mt-1 animate-fadeIn">
@@ -482,6 +467,8 @@ export function ChatPane({
     return externalActivities.filter((activity) => activity.agentId === agent.id);
   });
   const endRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerPadding = isMobile ? '0.5rem' : '0.75rem';
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -672,71 +659,69 @@ export function ChatPane({
 
   // Merge messages and activities, sorted by timestamp
   type TimelineItem = (RenderMessage & { itemType: 'message' }) | (Activity & { itemType: 'activity' });
-
+  
   const timelineItems: TimelineItem[] = useMemo(() => {
     if (!agent) return [];
-
+    
     const items: TimelineItem[] = [];
-
+    
     // Add visible messages
     visibleMessages.forEach((message) => {
       items.push({ ...message, itemType: 'message' as const });
     });
-
+    
     // Add activities
     activities.forEach((activity) => {
       items.push({ ...activity, itemType: 'activity' as const });
     });
-
-    // Add streaming message if applicable
-    if (isStreaming) {
+    
+    // Add streaming message if applicable (including during completion-reload transition)
+    if (isStreaming || streamingMessage) {
       items.push({
         id: 'streaming',
         agentId: agent.id,
         role: 'assistant',
         content: streamingMessage,
         createdAt: streamingStartedAt ?? new Date().toISOString(),
-        isStreaming: true,
+        isStreaming: isStreaming,
         itemType: 'message' as const,
       });
     }
-
+    
     // Sort by timestamp
     items.sort((a, b) => {
       const aTime = new Date(a.itemType === 'message' ? a.createdAt : a.timestamp).getTime();
       const bTime = new Date(b.itemType === 'message' ? b.createdAt : b.timestamp).getTime();
       return aTime - bTime;
     });
-
+    
     console.log('📋 Timeline items:', {
       total: items.length,
       messages: items.filter(i => i.itemType === 'message').length,
       activities: items.filter(i => i.itemType === 'activity').length
     });
-
+    
     return items;
   }, [agent, visibleMessages, activities, isStreaming, streamingMessage, streamingStartedAt]);
-
-  // Group activities by batch for batch progress indicators
-  const activitiesByBatch = useMemo(() => {
-    const batches = new Map<string, Activity[]>();
-
-    activities.forEach(activity => {
-      if (activity.batchId) {
-        if (!batches.has(activity.batchId)) {
-          batches.set(activity.batchId, []);
-        }
-        batches.get(activity.batchId)!.push(activity);
-      }
-    });
-
-    return batches;
-  }, [activities]);
 
   // Auto-scroll to bottom when new messages arrive or streaming updates
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [timelineItems]);
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+
+    // Set the height to the scrollHeight, but cap it at a reasonable max
+    const maxHeight = isMobile ? 120 : 100; // Max height in pixels
+    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+    textarea.style.height = `${newHeight}px`;
+  }, [text, isMobile]);
 
   const handleStreamingSend = async (content: string) => {
     if (!agent || isStreaming) return;
@@ -829,34 +814,33 @@ export function ChatPane({
                 setStreamingMessage(prev => prev + data.content);
               } else if (data.type === 'complete') {
                 console.log('✓ Stream completed, sessionId:', data.sessionId);
-                
-                // Clear streaming state - message is already saved to DB by API route
-                setStreamingMessage('');
+
+                // Set completion flag but keep the streaming message visible until reload
                 setSessionId(data.sessionId);
                 setIsStreaming(false);
                 setStreamingStartedAt(null);
-                
+
                 // Reload messages from database to show the complete assistant response
                 // This prevents duplicates since we're using the DB as source of truth
                 if (typeof window !== 'undefined') {
                   window.dispatchEvent(new CustomEvent('reload-messages'));
                 }
+              } else if (data.type === 'messages-reloaded') {
+                // Custom event to indicate messages have been reloaded
+                console.log('✓ Messages reloaded, clearing streaming state');
+                setStreamingMessage('');
               } else if (data.type === 'error') {
                 console.error('❌ Streaming error:', data.error);
                 setIsStreaming(false);
                 setStreamingMessage('');
                 setStreamingStartedAt(null);
               } else if (
-                data.type === 'tool_start' ||
-                data.type === 'tool_params' ||
-                data.type === 'tool_executing' ||
-                data.type === 'tool_result' ||
-                data.type === 'thinking_preview' ||
+                data.type === 'tool_start' || 
+                data.type === 'tool_params' || 
+                data.type === 'tool_executing' || 
+                data.type === 'tool_result' || 
                 data.type === 'thinking' ||
-                data.type === 'status' ||
-                data.type === 'batch_start' ||
-                data.type === 'batch_progress' ||
-                data.type === 'batch_complete'
+                data.type === 'status'
               ) {
                 const targetAgentId = agent?.id ?? currentAgentId;
                 if (!targetAgentId) {
@@ -876,9 +860,6 @@ export function ChatPane({
                   message: data.message,
                   content: data.content,
                   error: data.error,
-                  batchId: data.batchId,
-                  batchTotal: data.batchTotal,
-                  batchCompleted: data.batchCompleted,
                   timestamp: new Date().toISOString()
                 };
                 console.log('📊 Activity created:', {
@@ -945,118 +926,15 @@ export function ChatPane({
       )}
 
       <div className={`flex-1 overflow-auto ${isMobile ? 'p-4' : 'p-3'} flex flex-col`}>
-        {timelineItems.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="w-full max-w-xl px-4">
-              <div className="text-center mb-6 animate-fadeIn">
-                <h2 className="text-2xl font-bold text-[var(--fg)] mb-2">Welcome!</h2>
-                <p className="text-sm text-[var(--fg)]/60">Get started with one of these common tasks</p>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
-                {/* Prompt 1: Find me 5 jobs */}
-                <button
-                  onClick={() => handleStreamingSend("Find me 5 jobs you think I'd like")}
-                  disabled={isStreaming}
-                  className="group flex flex-col items-start gap-3 p-4 rounded-xl bg-[var(--card)] border-2 border-[var(--border)] hover:border-brand-500 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 text-left min-h-[100px]"
-                  aria-label="Find me 5 jobs you think I'd like"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-[var(--fg)] leading-relaxed">
-                      Find me 5 jobs you think I&apos;d like
-                    </p>
-                  </div>
-                </button>
-
-                {/* Prompt 2: Update resume */}
-                <button
-                  onClick={() => handleStreamingSend("Help me update my resume for tech jobs")}
-                  disabled={isStreaming}
-                  className="group flex flex-col items-start gap-3 p-4 rounded-xl bg-[var(--card)] border-2 border-[var(--border)] hover:border-brand-500 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 text-left min-h-[100px]"
-                  aria-label="Help me update my resume for tech jobs"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-[var(--fg)] leading-relaxed">
-                      Help me update my resume for tech jobs
-                    </p>
-                  </div>
-                </button>
-
-                {/* Prompt 3: Remote positions */}
-                <button
-                  onClick={() => handleStreamingSend("Search for remote software engineering positions")}
-                  disabled={isStreaming}
-                  className="group flex flex-col items-start gap-3 p-4 rounded-xl bg-[var(--card)] border-2 border-[var(--border)] hover:border-brand-500 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 text-left min-h-[100px]"
-                  aria-label="Search for remote software engineering positions"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-[var(--fg)] leading-relaxed">
-                      Search for remote software engineering positions
-                    </p>
-                  </div>
-                </button>
-
-                {/* Prompt 4: Top skills */}
-                <button
-                  onClick={() => handleStreamingSend("What are the top skills employers are looking for?")}
-                  disabled={isStreaming}
-                  className="group flex flex-col items-start gap-3 p-4 rounded-xl bg-[var(--card)] border-2 border-[var(--border)] hover:border-brand-500 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 text-left min-h-[100px]"
-                  aria-label="What are the top skills employers are looking for?"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-[var(--fg)] leading-relaxed">
-                      What are the top skills employers are looking for?
-                    </p>
-                  </div>
-                </button>
-              </div>
-            </div>
+        {visibleMessages.length === 0 && !isStreaming ? (
+          <div className="flex items-center justify-center h-full text-[var(--fg)]/60 text-sm">
+            No messages yet. Start a conversation!
           </div>
         ) : (
           <>
             {timelineItems.map((item, index) => {
               // Check if this is an activity or message
               if (item.itemType === 'activity') {
-                // Handle batch progress indicators separately
-                if (item.batchId && activitiesByBatch.has(item.batchId)) {
-                  const batchActivities = activitiesByBatch.get(item.batchId)!;
-                  // Only render batch progress indicator once per batch, at the first activity
-                  if (batchActivities[0]?.id === item.id) {
-                    return <BatchProgressIndicator key={item.batchId} activities={batchActivities} />;
-                  }
-                  // Skip individual batch activities since they're handled by the indicator
-                  return null;
-                }
-
                 // Only render activities that have valid content
                 const hasDisplayableContent = Boolean(
                   item.tool ||
@@ -1066,8 +944,7 @@ export function ChatPane({
                     item.result ||
                     item.error ||
                     item.type === 'thinking' ||
-                    item.type === 'status' ||
-                    item.type === 'thinking_preview'
+                    item.type === 'status'
                 );
                 if (!hasDisplayableContent) {
                   console.warn('Skipping activity with no content:', item);
@@ -1115,9 +992,11 @@ export function ChatPane({
                       className={`w-full text-left ${theme.bubble} ${bubbleClasses}`}
                     >
                       {renderMarkdown(message.content, messageKeyPrefix)}
-                      {message.isStreaming && (
-                        <span className={`ml-1 inline-block align-middle text-sm ${message.role === 'assistant' ? 'text-[var(--assistant-text)]/60' : 'text-white/80'} animate-cursorPulse`}>
-                          █
+                      {message.isStreaming && !message.content && (
+                        <span className={`inline-block text-sm ${message.role === 'assistant' ? 'text-[var(--assistant-text)]/60' : 'text-white/80'}`}>
+                          <span className="animate-ellipsisDot1">.</span>
+                          <span className="animate-ellipsisDot2">.</span>
+                          <span className="animate-ellipsisDot3">.</span>
                         </span>
                       )}
                     </div>
@@ -1130,21 +1009,33 @@ export function ChatPane({
         <div ref={endRef} />
       </div>
 
-      <footer className={`${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}>
+      <footer
+        className={`flex-shrink-0 ${isMobile ? 'px-4 pt-3' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}
+        style={{
+          paddingBottom: isMobile
+            ? `calc(${composerPadding} + env(safe-area-inset-bottom, 0px))`
+            : composerPadding,
+        }}
+      >
         <form
           onSubmit={(e) => {
             e.preventDefault();
             if (!text.trim() || isStreaming) return;
             handleStreamingSend(text.trim());
             setText('');
+            // Reset textarea height after clearing
+            if (textareaRef.current) {
+              textareaRef.current.style.height = 'auto';
+            }
           }}
           className="flex flex-col gap-2"
         >
           <div className="flex items-end gap-2">
             <div className="flex flex-1 items-end gap-2">
               <textarea
+                ref={textareaRef}
                 aria-label="Message"
-                rows={isMobile ? 3 : 2}
+                rows={isMobile ? 1 : 2}
                 className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 py-3 ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
                 placeholder="Type a message..."
                 value={text}
@@ -1155,6 +1046,10 @@ export function ChatPane({
                     if (!text.trim() || isStreaming) return;
                     handleStreamingSend(text.trim());
                     setText('');
+                    // Reset textarea height after clearing
+                    if (textareaRef.current) {
+                      textareaRef.current.style.height = 'auto';
+                    }
                   }
                 }}
               />

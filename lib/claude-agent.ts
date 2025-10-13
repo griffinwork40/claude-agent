@@ -806,46 +806,82 @@ async function executeTools(
             break;
             
           case 'search_jobs_indeed':
-            const indeedJobsResult = await browserService.searchJobsIndeed({
-              keywords: input.keywords,
-              location: input.location,
-              experience_level: input.experience_level,
-              remote: input.remote
-            });
-            result = {
-              success: true,
-              data: indeedJobsResult,
-              message: `Found ${indeedJobsResult.length} jobs on Indeed`
-            };
+            console.log('🔍 Executing search_jobs_indeed:', input);
+            try {
+              const indeedJobsResult = await browserService.searchJobsIndeed({
+                keywords: input.keywords,
+                location: input.location,
+                experience_level: input.experience_level,
+                remote: input.remote
+              });
+              console.log(`✓ Indeed search completed: ${indeedJobsResult.length} jobs found`);
+              result = {
+                success: true,
+                data: indeedJobsResult,
+                message: `Found ${indeedJobsResult.length} jobs on Indeed`
+              };
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Indeed search tool failed:', errMessage);
+              result = {
+                success: false,
+                error: `Indeed search failed: ${errMessage}`,
+                message: `Failed to search Indeed: ${errMessage}`
+              };
+            }
             break;
             
           case 'search_jobs_google':
-            const googleJobsResult = await browserService.searchJobsGoogle({
-              keywords: input.keywords,
-              location: input.location,
-              experience_level: input.experience_level,
-              remote: input.remote
-            });
-            result = {
-              success: true,
-              data: googleJobsResult,
-              message: `Found ${googleJobsResult.length} jobs on Google Jobs`
-            };
+            console.log('🔍 Executing search_jobs_google:', input);
+            try {
+              const googleJobsResult = await browserService.searchJobsGoogle({
+                keywords: input.keywords,
+                location: input.location,
+                experience_level: input.experience_level,
+                remote: input.remote
+              });
+              console.log(`✓ Google Jobs search completed: ${googleJobsResult.length} jobs found`);
+              result = {
+                success: true,
+                data: googleJobsResult,
+                message: `Found ${googleJobsResult.length} jobs on Google Jobs`
+              };
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Google Jobs search tool failed:', errMessage);
+              result = {
+                success: false,
+                error: `Google Jobs search failed: ${errMessage}`,
+                message: `Failed to search Google Jobs: ${errMessage}`
+              };
+            }
             break;
             
           case 'search_jobs_linkedin':
-            const linkedinJobsResult = await browserService.searchJobsLinkedIn({
-              keywords: input.keywords,
-              location: input.location,
-              experience_level: input.experience_level,
-              remote: input.remote,
-              userId: input.userId || userId
-            });
-            result = {
-              success: true,
-              data: linkedinJobsResult,
-              message: `Found ${linkedinJobsResult.length} jobs on LinkedIn`
-            };
+            console.log('🔍 Executing search_jobs_linkedin:', input);
+            try {
+              const linkedinJobsResult = await browserService.searchJobsLinkedIn({
+                keywords: input.keywords,
+                location: input.location,
+                experience_level: input.experience_level,
+                remote: input.remote,
+                userId: input.userId || userId
+              });
+              console.log(`✓ LinkedIn search completed: ${linkedinJobsResult.length} jobs found`);
+              result = {
+                success: true,
+                data: linkedinJobsResult,
+                message: `Found ${linkedinJobsResult.length} jobs on LinkedIn`
+              };
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ LinkedIn search tool failed:', errMessage);
+              result = {
+                success: false,
+                error: `LinkedIn search failed: ${errMessage}`,
+                message: `Failed to search LinkedIn: ${errMessage}`
+              };
+            }
             break;
             
           default:
