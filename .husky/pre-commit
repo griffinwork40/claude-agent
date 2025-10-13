@@ -1,5 +1,5 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
+#!/usr/bin/env bash
+# .husky/pre-commit Purpose: Run project linting and type-check tasks before commits.
 
 set -eu
 

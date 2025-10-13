@@ -4,16 +4,19 @@
  */
 'use client';
 
-import { useMemo, useRef, useState, useEffect, ReactNode } from 'react';
+import { useMemo, useRef, useState, useEffect, useCallback, ReactNode } from 'react';
 import { ChatPaneProps, Activity, Message } from './types';
-import { 
-  Wrench, 
-  FileText, 
-  Zap, 
-  CheckCircle, 
-  XCircle, 
-  Brain, 
-  Info 
+import {
+  Wrench,
+  FileText,
+  Zap,
+  CheckCircle,
+  XCircle,
+  Brain,
+  Info,
+  Mic,
+  Square,
+  Loader2
 } from 'lucide-react';
 
 interface RenderMessage extends Message {
@@ -444,6 +447,13 @@ export function ChatPane({
   isMobile = false,
 }: ChatPaneProps) {
   const [text, setText] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [isAudioCaptureSupported, setIsAudioCaptureSupported] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -458,9 +468,158 @@ export function ChatPane({
   });
   const endRef = useRef<HTMLDivElement | null>(null);
   const composerPadding = isMobile ? '0.5rem' : '0.75rem';
-  const composerTextAreaPadding = isMobile ? 'py-2' : 'py-3';
-  const composerButtonPadding = isMobile ? 'px-4 py-2' : 'px-4 py-2.5';
-  const composerRows = isMobile ? 1 : 2;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const mediaDevicesAvailable =
+      typeof navigator !== 'undefined' && typeof navigator.mediaDevices !== 'undefined';
+    const supportsMediaRecorder = typeof MediaRecorder !== 'undefined';
+
+    if (mediaDevicesAvailable && supportsMediaRecorder) {
+      setIsAudioCaptureSupported(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      mediaRecorderRef.current?.stop();
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    };
+  }, []);
+
+  const handleTranscription = useCallback(
+    async (audioBlob: Blob) => {
+      setIsTranscribing(true);
+      setRecordingError(null);
+
+      try {
+        const transcriptionForm = new FormData();
+        transcriptionForm.append('audio', audioBlob, `recording-${Date.now()}.webm`);
+
+        const response = await fetch('/api/speech-to-text', {
+          method: 'POST',
+          body: transcriptionForm,
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          const message =
+            typeof errorBody.error === 'string'
+              ? errorBody.error
+              : 'Unable to transcribe audio right now.';
+          setRecordingError(message);
+          return;
+        }
+
+        const data = (await response.json()) as { text?: string };
+        if (data.text) {
+          setText((prev) => {
+            if (!prev) {
+              return data.text ?? '';
+            }
+
+            const delimiter = /\s$/.test(prev) ? '' : ' ';
+            return `${prev}${delimiter}${data.text}`;
+          });
+        }
+      } catch (error) {
+        console.error('Transcription request failed', error);
+        setRecordingError('Unexpected error while transcribing audio.');
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+    []
+  );
+
+  const stopStream = useCallback(() => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+  }, []);
+
+  const handleStartRecording = useCallback(async () => {
+    if (isStreaming || isTranscribing || !isAudioCaptureSupported) {
+      return;
+    }
+
+    try {
+      setRecordingError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      recordedChunksRef.current = [];
+
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        stopStream();
+        setIsRecording(false);
+        const chunks = recordedChunksRef.current;
+        recordedChunksRef.current = [];
+
+        if (chunks.length === 0) {
+          return;
+        }
+
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        await handleTranscription(blob);
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Failed to start audio recording', error);
+      setRecordingError('Microphone permission denied or unavailable.');
+      stopStream();
+      mediaRecorderRef.current = null;
+    }
+  }, [handleTranscription, isAudioCaptureSupported, isStreaming, isTranscribing, stopStream]);
+
+  const handleRecordingToggle = useCallback(async () => {
+    if (isStreaming || isTranscribing) {
+      return;
+    }
+
+    if (!isRecording) {
+      await handleStartRecording();
+      return;
+    }
+
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+  }, [handleStartRecording, isRecording, isStreaming, isTranscribing]);
+
+  useEffect(() => {
+    if (!isRecording) {
+      return;
+    }
+
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (recorder.state === 'recording') {
+        recorder.stop();
+      }
+    }, 60_000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [isRecording]);
 
   // Reset session when agent changes
   useEffect(() => {
@@ -726,6 +885,21 @@ export function ChatPane({
     }
   };
 
+  const microphoneDisabled = !isRecording && (isStreaming || isTranscribing || !isAudioCaptureSupported);
+  const microphoneAriaLabel = isRecording
+    ? 'Stop recording voice prompt'
+    : isTranscribing
+      ? 'Transcribing voice prompt'
+      : 'Record a voice prompt';
+
+  const statusMessage = recordingError
+    ? recordingError
+    : isTranscribing
+      ? 'Transcribing voice prompt…'
+      : isRecording
+        ? 'Recording… tap the microphone to stop.'
+        : '';
+
   return (
     <section className={`h-full flex flex-col ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
       {!isMobile && (
@@ -835,31 +1009,59 @@ export function ChatPane({
             handleStreamingSend(text.trim());
             setText('');
           }}
-          className="flex items-end gap-2"
+          className="flex flex-col gap-2"
         >
-          <textarea
-            aria-label="Message"
-            rows={composerRows}
-            className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 ${composerTextAreaPadding} ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
-            placeholder="Type a message..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!text.trim() || isStreaming) return;
-                handleStreamingSend(text.trim());
-                setText('');
-              }
-            }}
-          />
-          <button
-            type="submit"
-            disabled={isStreaming}
-            className={`self-stretch ${composerButtonPadding} rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150`}
-          >
-            {isStreaming ? 'Sending...' : 'Send'}
-          </button>
+          <div className="flex items-end gap-2">
+            <div className="flex flex-1 items-end gap-2">
+              <textarea
+                aria-label="Message"
+                rows={isMobile ? 3 : 2}
+                className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 py-3 ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
+                placeholder="Type a message..."
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!text.trim() || isStreaming) return;
+                    handleStreamingSend(text.trim());
+                    setText('');
+                  }
+                }}
+              />
+              {isAudioCaptureSupported && (
+                <button
+                  type="button"
+                  onClick={handleRecordingToggle}
+                  disabled={microphoneDisabled}
+                  aria-pressed={isRecording}
+                  aria-label={microphoneAriaLabel}
+                  title={microphoneAriaLabel}
+                  className={`${isMobile ? 'h-12 w-12' : 'h-10 w-10'} flex items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--card)]/90 focus:outline-none focus:ring-2 focus:ring-brand-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {isTranscribing ? (
+                    <Loader2 className={`${isMobile ? 'h-5 w-5' : 'h-4 w-4'} animate-spin`} />
+                  ) : isRecording ? (
+                    <Square className={isMobile ? 'h-5 w-5 text-red-500' : 'h-4 w-4 text-red-500'} />
+                  ) : (
+                    <Mic className={isMobile ? 'h-5 w-5' : 'h-4 w-4'} />
+                  )}
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={isStreaming}
+              className={`self-stretch ${isMobile ? 'px-5 py-3' : 'px-4 py-2.5'} rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150`}
+            >
+              {isStreaming ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+          {(statusMessage || recordingError) && (
+            <p className="text-xs text-[var(--timestamp-subtle)]" aria-live="polite" role="status">
+              {statusMessage}
+            </p>
+          )}
         </form>
       </footer>
     </section>

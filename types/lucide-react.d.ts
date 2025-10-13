@@ -16,5 +16,8 @@ declare module 'lucide-react' {
   export const XCircle: LucideIcon;
   export const Brain: LucideIcon;
   export const Info: LucideIcon;
+  export const Mic: LucideIcon;
+  export const Square: LucideIcon;
+  export const Loader2: LucideIcon;
   export default {} as Record<string, LucideIcon>;
 }
