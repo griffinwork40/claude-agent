@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
   // auth-helpers middleware already updates cookies; just redirect to settings or redirect param
   const redirectParam = req.nextUrl.searchParams.get('redirect');
   const url = req.nextUrl.clone();
-  url.pathname = redirectParam || '/settings';
+  url.pathname = redirectParam || '/dashboard';
   url.search = '';
   return NextResponse.redirect(url);
 }

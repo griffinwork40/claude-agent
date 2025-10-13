@@ -22,6 +22,27 @@ export class BrowserJobService {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-web-security',
+        '--disable-features=TranslateUI',
+        '--disable-ipc-flooding-protection',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-default-apps',
+        '--disable-popup-blocking',
+        '--disable-extensions',
+        '--disable-plugins',
+        '--disable-images',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-field-trial-config',
+        '--disable-back-forward-cache',
+        '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       ],
     };
     
@@ -40,6 +61,56 @@ export class BrowserJobService {
     }
   }
 
+  // Create a stealth page with anti-detection measures
+  private async createStealthPage(): Promise<Page> {
+    if (!this.browser) {
+      await this.initialize();
+    }
+
+    const page = await this.browser!.newPage();
+    
+    // Add stealth measures
+    await page.addInitScript(() => {
+      // Remove webdriver property
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+      
+      // Mock plugins
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      });
+      
+      // Mock languages
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en'],
+      });
+      
+      // Mock permissions
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+          Promise.resolve({ state: Notification.permission }) :
+          originalQuery.call(window.navigator.permissions, parameters)
+      );
+    });
+    
+    // Set realistic viewport
+    await page.setViewportSize({ width: 1366, height: 768 });
+    
+    // Set extra headers
+    await page.setExtraHTTPHeaders({
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+    });
+    
+    return page;
+  }
+
   // Search jobs on Indeed (no authentication required)
   async searchJobsIndeed(params: {
     keywords: string;
@@ -47,11 +118,7 @@ export class BrowserJobService {
     experience_level?: string;
     remote?: boolean;
   }): Promise<JobOpportunity[]> {
-    if (!this.browser) {
-      await this.initialize();
-    }
-
-    const page = await this.browser!.newPage();
+    const page = await this.createStealthPage();
     
     try {
       // Build Indeed search URL
@@ -60,13 +127,16 @@ export class BrowserJobService {
       
       await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       
+      // Add random delay to look more human
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      
       // Wait for job listings with multiple possible selectors
       await page.waitForSelector('.job_seen_beacon, .jobsearch-ResultsList li, [data-testid="job-card"]', { timeout: 15000 }).catch(() => {
         console.log('Primary selector not found, trying alternative approach');
       });
       
       // Wait a bit for dynamic content
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(2000 + Math.random() * 1000);
       
       // Extract job listings with multiple selector strategies
       const jobs = await page.evaluate(() => {
@@ -120,11 +190,7 @@ export class BrowserJobService {
     experience_level?: string;
     remote?: boolean;
   }): Promise<JobOpportunity[]> {
-    if (!this.browser) {
-      await this.initialize();
-    }
-
-    const page = await this.browser!.newPage();
+    const page = await this.createStealthPage();
     
     try {
       // Build Google Jobs search URL
@@ -133,13 +199,16 @@ export class BrowserJobService {
       
       await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       
+      // Add random delay to look more human
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      
       // Wait for Google Jobs results to load
       await page.waitForSelector('[data-ved], .g, .jobsearch-ResultsList', { timeout: 15000 }).catch(() => {
         console.log('Primary selector not found, trying alternative approach');
       });
       
       // Wait a bit for dynamic content
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(3000 + Math.random() * 1000);
       
       // Extract job listings from Google Jobs
       const jobs = await page.evaluate(() => {

@@ -9,7 +9,7 @@ import LogoutButton from '@/components/LogoutButton';
 const navigationLinks = [
   { href: '/', label: 'Home', external: false },
   { href: '/agent', label: 'Agents', external: false },
-  { href: 'https://docs.example.com', label: 'Docs', external: true },
+  { href: '/dashboard', label: 'Dashboard', external: false },
 ];
 
 type HeaderNavigationProps = {

@@ -27,7 +27,7 @@ interface FieldErrors {
 export default function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
   const search = useSearchParams();
-  const redirect = search.get('redirect') || '/settings';
+  const redirect = search.get('redirect') || '/dashboard';
   const supabase = getBrowserSupabase();
 
   const [email, setEmail] = useState('');

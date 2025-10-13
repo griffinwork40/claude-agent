@@ -51,7 +51,7 @@ export default function EnlistLanding() {
           <nav className="flex items-center gap-4 text-sm">
             <Link href="/" className="hover:underline">Home</Link>
             <Link href="/agent" className="hover:underline">Agents</Link>
-            <a href="https://docs.example.com" className="hover:underline" target="_blank" rel="noreferrer">Docs</a>
+            <Link href="/dashboard" className="hover:underline">Dashboard</Link>
           </nav>
         </div>
       </footer>

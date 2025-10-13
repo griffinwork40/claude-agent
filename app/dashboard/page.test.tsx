@@ -4,7 +4,7 @@ vi.mock('@/lib/supabase/server', () => ({
   getServerSupabase: () => ({ auth: { getSession: async () => ({ data: { session: null } }) } }),
 }));
 
-describe('Settings page auth', () => {
+describe('Dashboard page auth', () => {
   it('server check is mockable (example placeholder)', async () => {
     expect(true).toBe(true);
   });
