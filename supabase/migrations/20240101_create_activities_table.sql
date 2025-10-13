@@ -56,9 +56,6 @@ CREATE TABLE IF NOT EXISTS activities (
   ),
   CONSTRAINT valid_tool_execution CHECK (
     (type NOT LIKE 'tool_%') OR (tool IS NOT NULL)
-  ),
-  CONSTRAINT valid_timing CHECK (
-    (started_at IS NULL) = (completed_at IS NULL)
   )
 );
 
@@ -91,4 +88,3 @@ CREATE POLICY "Users can delete own activities" ON activities
 
 -- Grants for the authenticated role
 GRANT SELECT, INSERT, UPDATE, DELETE ON activities TO authenticated;
-GRANT USAGE, SELECT ON SEQUENCE activities_id_seq TO authenticated;

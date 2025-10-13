@@ -10,7 +10,7 @@ import { Agent, Message, Activity } from '@/components/agents/types';
 import { AgentList, BrowserPane, ChatPane, BottomSheet } from '@/components/agents';
 import { ResizablePane } from '@/components/ResizablePane';
 import { loadMessagesFromAPI } from '@/lib/message-utils';
-import { loadActivitiesFromAPI, createActivity, mergeActivities } from '@/lib/activity-utils';
+import { loadActivitiesFromAPI, mergeActivities } from '@/lib/activity-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -244,21 +244,11 @@ export default function AgentPage() {
     setIsBottomSheetOpen(false);
   }
 
-  const handleActivity = useCallback(async (activity: Activity) => {
+  const handleActivity = useCallback((activity: Activity) => {
     if (!activity.agentId) {
       console.warn('Received activity without agentId, skipping', activity);
       return;
     }
-
-    // Persist activity to database
-    try {
-      await createActivity(activity);
-      console.log('Activity persisted to database:', activity.type, activity.tool);
-    } catch (error) {
-      console.error('Failed to persist activity:', error);
-      // Continue with local state update even if DB persistence fails
-    }
-
     // Update local state with the new activity
     setActivitiesByAgent(prev => {
       const existing = prev[activity.agentId] ?? [];

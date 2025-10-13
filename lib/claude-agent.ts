@@ -490,13 +490,17 @@ async function executeTools(
 
   let completedCount = 0;
 
-  for (const toolUse of toolUses) {
-    // Add batch context to tool activities
-    const batchContext = batchId ? {
+  const buildBatchContext = (completed: number) => (
+    batchId ? {
       batchId,
       batchTotal: toolUses.length,
-      batchCompleted: completedCount
-    } : {};
+      batchCompleted: completed
+    } : {}
+  );
+
+  for (const toolUse of toolUses) {
+    // Add batch context to tool activities
+    const executingBatchContext = buildBatchContext(completedCount);
 
     console.log(`🔧 Executing tool: ${toolUse.name}`, toolUse.input);
 
@@ -506,11 +510,12 @@ async function executeTools(
         tool: toolUse.name,
         toolId: toolUse.id,
         params: toolUse.input,
-        ...batchContext
+        ...executingBatchContext
       });
     }
 
     completedCount++;
+    const resultBatchContext = buildBatchContext(completedCount);
 
     try {
         let result: BrowserToolResult;
@@ -678,8 +683,14 @@ async function executeTools(
             success: result.success,
             result: result,
             message: result.message,
-            ...batchContext
+            ...resultBatchContext
           });
+          if (batchId) {
+            sendActivity('batch_progress', {
+              ...resultBatchContext,
+              content: `Completed ${completedCount} of ${toolUses.length} tools`
+            });
+          }
         }
         
       } catch (error: unknown) {
@@ -707,8 +718,14 @@ async function executeTools(
             success: false,
             error: errorMessage,
             message: `Failed: ${errorMessage}`,
-            ...batchContext
+            ...resultBatchContext
           });
+          if (batchId) {
+            sendActivity('batch_progress', {
+              ...resultBatchContext,
+              content: `Completed ${completedCount} of ${toolUses.length} tools (latest failed)`
+            });
+          }
         }
       }
     }
@@ -721,7 +738,7 @@ async function executeTools(
     sendActivity('batch_complete', {
       batchId,
       batchTotal: toolUses.length,
-      batchCompleted: toolUses.length,
+      batchCompleted: completedCount,
       success: failureCount === 0,
       content: failureCount === 0
         ? `Completed ${toolUses.length} tools successfully`
