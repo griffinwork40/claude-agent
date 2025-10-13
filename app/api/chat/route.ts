@@ -74,7 +74,8 @@ export async function POST(request: NextRequest) {
       const result = await runClaudeAgentStream(
         message, 
         session.user.id, 
-        sessionId
+        sessionId,
+        agentId  // Pass agentId for proper message association
       );
       agentSessionId = result.sessionId;
       stream = result.stream;
@@ -163,26 +164,9 @@ export async function POST(request: NextRequest) {
 
             if (done) {
               console.log('✓ Stream completed, total chunks:', chunkCount);
-              console.log('Saving complete response to database...');
-
-              // Store the complete response in database
-              const { data: botMessage, error: botMessageError } = await supabase
-                .from('messages')
-                .insert([{
-                  content: fullResponse,
-                  sender: 'bot',
-                  user_id: session.user.id,
-                  session_id: agentId || 'default-agent',
-                  created_at: new Date().toISOString()
-                }])
-                .select()
-                .single();
-
-              if (botMessageError) {
-                console.error('❌ Error saving bot message:', botMessageError);
-              } else {
-                console.log('✓ Bot message saved:', botMessage.id);
-              }
+              
+              // Note: Message chunks are now saved incrementally in claude-agent.ts
+              // No need to save fullResponse here as it would create duplicates
 
               // Persist any remaining pending activities
               if (pendingActivities.length > 0) {
@@ -193,8 +177,7 @@ export async function POST(request: NextRequest) {
               // Send final event with session ID
               const finalEvent = `data: ${JSON.stringify({
                 type: 'complete',
-                sessionId: agentSessionId,
-                messageId: botMessage?.id
+                sessionId: agentSessionId
               })}\n\n`;
               controller.enqueue(encoder.encode(finalEvent));
               controller.close();
