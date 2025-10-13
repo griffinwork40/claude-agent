@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         console.log('Starting stream processing...');
         // Ensure counters/state visible to catch scope
         let chunkCount = 0;
-        const pendingActivities: Array<any> = [];
+        const pendingActivities: Array<Promise<void>> = [];
 
         // Helper function to persist activities asynchronously
         const persistActivity = async (activityData: any) => {
@@ -186,8 +186,8 @@ export async function POST(request: NextRequest) {
 
               // Persist any remaining pending activities
               if (pendingActivities.length > 0) {
-                console.log(`Persisting ${pendingActivities.length} remaining activities...`);
-                await Promise.all(pendingActivities.map(persistActivity));
+                console.log(`Waiting for ${pendingActivities.length} pending activity writes...`);
+                await Promise.allSettled(pendingActivities);
               }
 
               // Send final event with session ID
@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
                   // Persist activity asynchronously (non-blocking)
                   if (activityData.type !== 'thinking_preview') {
                     // Don't persist thinking_preview events (too ephemeral)
-                    persistActivity(activityData);
+                    pendingActivities.push(persistActivity(activityData));
                   }
                 } catch (parseError) {
                   console.error('Failed to parse activity JSON:', activityJson, parseError);
@@ -297,8 +297,8 @@ export async function POST(request: NextRequest) {
 
           // Persist any pending activities even on error
           if (pendingActivities.length > 0) {
-            console.log(`Persisting ${pendingActivities.length} activities due to error...`);
-            await Promise.allSettled(pendingActivities.map(persistActivity));
+            console.log(`Waiting for ${pendingActivities.length} pending activity writes due to error...`);
+            await Promise.allSettled(pendingActivities);
           }
 
           // Ensure client receives an error SSE event before closing
