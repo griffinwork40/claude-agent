@@ -8,26 +8,49 @@ export class BrowserService {
   private apiKey = process.env.BROWSER_SERVICE_API_KEY || 'test-key-12345';
 
   private async request(endpoint: string, body: Record<string, unknown>) {
-    const response = await fetch(`${this.serviceUrl}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(body)
-    });
+    const url = `${this.serviceUrl}${endpoint}`;
+    console.log(`🌐 Browser service request: ${endpoint}`, { params: body });
     
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || response.statusText);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30000) // 30s timeout
+      });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ 
+          error: response.statusText,
+          status: response.status 
+        }));
+        console.error(`❌ Browser service error (${response.status}):`, error);
+        throw new Error(`Browser service error (${response.status}): ${error.error || response.statusText}`);
+      }
+      
+      const result = await response.json();
+      if (!result.success) {
+        console.error('❌ Browser service returned failure:', result);
+        throw new Error(result.error || 'Request failed');
+      }
+      
+      console.log(`✓ Browser service response:`, { 
+        endpoint, 
+        dataLength: Array.isArray(result.data) ? result.data.length : 'N/A' 
+      });
+      return result.data;
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Browser service request failed: ${endpoint}`, {
+        error: errMessage,
+        serviceUrl: this.serviceUrl,
+        endpoint
+      });
+      throw error;
     }
-    
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(result.error || 'Request failed');
-    }
-    
-    return result.data;
   }
 
   // Navigate to a URL
