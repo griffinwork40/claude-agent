@@ -467,6 +467,7 @@ export function ChatPane({
     return externalActivities.filter((activity) => activity.agentId === agent.id);
   });
   const endRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerPadding = isMobile ? '0.5rem' : '0.75rem';
 
   useEffect(() => {
@@ -707,6 +708,20 @@ export function ChatPane({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [timelineItems]);
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+
+    // Set the height to the scrollHeight, but cap it at a reasonable max
+    const maxHeight = isMobile ? 120 : 100; // Max height in pixels
+    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+    textarea.style.height = `${newHeight}px`;
+  }, [text, isMobile]);
 
   const handleStreamingSend = async (content: string) => {
     if (!agent || isStreaming) return;
@@ -1008,14 +1023,19 @@ export function ChatPane({
             if (!text.trim() || isStreaming) return;
             handleStreamingSend(text.trim());
             setText('');
+            // Reset textarea height after clearing
+            if (textareaRef.current) {
+              textareaRef.current.style.height = 'auto';
+            }
           }}
           className="flex flex-col gap-2"
         >
           <div className="flex items-end gap-2">
             <div className="flex flex-1 items-end gap-2">
               <textarea
+                ref={textareaRef}
                 aria-label="Message"
-                rows={isMobile ? 1 : 2}
+                rows={isMobile ? 2 : 1}
                 className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 py-3 ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
                 placeholder="Type a message..."
                 value={text}
@@ -1026,6 +1046,10 @@ export function ChatPane({
                     if (!text.trim() || isStreaming) return;
                     handleStreamingSend(text.trim());
                     setText('');
+                    // Reset textarea height after clearing
+                    if (textareaRef.current) {
+                      textareaRef.current.style.height = 'auto';
+                    }
                   }
                 }}
               />
