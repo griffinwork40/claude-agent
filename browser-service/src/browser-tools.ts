@@ -88,11 +88,21 @@ export class BrowserJobService {
       
       // Mock permissions
       const originalQuery = window.navigator.permissions.query;
-      window.navigator.permissions.query = (parameters) => (
-        parameters.name === 'notifications' ?
-          Promise.resolve({ state: Notification.permission }) :
-          originalQuery.call(window.navigator.permissions, parameters)
-      );
+      window.navigator.permissions.query = (parameters) => {
+        if (parameters.name === 'notifications') {
+          // Create a proper PermissionStatus-like object
+          const mockPermissionStatus = {
+            state: Notification.permission,
+            name: 'notifications',
+            onchange: null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false
+          } as PermissionStatus;
+          return Promise.resolve(mockPermissionStatus);
+        }
+        return originalQuery.call(window.navigator.permissions, parameters);
+      };
     });
     
     // Set realistic viewport
