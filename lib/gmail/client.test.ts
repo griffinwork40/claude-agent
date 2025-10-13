@@ -128,6 +128,18 @@ describe('gmail API helpers', () => {
     expect(parsed.raw).toBeTruthy();
   });
 
+  it('rejects header injection attempts when sending mail', async () => {
+    const originalCalls = gmailCredentialMocks.get.mock.calls.length;
+    await expect(
+      sendGmailMessage('user-5', {
+        to: 'person@example.com\r\nBcc: attacker@example.com',
+        subject: 'Test',
+        body: 'Body'
+      })
+    ).rejects.toThrow('gmail_send_email.to cannot contain newline characters');
+    expect(gmailCredentialMocks.get.mock.calls.length).toBe(originalCalls);
+  });
+
   it('marks threads as read', async () => {
     const future = new Date(Date.now() + 60_000).toISOString();
     gmailCredentialMocks.get.mockResolvedValueOnce({

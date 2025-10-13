@@ -178,6 +178,12 @@ function toBase64Url(input: string): string {
     .replace(/=+$/g, '');
 }
 
+function assertHeaderSafe(value: string, field: string): void {
+  if (value.includes('\r') || value.includes('\n')) {
+    throw new Error(`${field} cannot contain newline characters`);
+  }
+}
+
 export function buildOAuthConsentUrl(state: string): string {
   if (!state) {
     throw new Error('State parameter is required for OAuth consent URL');
@@ -257,6 +263,15 @@ export async function listGmailThreads(userId: string, options: ListThreadsOptio
 export async function sendGmailMessage(userId: string, input: GmailSendEmailInput): Promise<{ id: string }> {
   if (!input.to || !input.subject || !input.body) {
     throw new Error('sendGmailMessage requires to, subject, and body fields');
+  }
+
+  assertHeaderSafe(input.to, 'gmail_send_email.to');
+  assertHeaderSafe(input.subject, 'gmail_send_email.subject');
+  if (input.cc) {
+    assertHeaderSafe(input.cc, 'gmail_send_email.cc');
+  }
+  if (input.bcc) {
+    assertHeaderSafe(input.bcc, 'gmail_send_email.bcc');
   }
 
   const headers = [

@@ -148,6 +148,12 @@ function sanitizeString(value: string, maxLength: number, field: string): string
   return trimmed.slice(0, maxLength);
 }
 
+function rejectHeaderInjection(value: string, field: string): void {
+  if (value.includes('\r') || value.includes('\n')) {
+    throw new Error(`${field} cannot contain newline characters`);
+  }
+}
+
 function validateListThreadsInput(raw: Record<string, unknown>): GmailListThreadsToolInput {
   const input: GmailListThreadsToolInput = {};
 
@@ -178,15 +184,23 @@ function validateListThreadsInput(raw: Record<string, unknown>): GmailListThread
 
 function validateSendEmailInput(raw: Record<string, unknown>): GmailSendEmailToolInput {
   const to = sanitizeString(String(raw.to ?? ''), 512, 'gmail_send_email.to');
+  rejectHeaderInjection(to, 'gmail_send_email.to');
   if (!to.includes('@')) {
     throw new Error('gmail_send_email.to must contain at least one email address');
   }
 
   const subject = sanitizeString(String(raw.subject ?? ''), 256, 'gmail_send_email.subject');
+  rejectHeaderInjection(subject, 'gmail_send_email.subject');
   const bodyValue = sanitizeString(String(raw.body ?? ''), 5000, 'gmail_send_email.body');
 
   const cc = raw.cc ? sanitizeString(String(raw.cc), 512, 'gmail_send_email.cc') : undefined;
+  if (cc) {
+    rejectHeaderInjection(cc, 'gmail_send_email.cc');
+  }
   const bcc = raw.bcc ? sanitizeString(String(raw.bcc), 512, 'gmail_send_email.bcc') : undefined;
+  if (bcc) {
+    rejectHeaderInjection(bcc, 'gmail_send_email.bcc');
+  }
 
   return {
     to,
