@@ -86,6 +86,15 @@ The system uses the existing `griffin.json` file from your resume project as the
 - Adjust your preferences in `config.json`
 - Add more job platforms by extending the Job Search Agent
 
+## Gmail integration
+
+1. Create a Google Cloud project and enable the **Gmail API**.
+2. Configure an OAuth 2.0 client ID for a web application with the authorized redirect URI `https://<your-domain>/api/integrations/gmail/callback` (use `http://localhost:3000/...` for local development).
+3. Copy the client ID, client secret, and redirect URI into `.env` using the keys shown in `.env.example` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`, `GOOGLE_GMAIL_SCOPES`).
+4. Run the SQL script in `supabase/sql/20251013_create_gmail_credentials.sql` against your Supabase project to create the `gmail_credentials` table.
+5. Restart the Next.js app so environment changes are picked up, then visit `/dashboard` and click **Connect Gmail** to complete OAuth.
+6. After connecting, Claude gains access to the new `gmail_*` tools for listing messages, sending replies, and marking threads as read.
+
 ## Troubleshooting
 
 - If applications are failing, check that your resume and cover letter are accessible

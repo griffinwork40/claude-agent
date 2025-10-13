@@ -4,6 +4,10 @@ import type { MessageParam, TextBlockParam, ToolUseBlockParam } from '@anthropic
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { browserTools, getBrowserService } from './browser-tools';
+import { gmailTools } from './gmail/tools';
+import { listRecentGmailMessages } from './gmail/listRecentMessages';
+import { sendGmailMessage } from './gmail/sendEmail';
+import { markGmailThreadAsRead } from './gmail/markThreadAsRead';
 import { getOrCreateUserProfile } from './user-profile';
 import { ToolUse, ToolResult, BrowserToolResult } from '@/types';
 
@@ -137,7 +141,7 @@ export async function runClaudeAgentStream(
             max_tokens: 4096,
             system: instructions,
             messages: messages,
-            tools: browserTools, // Add tools support
+            tools: [...browserTools, ...gmailTools], // Add browser and Gmail tools
             stream: true
           });
 
@@ -609,7 +613,55 @@ async function executeTools(
               message: `Found ${linkedinJobsResult.length} jobs on LinkedIn`
             };
             break;
-            
+
+          case 'gmail_list_messages': {
+            const maxResults = typeof input.maxResults === 'number' ? input.maxResults : undefined;
+            const unreadOnly = typeof input.unreadOnly === 'boolean' ? input.unreadOnly : false;
+            const gmailMessages = await listRecentGmailMessages(userId, {
+              maxResults,
+              unreadOnly
+            });
+            result = {
+              success: true,
+              data: gmailMessages,
+              message: `Fetched ${gmailMessages.length} Gmail message${gmailMessages.length === 1 ? '' : 's'}`
+            };
+            break;
+          }
+
+          case 'gmail_send_email': {
+            if (typeof input.to !== 'string' || typeof input.subject !== 'string' || typeof input.body !== 'string') {
+              throw new Error('gmail_send_email requires to, subject, and body string inputs.');
+            }
+
+            const messageId = await sendGmailMessage(userId, {
+              to: input.to,
+              subject: input.subject,
+              body: input.body
+            });
+
+            result = {
+              success: true,
+              data: { messageId },
+              message: `Email sent successfully with id ${messageId}`
+            };
+            break;
+          }
+
+          case 'gmail_mark_thread_read': {
+            if (typeof input.threadId !== 'string' || input.threadId.trim().length === 0) {
+              throw new Error('gmail_mark_thread_read requires a non-empty threadId string.');
+            }
+
+            await markGmailThreadAsRead(userId, input.threadId);
+            result = {
+              success: true,
+              data: { threadId: input.threadId },
+              message: `Marked Gmail thread ${input.threadId} as read`
+            };
+            break;
+          }
+
           default:
             result = {
               success: false,

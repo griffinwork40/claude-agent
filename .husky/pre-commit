@@ -1,7 +1,7 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 . "$(dirname -- "$0")/_/husky.sh"
 
-set -euo pipefail
+set -eu
 
 echo "🔍 Running linter..."
 npm run lint

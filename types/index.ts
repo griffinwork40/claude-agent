@@ -78,3 +78,5 @@ export interface BrowserToolResult {
   error?: string;
   message?: string;
 }
+
+export * from './gmail';
