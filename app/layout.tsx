@@ -6,6 +6,7 @@ import { getSiteName, getSiteUrl } from '@/lib/site';
 import LayoutWrapper from '@/components/LayoutWrapper';
 import { getServerSupabase } from '@/lib/supabase/server';
 import HeaderNavigation from '@/components/HeaderNavigation';
+import { AuthProvider } from '@/components/AuthProvider';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -55,15 +56,17 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} min-h-screen bg-[var(--bg)] text-[var(--fg)]`}>
-        <header className="sticky top-0 z-40 bg-[var(--card)] border-b border-[var(--border)] h-16">
-          <div className="max-w-6xl mx-auto px-4 h-full flex items-center justify-between">
-            <Link href="/" className="text-heading font-semibold text-[var(--fg)]">Enlist</Link>
-            <HeaderNavigation isAuthenticated={Boolean(session)} />
-          </div>
-        </header>
-        <LayoutWrapper>
-          {children}
-        </LayoutWrapper>
+        <AuthProvider initialSession={session}>
+          <header className="sticky top-0 z-40 bg-[var(--card)] border-b border-[var(--border)] h-16">
+            <div className="max-w-6xl mx-auto px-4 h-full flex items-center justify-between">
+              <Link href="/" className="text-heading font-semibold text-[var(--fg)]">Enlist</Link>
+              <HeaderNavigation isAuthenticated={Boolean(session)} />
+            </div>
+          </header>
+          <LayoutWrapper>
+            {children}
+          </LayoutWrapper>
+        </AuthProvider>
       </body>
     </html>
   );

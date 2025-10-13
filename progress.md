@@ -51,3 +51,5 @@
 - 2025-10-12: Tuned iOS Safari safe-area offset to halve the additional padding, keeping controls visible without excessive footer height. Overall completion: 99%.
 - 2025-10-12: Slimmed iOS Safari composer controls by reducing mobile rows/padding while keeping safe-area protection, bringing the footer to a more compact height. Overall completion: 99%.
 
+- 2025-01-15: **CRITICAL FIX: Login Status Auto-Update Bug** - Fixed login status not updating automatically after authentication. Root cause: Server-side auth state in layout.tsx was only checked once during initial render, while client-side login used different Supabase client without real-time state sync. Solution: (1) Created AuthProvider component with real-time auth state management using Supabase's onAuthStateChange listener, (2) Updated HeaderNavigation to use client-side auth state with server-side fallback, (3) Modified AuthForm to refresh router after successful login, (4) Wrapped app with AuthProvider to provide real-time auth context throughout the app. Login status now updates immediately without requiring page refresh. Overall completion: 100%.
+
