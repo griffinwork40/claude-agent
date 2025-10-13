@@ -1,14 +1,24 @@
+<!-- README.md Purpose: Provide a high-level overview of the Enlist job search agent project. -->
+
 # Enlist — Job Search Agent
 
 Enlist is your job search agent—scouting roles, tailoring materials, and applying automatically. Visit `https://jobenlist.com`.
 
 ## Features
 
-- Multi-platform job search (LinkedIn, Indeed, Glassdoor, etc.)
+- Multi-platform job search (LinkedIn, Indeed, Google Jobs, etc.)
 - Smart job curation based on your profile and preferences
 - Human-in-the-loop approval before applying
 - Automated application submission
 - Application tracking and reporting
+- **Live activity feed** - See tool execution in real-time with Cursor-inspired UI
+
+## Recent Updates
+
+- **October 11, 2025**: Cursor-style activity feed with lightweight, borderless design ([see docs](./ACTIVITY_FEED_INDEX.md))
+- **October 11, 2025**: Fixed tool execution hanging bug with iterative continuation loop
+- **October 11, 2025**: Added missing job search tools (Indeed, LinkedIn, Google Jobs)
+- **October 11, 2025**: Fixed duplicate messages, conversation persistence, and memory bugs
 
 ## Architecture
 
@@ -18,6 +28,10 @@ The system uses four specialized subagents:
 2. **Job Curation Agent**: Filters and ranks jobs based on your preferences
 3. **User Interaction Agent**: Presents jobs and gets your approval
 4. **Application Agent**: Automates the application process for approved jobs
+
+### Extending automation runtimes
+
+See [`docs/extending-automation-runtimes.md`](docs/extending-automation-runtimes.md) for guidance on adding new containerized services (e.g., Appium, Python workers, ATS API clients) that complement the existing Playwright-based browser service.
 
 ## Prerequisites
 

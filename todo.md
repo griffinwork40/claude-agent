@@ -38,3 +38,20 @@ Agent UI refactor (2025-10-08):
 - [x] Update BrowserPane for job search context
 - [x] Remove coding-specific fields (repo, branch, diffStats, status grouping)
 
+Activity Feed Integration (2025-10-11):
+
+- [x] Install lucide-react package for icons
+- [x] Create ActivityCard component with collapsible design and icon mapping
+- [x] Merge activities with messages in ChatPane timeline
+- [x] Simplify BrowserPane to placeholder for future workspace features
+- [x] Test expand/collapse functionality and build
+- [x] Update progress.md with completion status
+
+Future Enhancements:
+
+- [ ] Add activity filtering/search in chat
+- [ ] Add copy-to-clipboard for activity details
+- [ ] Implement activity grouping for related tool calls
+- [ ] Add visual progress indicators for long-running tools
+- [ ] Populate BrowserPane with job listings and application tracking
+
