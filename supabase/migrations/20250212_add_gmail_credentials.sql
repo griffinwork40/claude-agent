@@ -13,3 +13,17 @@ create table if not exists public.gmail_credentials (
 create index if not exists gmail_credentials_expiry_idx
   on public.gmail_credentials (expiry);
 
+alter table public.gmail_credentials
+  enable row level security;
+
+create policy if not exists "Users can read their own Gmail credentials"
+  on public.gmail_credentials
+  for select
+  using (auth.uid() = user_id);
+
+create policy if not exists "Users can manage their own Gmail credentials"
+  on public.gmail_credentials
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
