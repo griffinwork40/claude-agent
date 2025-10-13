@@ -64,6 +64,26 @@ describe('AuthForm', () => {
       );
     });
   });
+
+  it('requires ToS acceptance before starting OAuth signup', async () => {
+    render(<AuthForm mode="signup" />);
+    const oauthBtn = await screen.findByRole('button', { name: /continue with google/i });
+    fireEvent.click(oauthBtn);
+
+    expect(
+      await screen.findByText(/you must agree to the terms of service/i)
+    ).toBeInTheDocument();
+    expect(signInWithOAuthMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText(/i agree to the terms of service/i));
+    fireEvent.click(oauthBtn);
+
+    await waitFor(() => {
+      expect(signInWithOAuthMock).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'google' })
+      );
+    });
+  });
 });
 
 

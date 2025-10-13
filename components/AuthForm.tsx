@@ -117,6 +117,15 @@ export default function AuthForm({ mode }: AuthFormProps) {
   }
 
   async function handleOAuth(provider: OAuthProvider) {
+    if (mode === 'signup' && !tosAccepted) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        tos: 'You must agree to the Terms of Service to continue.',
+      }));
+      setFormError(null);
+      return;
+    }
+
     setLoading(true);
     setFormError(null);
     setFieldErrors({});
