@@ -389,7 +389,7 @@ export default function AgentPage() {
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-hidden min-h-0">
+          <div className="flex-1 min-h-0 flex flex-col">
             {activeTab === 'workspace' ? (
               <BrowserPane
                 agent={selectedAgent}
