@@ -3,8 +3,26 @@
 
 "use client";
 
-import { useAuthContext } from '@/components/AuthProvider';
+import { useContext } from 'react';
+import { AuthContext } from '@/components/AuthProvider';
 
 export function useAuth() {
-  return useAuthContext();
+  const context = useContext(AuthContext);
+  
+  // If context is not available (e.g., in tests or standalone usage),
+  // return default values with a flag to indicate context is not available
+  if (!context) {
+    return {
+      session: null,
+      user: null,
+      isAuthenticated: false,
+      loading: false,
+      hasContext: false
+    };
+  }
+  
+  return {
+    ...context,
+    hasContext: true
+  };
 }

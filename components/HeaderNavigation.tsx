@@ -100,10 +100,10 @@ export default function HeaderNavigation({ isAuthenticated: serverAuth }: Header
   const previousFocusRef = useRef<HTMLElement | null>(null);
   
   // Use real-time auth state
-  const { isAuthenticated: clientAuth, loading } = useAuth();
+  const { isAuthenticated: clientAuth, loading, hasContext } = useAuth();
   
-  // Use client-side auth state if available, fallback to server-side
-  const isAuthenticated = loading ? serverAuth : clientAuth;
+  // Use client-side auth state if context is available and not loading, fallback to server-side
+  const isAuthenticated = hasContext && !loading ? clientAuth : serverAuth;
 
   const closeMenu = useCallback(() => {
     setIsOpen(false);
