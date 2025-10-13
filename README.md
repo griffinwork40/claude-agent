@@ -37,6 +37,7 @@ See [`docs/extending-automation-runtimes.md`](docs/extending-automation-runtimes
 
 - Node.js (for TypeScript SDK) or Python environment
 - Claude API key
+- OpenAI API key (for Whisper-powered speech-to-text input)
 - Playwright for browser automation
 
 ## Installation
@@ -116,6 +117,7 @@ The dashboard now supports connecting a Gmail account so the Claude agent can li
    - `GOOGLE_CLIENT_SECRET`
    - `GOOGLE_OAUTH_REDIRECT_URI` – must match the URI registered in Google Cloud.
    - `GOOGLE_OAUTH_SUCCESS_REDIRECT` – path or absolute URL where users should land after linking Gmail (defaults to `/dashboard`).
+   - `OPENAI_API_KEY` – required to enable the chat composer's speech-to-text microphone powered by Whisper.
 
 3. **Provision Supabase Storage**
    Run the SQL in `supabase/migrations/20250212_add_gmail_credentials.sql` against your Supabase project to create the `gmail_credentials` table. Ensure the table has Row Level Security policies that allow the application to read/write rows for the authenticated user (or rely on the service role client).
