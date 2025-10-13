@@ -3,6 +3,7 @@
 # Progress
 
 - 2025-10-13: Added Whisper-powered speech-to-text composer with secure API proxying to OpenAI and UI microphone controls. Overall completion: 100%.
+- 2025-10-13: Required Terms of Service acceptance on account creation to harden onboarding compliance. Overall completion: 100%.
 - 2025-10-07: Fixed React key warnings on landing; implemented asChild in Button; updated web manifest to use existing SVG icon. Overall completion: 31%.
 - 2025-10-07: Refactored /agent page for full mobile responsiveness with bottom sheet UI pattern, tablet 2-pane layout with collapsible sidebar, and improved desktop 3-pane layout. Added smooth animations and touch-friendly interactions. Overall completion: 22%.
 - 2025-10-07: Updated landing copy to highlight resume building/tailoring. Overall completion: 17%.
