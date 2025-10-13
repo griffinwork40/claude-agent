@@ -24,9 +24,10 @@ export interface JobOpportunity {
   match_percentage?: number;
   applied: boolean;
   applied_at?: string;
-  status: 'discovered' | 'interested' | 'applied' | 'rejected';
+  status: 'discovered' | 'interested' | 'applied' | 'rejected' | 'error';
   raw_data?: Record<string, unknown>; // Original scraped data
   created_at: string;
+  error?: string; // Error message for error status jobs
 }
 
 export interface UserProfile {

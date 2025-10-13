@@ -172,13 +172,16 @@ export default function AgentPage() {
         const loadedMessages = await loadMessagesFromAPI(selectedAgentId || undefined);
         console.log(`Reloaded ${loadedMessages.length} messages from database for agent ${selectedAgentId}`);
         setMessages(loadedMessages);
+
+        // Notify ChatPane that messages have been reloaded
+        window.dispatchEvent(new CustomEvent('messages-reloaded'));
       } catch (error) {
         console.error('Error reloading messages:', error);
       }
     };
-    
+
     window.addEventListener('reload-messages', handleReloadMessages);
-    
+
     return () => {
       window.removeEventListener('reload-messages', handleReloadMessages);
     };

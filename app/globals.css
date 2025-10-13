@@ -74,12 +74,76 @@ html, body {
   }
 }
 
+@keyframes ellipsisLoading {
+  0%, 20% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  80%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes ellipsisDot1 {
+  0%, 20% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes ellipsisDot2 {
+  0%, 40% {
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes ellipsisDot3 {
+  0%, 60% {
+    opacity: 0;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
 }
 
 .animate-cursorPulse {
   animation: cursorPulse 1s ease-in-out infinite;
+}
+
+.animate-ellipsisLoading {
+  animation: ellipsisLoading 1.2s ease-in-out infinite;
+}
+
+.animate-ellipsisDot1 {
+  animation: ellipsisDot1 1.5s ease-in-out infinite;
+}
+
+.animate-ellipsisDot2 {
+  animation: ellipsisDot2 1.5s ease-in-out infinite;
+}
+
+.animate-ellipsisDot3 {
+  animation: ellipsisDot3 1.5s ease-in-out infinite;
 }
 
 /* Modern custom scrollbar */

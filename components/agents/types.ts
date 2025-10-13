@@ -70,6 +70,7 @@ export interface Activity {
   message?: string;
   content?: string;
   error?: string;
+  fallback_url?: string;
 
   // Timing (Phase 2)
   startedAt?: string;
