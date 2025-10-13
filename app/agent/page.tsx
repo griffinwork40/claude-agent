@@ -365,10 +365,10 @@ export default function AgentPage() {
           title={selectedAgent?.name}
         >
           {/* Tabs */}
-          <div className="flex border-b border-[var(--border)] bg-[var(--bg)]">
+          <div className="flex border-b border-[var(--border)] bg-[var(--bg)] flex-shrink-0">
             <button
               onClick={() => setActiveTab('workspace')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
                 activeTab === 'workspace'
                   ? 'text-[var(--fg)] border-b-2 border-[var(--accent)]'
                   : 'text-[var(--fg)]/60 hover:text-[var(--fg)]'
@@ -378,7 +378,7 @@ export default function AgentPage() {
             </button>
             <button
               onClick={() => setActiveTab('chat')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
                 activeTab === 'chat'
                   ? 'text-[var(--fg)] border-b-2 border-[var(--accent)]'
                   : 'text-[var(--fg)]/60 hover:text-[var(--fg)]'

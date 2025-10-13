@@ -759,15 +759,17 @@ export function ChatPane({
 
   return (
     <section className={`h-full flex flex-col ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
+      {/* Desktop header - hidden on mobile to save space */}
       {!isMobile && (
-        <header className="px-4 py-3 border-b border-[var(--border)]">
+        <header className="px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
           <div className="text-sm font-medium text-[var(--fg)]">
             {agent ? `Chat — ${agent.name}` : 'Chat — no agent selected'}
           </div>
         </header>
       )}
 
-      <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isMobile ? 'p-4' : 'p-3'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
+      {/* Scrollable messages area */}
+      <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isMobile ? 'px-3 py-4' : 'p-3'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
         {timelineItems.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="w-full max-w-xl px-4">
@@ -953,7 +955,8 @@ export function ChatPane({
         <div ref={endRef} />
       </div>
 
-      <footer className={`${isMobile ? 'p-4' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}>
+      {/* Fixed composer at bottom */}
+      <footer className="p-3 border-t border-[var(--border)] bg-[var(--bg)] flex-shrink-0">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -965,8 +968,8 @@ export function ChatPane({
         >
           <textarea
             aria-label="Message"
-            rows={isMobile ? 3 : 2}
-            className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 py-3 ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
+            rows={2}
+            className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-3 py-2.5 text-base border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
             placeholder="Type a message..."
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -982,7 +985,7 @@ export function ChatPane({
           <button
             type="submit"
             disabled={isStreaming}
-            className={`self-stretch ${isMobile ? 'px-5 py-3' : 'px-4 py-2.5'} rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150`}
+            className="self-stretch px-4 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
           >
             {isStreaming ? 'Sending...' : 'Send'}
           </button>

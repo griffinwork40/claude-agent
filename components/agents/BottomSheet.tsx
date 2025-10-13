@@ -145,7 +145,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
       {/* Bottom Sheet */}
       <div
         ref={sheetRef}
-        className="fixed inset-x-0 bottom-0 z-50 bg-[var(--bg)] rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out max-h-[90dvh] flex flex-col"
+        className="fixed inset-x-0 bottom-0 z-50 bg-[var(--bg)] rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out h-[95dvh] flex flex-col"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -157,16 +157,16 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
       >
         {/* Handle bar for swipe indicator */}
         <div
-          className="flex justify-center py-3 border-b border-[var(--border)] touch-none"
+          className="flex justify-center py-2 border-b border-[var(--border)] touch-none flex-shrink-0"
           data-drag-handle="true"
         >
-          <div className="w-12 h-1.5 rounded-full bg-[var(--fg)]/30" />
+          <div className="w-12 h-1 rounded-full bg-[var(--fg)]/30" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)] flex-shrink-0">
           {title ? (
-            <h2 id={titleId} className="text-lg font-semibold text-[var(--fg)]">
+            <h2 id={titleId} className="text-base font-semibold text-[var(--fg)] truncate">
               {title}
             </h2>
           ) : (
@@ -176,7 +176,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
           )}
           <button
             onClick={onClose}
-            className="p-2 rounded-md hover:bg-[var(--muted)] text-[var(--fg)]"
+            className="p-1.5 rounded-md hover:bg-[var(--muted)] text-[var(--fg)] ml-2"
             aria-label="Close bottom sheet"
           >
             ✕
