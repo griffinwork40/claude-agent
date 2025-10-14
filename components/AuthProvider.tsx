@@ -16,14 +16,6 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
-export function useAuthContext() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuthContext must be used within an AuthProvider');
-  }
-  return context;
-}
-
 interface AuthProviderProps {
   children: React.ReactNode;
   initialSession?: Session | null;
