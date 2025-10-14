@@ -485,6 +485,22 @@ export function ChatPane({
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleMessagesReloaded: EventListener = () => {
+      setStreamingMessage('');
+    };
+
+    window.addEventListener('messages-reloaded', handleMessagesReloaded);
+
+    return () => {
+      window.removeEventListener('messages-reloaded', handleMessagesReloaded);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       mediaRecorderRef.current?.stop();
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -917,18 +933,112 @@ export function ChatPane({
 
   return (
     <section className={`h-full flex flex-col ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
+      {/* Desktop header - hidden on mobile to save space */}
       {!isMobile && (
-        <header className="px-4 py-3 border-b border-[var(--border)]">
+        <header className="px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
           <div className="text-sm font-medium text-[var(--fg)]">
             {agent ? `Chat — ${agent.name}` : 'Chat — no agent selected'}
           </div>
         </header>
       )}
 
-      <div className={`flex-1 overflow-auto ${isMobile ? 'p-4' : 'p-3'} flex flex-col`}>
-        {visibleMessages.length === 0 && !isStreaming ? (
-          <div className="flex items-center justify-center h-full text-[var(--fg)]/60 text-sm">
-            No messages yet. Start a conversation!
+      {/* Scrollable messages area */}
+      <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isMobile ? 'px-3 py-4' : 'p-3'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
+        {timelineItems.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="w-full max-w-xl px-4">
+              <div className="text-center mb-6 animate-fadeIn">
+                <h2 className="text-2xl font-bold text-[var(--fg)] mb-2">Welcome!</h2>
+                <p className="text-sm text-[var(--fg)]/60">Get started with one of these common tasks</p>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
+                {/* Prompt 1: Find me 5 jobs */}
+                <button
+                  onClick={() => handleStreamingSend("Find me 5 jobs you think I'd like")}
+                  disabled={isStreaming}
+                  className="group flex flex-col items-start gap-3 p-4 rounded-xl bg-[var(--card)] border-2 border-[var(--border)] hover:border-brand-500 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 text-left min-h-[100px]"
+                  aria-label="Find me 5 jobs you think I'd like"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-[var(--fg)] leading-relaxed">
+                      Find me 5 jobs you think I&apos;d like
+                    </p>
+                  </div>
+                </button>
+
+                {/* Prompt 2: Update resume */}
+                <button
+                  onClick={() => handleStreamingSend("Help me update my resume for tech jobs")}
+                  disabled={isStreaming}
+                  className="group flex flex-col items-start gap-3 p-4 rounded-xl bg-[var(--card)] border-2 border-[var(--border)] hover:border-brand-500 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 text-left min-h-[100px]"
+                  aria-label="Help me update my resume for tech jobs"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-[var(--fg)] leading-relaxed">
+                      Help me update my resume for tech jobs
+                    </p>
+                  </div>
+                </button>
+
+                {/* Prompt 3: Remote positions */}
+                <button
+                  onClick={() => handleStreamingSend("Search for remote software engineering positions")}
+                  disabled={isStreaming}
+                  className="group flex flex-col items-start gap-3 p-4 rounded-xl bg-[var(--card)] border-2 border-[var(--border)] hover:border-brand-500 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 text-left min-h-[100px]"
+                  aria-label="Search for remote software engineering positions"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-[var(--fg)] leading-relaxed">
+                      Search for remote software engineering positions
+                    </p>
+                  </div>
+                </button>
+
+                {/* Prompt 4: Top skills */}
+                <button
+                  onClick={() => handleStreamingSend("What are the top skills employers are looking for?")}
+                  disabled={isStreaming}
+                  className="group flex flex-col items-start gap-3 p-4 rounded-xl bg-[var(--card)] border-2 border-[var(--border)] hover:border-brand-500 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 text-left min-h-[100px]"
+                  aria-label="What are the top skills employers are looking for?"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-[var(--fg)] leading-relaxed">
+                      What are the top skills employers are looking for?
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <>
@@ -1009,8 +1119,9 @@ export function ChatPane({
         <div ref={endRef} />
       </div>
 
+      {/* Fixed composer at bottom with safe area support */}
       <footer
-        className={`flex-shrink-0 ${isMobile ? 'px-4 pt-3' : 'p-3'} border-t border-[var(--border)] bg-[var(--bg)]`}
+        className="flex-shrink-0 p-3 border-t border-[var(--border)] bg-[var(--bg)]"
         style={{
           paddingBottom: isMobile
             ? `calc(${composerPadding} + env(safe-area-inset-bottom, 0px))`
@@ -1036,7 +1147,7 @@ export function ChatPane({
                 ref={textareaRef}
                 aria-label="Message"
                 rows={isMobile ? 1 : 2}
-                className={`flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-4 py-3 ${isMobile ? 'text-base' : 'text-sm'} border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150`}
+                className="flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-3 py-2.5 text-base border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150"
                 placeholder="Type a message..."
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -1061,14 +1172,14 @@ export function ChatPane({
                   aria-pressed={isRecording}
                   aria-label={microphoneAriaLabel}
                   title={microphoneAriaLabel}
-                  className={`${isMobile ? 'h-12 w-12' : 'h-10 w-10'} flex items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--card)]/90 focus:outline-none focus:ring-2 focus:ring-brand-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className="h-11 w-11 flex items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--card)]/90 focus:outline-none focus:ring-2 focus:ring-brand-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isTranscribing ? (
-                    <Loader2 className={`${isMobile ? 'h-5 w-5' : 'h-4 w-4'} animate-spin`} />
+                    <Loader2 className="h-5 w-5 animate-spin" />
                   ) : isRecording ? (
-                    <Square className={isMobile ? 'h-5 w-5 text-red-500' : 'h-4 w-4 text-red-500'} />
+                    <Square className="h-5 w-5 text-red-500" />
                   ) : (
-                    <Mic className={isMobile ? 'h-5 w-5' : 'h-4 w-4'} />
+                    <Mic className="h-5 w-5" />
                   )}
                 </button>
               )}
@@ -1076,7 +1187,7 @@ export function ChatPane({
             <button
               type="submit"
               disabled={isStreaming}
-              className={`self-stretch ${isMobile ? 'px-5 py-3' : 'px-4 py-2.5'} rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150`}
+              className="self-stretch px-4 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-blue-700 active:bg-blue-800 text-[var(--accent-foreground)] text-sm font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
             >
               {isStreaming ? 'Sending...' : 'Send'}
             </button>
