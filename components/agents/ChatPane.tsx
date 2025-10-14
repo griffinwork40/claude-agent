@@ -485,6 +485,22 @@ export function ChatPane({
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleMessagesReloaded: EventListener = () => {
+      setStreamingMessage('');
+    };
+
+    window.addEventListener('messages-reloaded', handleMessagesReloaded);
+
+    return () => {
+      window.removeEventListener('messages-reloaded', handleMessagesReloaded);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       mediaRecorderRef.current?.stop();
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());

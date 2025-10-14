@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam, TextBlockParam, ToolUseBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { browserTools, getBrowserService } from './browser-tools';
 import { listGmailThreads, sendGmailMessage, markGmailThreadRead } from '@/lib/gmail/client';
 import { getOrCreateUserProfile } from './user-profile';
@@ -14,15 +14,22 @@ console.log('Anthropic SDK imported successfully');
 console.log('Anthropic class:', Anthropic);
 
 // Helper to get Supabase admin client
-function getSupabaseAdmin() {
+let supabaseAdmin: SupabaseClient | null = null;
+
+function getSupabaseAdmin(): SupabaseClient {
+  if (supabaseAdmin) {
+    return supabaseAdmin;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  
+
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('Supabase environment variables are not set');
   }
-  
-  return createClient(supabaseUrl, supabaseKey);
+
+  supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+  return supabaseAdmin;
 }
 
 // Initialize the Anthropic client
@@ -130,6 +137,52 @@ export async function initializeAgent(): Promise<{ client: Anthropic; instructio
 interface AgentSession {
   userId: string;
   messages: Array<{ role: string; content: string }>;
+}
+
+async function saveAssistantTextChunk({
+  supabase,
+  content,
+  userId,
+  agentId,
+  session,
+  context,
+}: {
+  supabase: SupabaseClient;
+  content: string;
+  userId: string;
+  agentId?: string | null;
+  session: AgentSession;
+  context: string;
+}): Promise<void> {
+  if (!content.trim()) {
+    return;
+  }
+
+  try {
+    const { data: textMessage, error } = await supabase
+      .from('messages')
+      .insert([
+        {
+          content,
+          sender: 'bot',
+          user_id: userId,
+          session_id: agentId || 'default-agent',
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`❌ Error saving ${context} text chunk:`, error);
+      return;
+    }
+
+    console.log(`✓ ${context} text chunk saved:`, textMessage?.id);
+    session.messages.push({ role: 'assistant', content });
+  } catch (saveError) {
+    console.error(`❌ Failed to save ${context} text chunk:`, saveError);
+  }
 }
 
 interface GmailListThreadsToolInput {
@@ -331,33 +384,15 @@ export async function runClaudeAgentStream(
                 });
               } else if (chunk.content_block.type === 'tool_use') {
                 // Before starting tool use, save any accumulated text as a message
-                if (currentTextChunk.trim()) {
-                  console.log('💾 Saving pre-tool text chunk to DB:', currentTextChunk.length, 'chars');
-                  try {
-                    const { data: textMessage, error: textMessageError } = await supabase
-                      .from('messages')
-                      .insert([{
-                        content: currentTextChunk,
-                        sender: 'bot',
-                        user_id: userId,
-                        session_id: agentId || 'default-agent',
-                        created_at: new Date().toISOString()
-                      }])
-                      .select()
-                      .single();
-
-                    if (textMessageError) {
-                      console.error('❌ Error saving text chunk:', textMessageError);
-                    } else {
-                      console.log('✓ Text chunk saved:', textMessage.id);
-                      // Save to session history
-                      session.messages.push({ role: 'assistant', content: currentTextChunk });
-                    }
-                  } catch (saveError) {
-                    console.error('❌ Failed to save text chunk:', saveError);
-                  }
-                  currentTextChunk = ''; // Reset for next chunk
-                }
+                await saveAssistantTextChunk({
+                  supabase,
+                  content: currentTextChunk,
+                  userId,
+                  agentId,
+                  session,
+                  context: 'pre-tool',
+                });
+                currentTextChunk = ''; // Reset for next chunk
 
                 // Start of a tool use
                 currentToolUse = {
@@ -498,32 +533,15 @@ export async function runClaudeAgentStream(
                         console.log(`📝 Continuation ${iteration}: text block started`);
                       } else if (chunk.content_block.type === 'tool_use') {
                         // Before starting tool use in continuation, save any accumulated text
-                        if (currentTextChunk.trim()) {
-                          console.log('💾 Saving continuation text chunk to DB:', currentTextChunk.length, 'chars');
-                          try {
-                            const { data: textMessage, error: textMessageError } = await supabase
-                              .from('messages')
-                              .insert([{
-                                content: currentTextChunk,
-                                sender: 'bot',
-                                user_id: userId,
-                                session_id: agentId || 'default-agent',
-                                created_at: new Date().toISOString()
-                              }])
-                              .select()
-                              .single();
-
-                            if (textMessageError) {
-                              console.error('❌ Error saving continuation text chunk:', textMessageError);
-                            } else {
-                              console.log('✓ Continuation text chunk saved:', textMessage.id);
-                              session.messages.push({ role: 'assistant', content: currentTextChunk });
-                            }
-                          } catch (saveError) {
-                            console.error('❌ Failed to save continuation text chunk:', saveError);
-                          }
-                          currentTextChunk = ''; // Reset for next chunk
-                        }
+                        await saveAssistantTextChunk({
+                          supabase,
+                          content: currentTextChunk,
+                          userId,
+                          agentId,
+                          session,
+                          context: `continuation ${iteration}`,
+                        });
+                        currentTextChunk = ''; // Reset for next chunk
 
                         continuationCurrentToolUse = {
                           id: chunk.content_block.id,
@@ -639,32 +657,15 @@ export async function runClaudeAgentStream(
               }
               
               // Save any remaining text that hasn't been saved yet
-              if (currentTextChunk.trim()) {
-                console.log('💾 Saving final text chunk to DB:', currentTextChunk.length, 'chars');
-                try {
-                  const { data: textMessage, error: textMessageError } = await supabase
-                    .from('messages')
-                    .insert([{
-                      content: currentTextChunk,
-                      sender: 'bot',
-                      user_id: userId,
-                      session_id: agentId || 'default-agent',
-                      created_at: new Date().toISOString()
-                    }])
-                    .select()
-                    .single();
-
-                  if (textMessageError) {
-                    console.error('❌ Error saving final text chunk:', textMessageError);
-                  } else {
-                    console.log('✓ Final text chunk saved:', textMessage.id);
-                    session.messages.push({ role: 'assistant', content: currentTextChunk });
-                  }
-                } catch (saveError) {
-                  console.error('❌ Failed to save final text chunk:', saveError);
-                }
-                currentTextChunk = '';
-              }
+              await saveAssistantTextChunk({
+                supabase,
+                content: currentTextChunk,
+                userId,
+                agentId,
+                session,
+                context: 'final',
+              });
+              currentTextChunk = '';
               
               controller.close();
               break;
