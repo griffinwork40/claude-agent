@@ -130,7 +130,8 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activities`, {
+            const activityUrl = new URL('/api/activities', request.nextUrl.origin);
+            const response = await fetch(activityUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
