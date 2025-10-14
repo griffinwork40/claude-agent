@@ -107,6 +107,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
         const { error } = await supabase.auth.signUp({ email: normalizedEmail, password });
         if (error) throw error;
       }
+      // Refresh the router to update auth state
+      router.refresh();
       router.replace(redirect);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
@@ -131,10 +133,11 @@ export default function AuthForm({ mode }: AuthFormProps) {
     setFieldErrors({});
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${origin}/auth/callback` },
+        options: { redirectTo: `${origin}/auth/callback?redirect=${encodeURIComponent(redirect)}` },
       });
+      if (error) throw error;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'OAuth failed';
       setFormError(errorMessage);
