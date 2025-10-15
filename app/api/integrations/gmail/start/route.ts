@@ -11,6 +11,23 @@ const STATE_COOKIE_NAME = 'gmail_oauth_state';
 const STATE_TTL_SECONDS = 10 * 60;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  // Validate required environment variables at runtime
+  const requiredEnvVars = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    return new NextResponse(
+      JSON.stringify({
+        error: 'Server configuration error',
+        details: `Missing required environment variables: ${missingVars.join(', ')}`
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
   const routeClient = createRouteHandlerClient({ cookies });
   const { data: { session } } = await routeClient.auth.getSession();
 

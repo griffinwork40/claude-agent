@@ -17,6 +17,23 @@ function resolveRedirect(request: NextRequest, target: string): URL {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  // Validate required environment variables at runtime
+  const requiredEnvVars = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    return new NextResponse(
+      JSON.stringify({
+        error: 'Server configuration error',
+        details: `Missing required environment variables: ${missingVars.join(', ')}`
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
   const cookieStore = cookies();
   const storedState = cookieStore.get(STATE_COOKIE_NAME)?.value;
   const successRedirect = process.env.GOOGLE_OAUTH_SUCCESS_REDIRECT || '/dashboard';
