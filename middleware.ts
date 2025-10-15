@@ -23,7 +23,7 @@ export async function middleware(req: NextRequest) {
 
     // Gate protected routes
     const url = req.nextUrl;
-    const protectedPath = url.pathname.startsWith('/agent') || url.pathname === '/settings';
+    const protectedPath = url.pathname.startsWith('/agent') || url.pathname === '/dashboard';
     if (protectedPath && !session) {
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = '/login';
@@ -39,7 +39,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/agent/:path*', '/settings'],
+  matcher: ['/agent/:path*', '/dashboard'],
 };
 
 

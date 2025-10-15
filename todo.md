@@ -13,6 +13,10 @@
 - [x] Add Logout button in UI shell
 - [x] Require session in API routes if sensitive
 
+Fixes (2025-10-11):
+
+- [x] Prevent bottom sheet from closing when scrolling chat (handle-only swipe)
+
 - [x] Create tables in Supabase (messages, jobs, applications)
 - [ ] Point env to multi-agent-reviews project and set SUPABASE_SERVICE_ROLE_KEY
 
@@ -33,4 +37,21 @@ Agent UI refactor (2025-10-08):
 - [x] Update AgentList component with flat list and search
 - [x] Update BrowserPane for job search context
 - [x] Remove coding-specific fields (repo, branch, diffStats, status grouping)
+
+Activity Feed Integration (2025-10-11):
+
+- [x] Install lucide-react package for icons
+- [x] Create ActivityCard component with collapsible design and icon mapping
+- [x] Merge activities with messages in ChatPane timeline
+- [x] Simplify BrowserPane to placeholder for future workspace features
+- [x] Test expand/collapse functionality and build
+- [x] Update progress.md with completion status
+
+Future Enhancements:
+
+- [ ] Add activity filtering/search in chat
+- [ ] Add copy-to-clipboard for activity details
+- [ ] Implement activity grouping for related tool calls
+- [ ] Add visual progress indicators for long-running tools
+- [ ] Populate BrowserPane with job listings and application tracking
 

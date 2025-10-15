@@ -5,18 +5,20 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import LogoutButton from '@/components/LogoutButton';
+import { useAuth } from '@/lib/use-auth';
 
 const navigationLinks = [
   { href: '/', label: 'Home', external: false },
   { href: '/agent', label: 'Agents', external: false },
-  { href: 'https://docs.example.com', label: 'Docs', external: true },
+  { href: '/dashboard', label: 'Dashboard', external: false },
 ];
 
 type HeaderNavigationProps = {
   /**
-   * Indicates whether the current user has an authenticated session.
+   * Optional server-side authentication state for SSR.
+   * If not provided, will use client-side auth state.
    */
-  isAuthenticated: boolean;
+  isAuthenticated?: boolean;
 };
 
 const focusableSelector = [
@@ -88,7 +90,7 @@ function handleFocusTrap(event: KeyboardEvent, container: HTMLElement | null, on
   }
 }
 
-export default function HeaderNavigation({ isAuthenticated }: HeaderNavigationProps) {
+export default function HeaderNavigation({ isAuthenticated: serverAuth }: HeaderNavigationProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const menuId = useId();
@@ -96,6 +98,12 @@ export default function HeaderNavigation({ isAuthenticated }: HeaderNavigationPr
   const panelRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  
+  // Use real-time auth state
+  const { isAuthenticated: clientAuth, loading, hasContext } = useAuth();
+  
+  // Use client-side auth state if context is available and not loading, fallback to server-side
+  const isAuthenticated = hasContext && !loading ? clientAuth : serverAuth;
 
   const closeMenu = useCallback(() => {
     setIsOpen(false);

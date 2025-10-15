@@ -17,6 +17,7 @@ interface AuthFormProps {
 interface FieldErrors {
   email?: string;
   password?: string;
+  tos?: string;
 }
 
 /**
@@ -27,7 +28,7 @@ interface FieldErrors {
 export default function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
   const search = useSearchParams();
-  const redirect = search.get('redirect') || '/settings';
+  const redirect = search.get('redirect') || '/dashboard';
   const supabase = getBrowserSupabase();
 
   const [email, setEmail] = useState('');
@@ -35,6 +36,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [tosAccepted, setTosAccepted] = useState(false);
 
   const helperText = useMemo(
     () => ({
@@ -91,6 +93,12 @@ export default function AuthForm({ mode }: AuthFormProps) {
       return;
     }
 
+    if (mode === 'signup' && !tosAccepted) {
+      setFieldErrors({ tos: 'You must agree to the Terms of Service to continue.' });
+      setLoading(false);
+      return;
+    }
+
     try {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
@@ -99,6 +107,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
         const { error } = await supabase.auth.signUp({ email: normalizedEmail, password });
         if (error) throw error;
       }
+      // Refresh the router to update auth state
+      router.refresh();
       router.replace(redirect);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
@@ -109,15 +119,25 @@ export default function AuthForm({ mode }: AuthFormProps) {
   }
 
   async function handleOAuth(provider: OAuthProvider) {
+    if (mode === 'signup' && !tosAccepted) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        tos: 'You must agree to the Terms of Service to continue.',
+      }));
+      setFormError(null);
+      return;
+    }
+
     setLoading(true);
     setFormError(null);
     setFieldErrors({});
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${origin}/auth/callback` },
+        options: { redirectTo: `${origin}/auth/callback?redirect=${encodeURIComponent(redirect)}` },
       });
+      if (error) throw error;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'OAuth failed';
       setFormError(errorMessage);
@@ -192,6 +212,39 @@ export default function AuthForm({ mode }: AuthFormProps) {
           <p className="text-sm font-medium text-[var(--danger)]" role="alert">
             {formError}
           </p>
+        )}
+        {mode === 'signup' && (
+          <div>
+            <div className="flex items-center gap-3">
+              <input
+                id="accept-tos"
+                type="checkbox"
+                checked={tosAccepted}
+                onChange={(e) => setTosAccepted(e.target.checked)}
+                aria-invalid={Boolean(fieldErrors.tos)}
+                aria-describedby="tos-helper"
+                className={`h-4 w-4 rounded border border-[var(--border)]/40 bg-[var(--card)] accent-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 ${
+                  fieldErrors.tos ? 'border-[var(--danger)] ring-[var(--danger)]/40' : ''
+                }`}
+              />
+              <label htmlFor="accept-tos" className="text-sm text-[var(--fg)]">
+                I agree to the{' '}
+                <a
+                  href="/terms"
+                  className="font-semibold text-[var(--accent)] underline decoration-[var(--accent)]/60 underline-offset-4 hover:text-[var(--accent)]/80"
+                >
+                  Terms of Service
+                </a>
+              </label>
+            </div>
+            <p
+              id="tos-helper"
+              className={`mt-2 text-sm ${fieldErrors.tos ? 'text-[var(--danger)]' : 'text-[var(--fg)]/60'}`}
+              role={fieldErrors.tos ? 'alert' : undefined}
+            >
+              {fieldErrors.tos ?? 'Required to create an Enlist account.'}
+            </p>
+          </div>
         )}
         <Button type="submit" disabled={loading} className="w-full justify-center">
           {loading ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Sign up'}

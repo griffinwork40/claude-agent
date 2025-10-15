@@ -30,10 +30,11 @@ export async function POST(request: NextRequest) {
     }
     console.log('✓ User authenticated:', session.user.id);
     
-    const { message, sessionId } = await request.json();
+    const { message, sessionId, agentId } = await request.json();
     console.log('Request data:', { 
       messageLength: message?.length, 
       sessionId,
+      agentId,
       hasMessage: !!message,
       requestHeaders: Object.fromEntries(request.headers.entries())
     });
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
         content: message, 
         sender: 'user',
         user_id: session.user.id,
+        session_id: agentId || 'default-agent',
         created_at: new Date().toISOString()
       }])
       .select()
@@ -72,7 +74,8 @@ export async function POST(request: NextRequest) {
       const result = await runClaudeAgentStream(
         message, 
         session.user.id, 
-        sessionId
+        sessionId,
+        agentId  // Pass agentId for proper message association
       );
       agentSessionId = result.sessionId;
       stream = result.stream;
@@ -95,6 +98,58 @@ export async function POST(request: NextRequest) {
         console.log('Starting stream processing...');
         // Ensure counters/state visible to catch scope
         let chunkCount = 0;
+        const pendingActivities: Array<Promise<void>> = [];
+
+        // Helper function to persist activities asynchronously
+        const persistActivity = async (activityData: any) => {
+          try {
+            // Add required fields for persistence
+            const activity = {
+              ...activityData,
+              agentId: agentId || 'default-agent',
+            };
+
+            // Add timing for executable activities while ensuring valid_timing constraint
+            // The constraint requires: (started_at IS NULL) = (completed_at IS NULL)
+            const executableTypes = ['tool_start', 'tool_executing', 'tool_result', 'batch_start', 'batch_progress', 'batch_complete'];
+            if (executableTypes.includes(activityData.type)) {
+              // For start and executing activities, set both timestamps initially
+              // They will be updated when the activity completes
+              if (activityData.type === 'tool_start' || activityData.type === 'tool_executing' ||
+                  activityData.type === 'batch_start' || activityData.type === 'batch_progress') {
+                const now = new Date().toISOString();
+                activity.startedAt = now;
+                activity.completedAt = now; // Same timestamp initially, will be updated on completion
+              }
+
+              // For completed activities, set both timestamps
+              if (activityData.type === 'tool_result' || activityData.type === 'batch_complete') {
+                const now = new Date().toISOString();
+                activity.startedAt = now;
+                activity.completedAt = now;
+              }
+            }
+
+            const activityUrl = new URL('/api/activities', request.nextUrl.origin);
+            const response = await fetch(activityUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': request.headers.get('cookie') || '',
+              },
+              body: JSON.stringify({ activity }),
+            });
+
+            if (!response.ok) {
+              console.error('Failed to persist activity:', response.status);
+            } else {
+              console.log('✓ Activity persisted:', activity.type, activity.tool || '');
+            }
+          } catch (error) {
+            console.error('Error persisting activity:', error);
+          }
+        };
+
         try {
           // Immediately send a preamble SSE event so the client receives bytes even if downstream fails
           const preamble = `data: ${JSON.stringify({ type: 'status', content: 'starting' })}\n\n`;
@@ -103,37 +158,27 @@ export async function POST(request: NextRequest) {
 
           const reader = stream.getReader();
           // chunkCount declared above
-          
+          let buffer = '';
+
           while (true) {
             const { done, value } = await reader.read();
-            
+
             if (done) {
               console.log('✓ Stream completed, total chunks:', chunkCount);
-              console.log('Saving complete response to database...');
               
-              // Store the complete response in database
-              const { data: botMessage, error: botMessageError } = await supabase
-                .from('messages')
-                .insert([{
-                  content: fullResponse,
-                  sender: 'bot',
-                  user_id: session.user.id,
-                  created_at: new Date().toISOString()
-                }])
-                .select()
-                .single();
+              // Note: Message chunks are now saved incrementally in claude-agent.ts
+              // No need to save fullResponse here as it would create duplicates
 
-              if (botMessageError) {
-                console.error('❌ Error saving bot message:', botMessageError);
-              } else {
-                console.log('✓ Bot message saved:', botMessage.id);
+              // Persist any remaining pending activities
+              if (pendingActivities.length > 0) {
+                console.log(`Waiting for ${pendingActivities.length} pending activity writes...`);
+                await Promise.allSettled(pendingActivities);
               }
 
               // Send final event with session ID
-              const finalEvent = `data: ${JSON.stringify({ 
-                type: 'complete', 
-                sessionId: agentSessionId,
-                messageId: botMessage?.id 
+              const finalEvent = `data: ${JSON.stringify({
+                type: 'complete',
+                sessionId: agentSessionId
               })}\n\n`;
               controller.enqueue(encoder.encode(finalEvent));
               controller.close();
@@ -141,19 +186,84 @@ export async function POST(request: NextRequest) {
               break;
             }
 
-            // Decode the chunk and add to full response
+            // Decode the chunk and add to buffer
             const chunk = new TextDecoder().decode(value);
+            buffer += chunk;
             console.log('Chunk received bytes:', value?.length ?? 0);
-            fullResponse += chunk;
-            chunkCount++;
 
-            // Send chunk as SSE
-            const event = `data: ${JSON.stringify({ 
-              type: 'chunk', 
-              content: chunk 
-            })}\n\n`;
-            controller.enqueue(encoder.encode(event));
-            
+            // Check for activity markers in the buffer
+            const activityMarkerStart = '__ACTIVITY__';
+            const activityMarkerEnd = '__END__';
+            let startIdx = buffer.indexOf(activityMarkerStart);
+
+            while (startIdx !== -1) {
+              const endIdx = buffer.indexOf(activityMarkerEnd, startIdx);
+
+              if (endIdx !== -1) {
+                // Extract the content before the activity marker
+                const beforeActivity = buffer.substring(0, startIdx);
+                if (beforeActivity) {
+                  fullResponse += beforeActivity;
+                  // Send as regular chunk
+                  const event = `data: ${JSON.stringify({
+                    type: 'chunk',
+                    content: beforeActivity
+                  })}\n\n`;
+                  controller.enqueue(encoder.encode(event));
+                  chunkCount++;
+                }
+
+                // Extract and parse the activity event
+                const activityJson = buffer.substring(
+                  startIdx + activityMarkerStart.length,
+                  endIdx
+                );
+
+                try {
+                  const activityData = JSON.parse(activityJson);
+                  console.log('Activity event:', activityData.type, activityData);
+
+                  // Add timing for start events
+                  if (activityData.type === 'tool_start' || activityData.type === 'batch_start') {
+                    activityData.startedAt = new Date().toISOString();
+                  }
+
+                  // Forward activity event as SSE
+                  const activityEvent = `data: ${JSON.stringify(activityData)}\n\n`;
+                  controller.enqueue(encoder.encode(activityEvent));
+
+                  // Persist activity asynchronously (non-blocking)
+                  if (activityData.type !== 'thinking_preview') {
+                    // Don't persist thinking_preview events (too ephemeral)
+                    pendingActivities.push(persistActivity(activityData));
+                  }
+                } catch (parseError) {
+                  console.error('Failed to parse activity JSON:', activityJson, parseError);
+                }
+
+                // Remove processed content from buffer
+                buffer = buffer.substring(endIdx + activityMarkerEnd.length);
+                startIdx = buffer.indexOf(activityMarkerStart);
+              } else {
+                // Incomplete activity marker, wait for more data
+                break;
+              }
+            }
+
+            // If no (more) activity markers, treat remaining buffer as regular content
+            if (startIdx === -1 && buffer) {
+              fullResponse += buffer;
+
+              // Send buffer as SSE chunk
+              const event = `data: ${JSON.stringify({
+                type: 'chunk',
+                content: buffer
+              })}\n\n`;
+              controller.enqueue(encoder.encode(event));
+              chunkCount++;
+              buffer = '';
+            }
+
             if (chunkCount % 10 === 0) {
               console.log(`Processed ${chunkCount} chunks, response length: ${fullResponse.length}`);
             }
@@ -168,11 +278,17 @@ export async function POST(request: NextRequest) {
             fullResponseLength: fullResponse.length,
             chunkCount
           });
-          
+
+          // Persist any pending activities even on error
+          if (pendingActivities.length > 0) {
+            console.log(`Waiting for ${pendingActivities.length} pending activity writes due to error...`);
+            await Promise.allSettled(pendingActivities);
+          }
+
           // Ensure client receives an error SSE event before closing
           try {
-            const errorEvent = `data: ${JSON.stringify({ 
-              type: 'error', 
+            const errorEvent = `data: ${JSON.stringify({
+              type: 'error',
               error: `Streaming error: ${errMessage}`,
               details: process.env.NODE_ENV === 'development' ? errStack : undefined
             })}\n\n`;
@@ -214,19 +330,43 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    console.log('=== GET Messages API Request Started ===');
+    
+    // Check authentication
+    const routeClient = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await routeClient.auth.getSession();
+    
+    if (!session) {
+      console.error('❌ Unauthorized: No session found');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.log('✓ User authenticated:', session.user.id);
+    
+    // Get agentId from query parameters
+    const { searchParams } = new URL(request.url);
+    const agentId = searchParams.get('agentId');
+    
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
+    let query = supabase
       .from('messages')
       .select('*')
-      .order('created_at', { ascending: true });
+      .eq('user_id', session.user.id);
+    
+    // Filter by session_id if agentId is provided
+    if (agentId) {
+      query = query.eq('session_id', agentId);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) {
       console.error('Error fetching messages:', error);
       return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
     }
 
+    console.log(`✓ Fetched ${data?.length || 0} messages for user${agentId ? ` with agentId: ${agentId}` : ''}`);
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Error in GET messages API:', error);

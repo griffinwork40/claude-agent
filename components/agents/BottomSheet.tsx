@@ -21,6 +21,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
   const sheetRef = useRef<HTMLDivElement>(null);
   const startY = useRef<number>(0);
   const currentY = useRef<number>(0);
+  const isDragGesture = useRef<boolean>(false);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
@@ -47,10 +48,20 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
   }, [isOpen]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement | null;
+    // Only start a drag gesture if the touch begins on the handle area
+    const startedOnHandle = !!target?.closest('[data-drag-handle="true"]');
+    isDragGesture.current = startedOnHandle;
+    if (!startedOnHandle) {
+      startY.current = 0;
+      currentY.current = 0;
+      return;
+    }
     startY.current = e.touches[0].clientY;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragGesture.current) return;
     currentY.current = e.touches[0].clientY;
     const diff = currentY.current - startY.current;
     
@@ -61,6 +72,12 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
   };
 
   const handleTouchEnd = () => {
+    if (!isDragGesture.current) {
+      // Not a drag-close gesture; ignore
+      startY.current = 0;
+      currentY.current = 0;
+      return;
+    }
     const diff = currentY.current - startY.current;
     
     // Close if swiped down more than 100px
@@ -75,6 +92,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
     
     startY.current = 0;
     currentY.current = 0;
+    isDragGesture.current = false;
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -127,8 +145,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
       {/* Bottom Sheet */}
       <div
         ref={sheetRef}
-        className="fixed inset-x-0 bottom-0 z-50 bg-[var(--bg)] rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out"
-        style={{ height: '90dvh' }}
+        className="fixed inset-x-0 bottom-0 z-50 bg-[var(--bg)] rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out h-[95dvh] flex flex-col"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -139,14 +156,17 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
         onKeyDown={handleKeyDown}
       >
         {/* Handle bar for swipe indicator */}
-        <div className="flex justify-center py-3 border-b border-[var(--border)]">
-          <div className="w-12 h-1.5 rounded-full bg-[var(--fg)]/30" />
+        <div
+          className="flex justify-center py-2 border-b border-[var(--border)] touch-none flex-shrink-0"
+          data-drag-handle="true"
+        >
+          <div className="w-12 h-1 rounded-full bg-[var(--fg)]/30" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)] flex-shrink-0">
           {title ? (
-            <h2 id={titleId} className="text-lg font-semibold text-[var(--fg)]">
+            <h2 id={titleId} className="text-base font-semibold text-[var(--fg)] truncate">
               {title}
             </h2>
           ) : (
@@ -156,7 +176,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
           )}
           <button
             onClick={onClose}
-            className="p-2 rounded-md hover:bg-[var(--muted)] text-[var(--fg)]"
+            className="p-1.5 rounded-md hover:bg-[var(--muted)] text-[var(--fg)] ml-2"
             aria-label="Close bottom sheet"
           >
             ✕
@@ -164,7 +184,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
         </div>
 
         {/* Content */}
-        <div className="h-[calc(100%-3rem)] overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {children}
         </div>
       </div>

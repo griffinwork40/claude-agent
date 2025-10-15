@@ -16,7 +16,7 @@ export interface JobOpportunity {
   description: string;
   salary?: string;
   application_url: string;
-  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company';
+  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google';
   skills: string[];
   experience_level: string;
   job_type: string; // full-time, part-time, contract
@@ -24,9 +24,10 @@ export interface JobOpportunity {
   match_percentage?: number;
   applied: boolean;
   applied_at?: string;
-  status: 'discovered' | 'interested' | 'applied' | 'rejected';
+  status: 'discovered' | 'interested' | 'applied' | 'rejected' | 'error';
   raw_data?: Record<string, unknown>; // Original scraped data
   created_at: string;
+  error?: string; // Error message for error status jobs
 }
 
 export interface UserProfile {
