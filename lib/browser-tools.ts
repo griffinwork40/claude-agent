@@ -4,7 +4,7 @@ import { JobOpportunity } from '@/types';
 
 // LLM-controlled browser automation client
 export class BrowserService {
-  private serviceUrl = process.env.BROWSER_SERVICE_URL || 'http://localhost:3001';
+  private serviceUrl = process.env.BROWSER_SERVICE_URL || 'http://localhost:3000';
   private apiKey = process.env.BROWSER_SERVICE_API_KEY || 'test-key-12345';
 
   private async request(endpoint: string, body: Record<string, unknown>) {

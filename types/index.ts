@@ -8,26 +8,28 @@ export interface Message {
 }
 
 export interface JobOpportunity {
-  id: string;
+  id?: string;
   user_id?: string;
   title: string;
   company: string;
   location: string;
   description: string;
   salary?: string;
-  application_url: string;
-  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google';
-  skills: string[];
-  experience_level: string;
-  job_type: string; // full-time, part-time, contract
-  remote_type: string; // remote, hybrid, onsite
+  url?: string; // For API responses
+  application_url?: string; // For database storage
+  source?: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google';
+  skills?: string[];
+  experience_level?: string;
+  job_type?: string; // full-time, part-time, contract
+  remote_type?: string; // remote, hybrid, onsite
   match_percentage?: number;
-  applied: boolean;
+  applied?: boolean;
   applied_at?: string;
-  status: 'discovered' | 'interested' | 'applied' | 'rejected' | 'error';
+  status?: 'discovered' | 'interested' | 'applied' | 'rejected' | 'error' | 'success' | 'fallback';
   raw_data?: Record<string, unknown>; // Original scraped data
-  created_at: string;
+  created_at?: string;
   error?: string; // Error message for error status jobs
+  fallback_url?: string; // URL for manual search when automation fails
 }
 
 export interface UserProfile {
