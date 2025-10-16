@@ -31,9 +31,6 @@ Current user data:
 
 If the user says they're done or everything looks good, confirm completion.`;
 
-// Session storage for onboarding conversations
-const onboardingSessions = new Map<string, Array<{ role: string; content: string }>>();
-
 export async function POST(req: NextRequest) {
   try {
     // Check authentication
@@ -69,10 +66,43 @@ export async function POST(req: NextRequest) {
     
     // Get or create conversation session
     const conversationKey = sessionId || `onboarding_${userId}`;
-    let messages = onboardingSessions.get(conversationKey) || [];
-    
+
+    const { data: storedMessages, error: loadError } = await supabase
+      .from('onboarding_chat_messages')
+      .select('role, content')
+      .eq('user_id', userId)
+      .eq('session_id', conversationKey)
+      .order('created_at', { ascending: true });
+
+    if (loadError) {
+      console.error('Failed to load onboarding chat history:', loadError);
+      return new Response(
+        JSON.stringify({ error: 'Unable to load chat history' }),
+        { status: 500 }
+      );
+    }
+
+    const messages = storedMessages?.map(({ role, content }) => ({ role, content })) ?? [];
+
     // Add user message
     messages.push({ role: 'user', content: message });
+
+    const { error: insertUserMessageError } = await supabase
+      .from('onboarding_chat_messages')
+      .insert({
+        user_id: userId,
+        session_id: conversationKey,
+        role: 'user',
+        content: message
+      });
+
+    if (insertUserMessageError) {
+      console.error('Failed to store onboarding chat user message:', insertUserMessageError);
+      return new Response(
+        JSON.stringify({ error: 'Unable to store user message' }),
+        { status: 500 }
+      );
+    }
     
     // Prepare system prompt with user data
     const userData = profile ? JSON.stringify({
@@ -119,7 +149,19 @@ export async function POST(req: NextRequest) {
             } else if (chunk.type === 'message_stop') {
               // Save assistant response to session
               messages.push({ role: 'assistant', content: fullResponse });
-              onboardingSessions.set(conversationKey, messages);
+
+              const { error: insertAssistantMessageError } = await supabase
+                .from('onboarding_chat_messages')
+                .insert({
+                  user_id: userId,
+                  session_id: conversationKey,
+                  role: 'assistant',
+                  content: fullResponse
+                });
+
+              if (insertAssistantMessageError) {
+                console.error('Failed to store onboarding chat assistant message:', insertAssistantMessageError);
+              }
               
               // Check if onboarding is complete
               const completionPhrases = [
