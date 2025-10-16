@@ -10,7 +10,7 @@ export interface JobOpportunity {
   salary?: string;
   url?: string;
   application_url: string;
-  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google' | 'manual';
+  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google' | 'manual' | 'remotive';
   skills: string[];
   experience_level: string;
   job_type: string;
@@ -24,4 +24,3 @@ export interface JobOpportunity {
   raw_data?: Record<string, unknown>;
   created_at: string;
 }
-
