@@ -179,7 +179,7 @@ export default function OnboardingPage() {
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold mb-4">Welcome to Enlist! 🎯</h1>
             <p className="text-xl text-[var(--fg)]/70">
-              Let's get you set up. Upload your resume to get started.
+              Let&apos;s get you set up. Upload your resume to get started.
             </p>
           </div>
 
