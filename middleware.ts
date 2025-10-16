@@ -24,11 +24,37 @@ export async function middleware(req: NextRequest) {
     // Gate protected routes
     const url = req.nextUrl;
     const protectedPath = url.pathname.startsWith('/agent') || url.pathname === '/dashboard';
+    const isOnboardingPath = url.pathname.startsWith('/onboarding');
+    
     if (protectedPath && !session) {
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = '/login';
       loginUrl.searchParams.set('redirect', req.nextUrl.pathname + req.nextUrl.search);
       return NextResponse.redirect(loginUrl);
+    }
+    
+    // Check onboarding status for authenticated users accessing protected routes
+    if (session && protectedPath && !isOnboardingPath) {
+      try {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('onboarding_completed')
+          .eq('user_id', session.user.id)
+          .single();
+        
+        // Redirect to onboarding if not completed
+        if (!profile || !profile.onboarding_completed) {
+          const onboardingUrl = req.nextUrl.clone();
+          onboardingUrl.pathname = '/onboarding';
+          return NextResponse.redirect(onboardingUrl);
+        }
+      } catch (error) {
+        console.warn('Failed to check onboarding status:', error);
+        // If we can't check onboarding status, redirect to onboarding to be safe
+        const onboardingUrl = req.nextUrl.clone();
+        onboardingUrl.pathname = '/onboarding';
+        return NextResponse.redirect(onboardingUrl);
+      }
     }
   } catch (error) {
     console.warn('Middleware auth check failed:', error);
@@ -39,7 +65,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/agent/:path*', '/dashboard'],
+  matcher: ['/agent/:path*', '/dashboard', '/onboarding'],
 };
 
 

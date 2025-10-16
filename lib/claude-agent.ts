@@ -8,6 +8,7 @@ import { browserTools, getBrowserService } from './browser-tools';
 import { listGmailThreads, sendGmailMessage, markGmailThreadRead } from '@/lib/gmail/client';
 import { getOrCreateUserProfile } from './user-profile';
 import { ToolUse, ToolResult, BrowserToolResult } from '@/types';
+import { getUserContextForPrompt } from './user-data-compiler';
 
 // Debug: Log SDK import
 console.log('Anthropic SDK imported successfully');
@@ -353,10 +354,14 @@ export async function runClaudeAgentStream(
             controller.enqueue(new TextEncoder().encode(marker));
           };
           
+          // Get user context and inject into system prompt
+          const userContext = await getUserContextForPrompt(userId);
+          const systemPromptWithContext = `${instructions}\n\n${userContext}`;
+          
           const stream = await client.messages.create({
             model: 'claude-sonnet-4-5-20250929',
             max_tokens: 4096,
-            system: instructions,
+            system: systemPromptWithContext,
             messages: messages,
             tools: agentTools, // Add tools support
             stream: true
@@ -509,7 +514,7 @@ export async function runClaudeAgentStream(
                 const continuationStream = await client.messages.create({
                   model: 'claude-sonnet-4-5-20250929',
                   max_tokens: 4096,
-                  system: instructions,
+                  system: systemPromptWithContext,
                   messages: continuationMessages,
                   tools: agentTools,
                   stream: true
