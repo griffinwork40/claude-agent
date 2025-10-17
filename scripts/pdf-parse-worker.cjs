@@ -5,7 +5,7 @@
  * compatibility issues when pdf-parse pulls in pdfjs-dist.
  */
 
-const { PDFParse } = require('pdf-parse');
+const pdfParse = require('pdf-parse');
 
 async function readStdin() {
   const chunks = [];
@@ -26,26 +26,16 @@ async function readStdin() {
       first: 50,
     };
 
-    const parser = new PDFParse({ data: buffer });
-    try {
-      const textResult = await parser.getText(options);
-      const infoResult = await parser.getInfo();
+    const result = await pdfParse(buffer, options);
 
-      const payload = {
-        text: textResult.text,
-        numpages: infoResult?.total ?? undefined,
-        info: infoResult?.info ?? undefined,
-        version: infoResult?.info?.PDFFormatVersion ?? undefined,
-      };
+    const payload = {
+      text: result.text,
+      numpages: result.numpages ?? result.info?.numpages ?? undefined,
+      info: result.info ?? undefined,
+      version: result.info?.PDFFormatVersion ?? result.metadata?._metadata?.get('pdf:PDFVersion') ?? undefined,
+    };
 
-      process.stdout.write(JSON.stringify(payload));
-    } finally {
-      try {
-        await parser.destroy();
-      } catch (destroyError) {
-        // ignore cleanup errors
-      }
-    }
+    process.stdout.write(JSON.stringify(payload));
   } catch (error) {
     const message = error instanceof Error ? error.stack || error.message : String(error);
     process.stderr.write(message);
