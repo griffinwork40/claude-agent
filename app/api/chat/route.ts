@@ -120,57 +120,9 @@ export async function POST(request: NextRequest) {
         console.log('Starting stream processing...');
         // Ensure counters/state visible to catch scope
         let chunkCount = 0;
-        const pendingActivities: Array<Promise<void>> = [];
-
-        // Helper function to persist activities asynchronously
-        const persistActivity = async (activityData: any) => {
-          try {
-            // Add required fields for persistence
-            const activity = {
-              ...activityData,
-              agentId: agentId || 'default-agent',
-            };
-
-            // Add timing for executable activities while ensuring valid_timing constraint
-            // The constraint requires: (started_at IS NULL) = (completed_at IS NULL)
-            const executableTypes = ['tool_start', 'tool_executing', 'tool_result', 'batch_start', 'batch_progress', 'batch_complete'];
-            if (executableTypes.includes(activityData.type)) {
-              // For start and executing activities, set both timestamps initially
-              // They will be updated when the activity completes
-              if (activityData.type === 'tool_start' || activityData.type === 'tool_executing' ||
-                  activityData.type === 'batch_start' || activityData.type === 'batch_progress') {
-                const now = new Date().toISOString();
-                activity.startedAt = now;
-                activity.completedAt = now; // Same timestamp initially, will be updated on completion
-              }
-
-              // For completed activities, set both timestamps
-              if (activityData.type === 'tool_result' || activityData.type === 'batch_complete') {
-                const now = new Date().toISOString();
-                activity.startedAt = now;
-                activity.completedAt = now;
-              }
-            }
-
-            const activityUrl = new URL('/api/activities', request.nextUrl.origin);
-            const response = await fetch(activityUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Cookie': request.headers.get('cookie') || '',
-              },
-              body: JSON.stringify({ activity }),
-            });
-
-            if (!response.ok) {
-              console.error('Failed to persist activity:', response.status);
-            } else {
-              console.log('✓ Activity persisted:', activity.type, activity.tool || '');
-            }
-          } catch (error) {
-            console.error('Error persisting activity:', error);
-          }
-        };
+        
+        // REMOVED: Activity persistence - activities are now ephemeral SSE events only
+        // They provide real-time progress feedback but are not stored in database
 
         try {
           // Immediately send a preamble SSE event so the client receives bytes even if downstream fails
@@ -188,14 +140,8 @@ export async function POST(request: NextRequest) {
             if (done) {
               console.log('✓ Stream completed, total chunks:', chunkCount);
               
-              // Note: Message chunks are now saved incrementally in claude-agent.ts
-              // No need to save fullResponse here as it would create duplicates
-
-              // Persist any remaining pending activities
-              if (pendingActivities.length > 0) {
-                console.log(`Waiting for ${pendingActivities.length} pending activity writes...`);
-                await Promise.allSettled(pendingActivities);
-              }
+              // Note: Complete assistant message is now saved in claude-agent.ts at stream end
+              // No need to save here - avoids duplicates
 
               // Send final event with session ID
               const finalEvent = `data: ${JSON.stringify({

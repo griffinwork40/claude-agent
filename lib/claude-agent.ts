@@ -141,51 +141,7 @@ interface AgentSession {
   messages: Array<{ role: string; content: string }>;
 }
 
-async function saveAssistantTextChunk({
-  supabase,
-  content,
-  userId,
-  agentId,
-  session,
-  context,
-}: {
-  supabase: SupabaseClient;
-  content: string;
-  userId: string;
-  agentId?: string | null;
-  session: AgentSession;
-  context: string;
-}): Promise<void> {
-  if (!content.trim()) {
-    return;
-  }
-
-  try {
-    const { data: textMessage, error } = await supabase
-      .from('messages')
-      .insert([
-        {
-          content,
-          sender: 'bot',
-          user_id: userId,
-          session_id: agentId || 'default-agent',
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single();
-
-    if (error) {
-      console.error(`❌ Error saving ${context} text chunk:`, error);
-      return;
-    }
-
-    console.log(`✓ ${context} text chunk saved:`, textMessage?.id);
-    session.messages.push({ role: 'assistant', content });
-  } catch (saveError) {
-    console.error(`❌ Failed to save ${context} text chunk:`, saveError);
-  }
-}
+// Removed: saveAssistantTextChunk - text is now accumulated and saved once at completion
 
 interface GmailListThreadsToolInput {
   query?: string;
@@ -399,16 +355,8 @@ export async function runClaudeAgentStream(
                   text: ''
                 });
               } else if (chunk.content_block.type === 'tool_use') {
-                // Before starting tool use, save any accumulated text as a message
-                await saveAssistantTextChunk({
-                  supabase,
-                  content: currentTextChunk,
-                  userId,
-                  agentId,
-                  session,
-                  context: 'pre-tool',
-                });
-                currentTextChunk = ''; // Reset for next chunk
+                // Don't save text chunk yet - accumulate all text until final completion
+                // currentTextChunk persists across tool boundaries for single final save
 
                 // Start of a tool use
                 currentToolUse = {
@@ -589,16 +537,8 @@ export async function runClaudeAgentStream(
                         });
                         console.log(`📝 Continuation ${iteration}: text block started`);
                       } else if (chunk.content_block.type === 'tool_use') {
-                        // Before starting tool use in continuation, save any accumulated text
-                        await saveAssistantTextChunk({
-                          supabase,
-                          content: currentTextChunk,
-                          userId,
-                          agentId,
-                          session,
-                          context: `continuation ${iteration}`,
-                        });
-                        currentTextChunk = ''; // Reset for next chunk
+                        // Don't save text chunk yet - accumulate all text until final completion
+                        // currentTextChunk persists across tool boundaries for single final save
 
                         continuationCurrentToolUse = {
                           id: chunk.content_block.id,
@@ -773,15 +713,34 @@ export async function runClaudeAgentStream(
                 console.log(`✓ Tool execution loop completed after ${iteration} iterations`);
               }
               
-              // Save any remaining text that hasn't been saved yet
-              await saveAssistantTextChunk({
-                supabase,
-                content: currentTextChunk,
-                userId,
-                agentId,
-                session,
-                context: 'final',
-              });
+              // Save the complete accumulated assistant response as a single message
+              if (currentTextChunk.trim()) {
+                console.log(`💾 Saving complete assistant response (${currentTextChunk.length} chars)...`);
+                try {
+                  const { data: assistantMessage, error } = await supabase
+                    .from('messages')
+                    .insert([
+                      {
+                        content: currentTextChunk,
+                        sender: 'bot',
+                        user_id: userId,
+                        session_id: agentId || 'default-agent',
+                        created_at: new Date().toISOString(),
+                      },
+                    ])
+                    .select()
+                    .single();
+
+                  if (error) {
+                    console.error(`❌ Error saving complete assistant message:`, error);
+                  } else {
+                    console.log(`✓ Complete assistant message saved:`, assistantMessage?.id);
+                    session.messages.push({ role: 'assistant', content: currentTextChunk });
+                  }
+                } catch (saveError) {
+                  console.error(`❌ Failed to save complete assistant message:`, saveError);
+                }
+              }
               currentTextChunk = '';
               
               controller.close();

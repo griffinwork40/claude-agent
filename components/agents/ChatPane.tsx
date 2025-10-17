@@ -475,13 +475,28 @@ export function ChatPane({
     inputTokens: number;
     outputTokens: number;
   } | null>(null);
-  const [activities, setActivities] = useState<Activity[]>(() => {
+  
+  // Use Map for automatic activity deduplication by ID
+  const [activitiesMap, setActivitiesMap] = useState<Map<string, Activity>>(() => {
     if (!agent?.id) {
-      return [];
+      return new Map();
     }
 
-    return externalActivities.filter((activity) => activity.agentId === agent.id);
+    // Initialize with external activities (from parent state)
+    const map = new Map<string, Activity>();
+    externalActivities
+      .filter((activity) => activity.agentId === agent.id)
+      .forEach((activity) => map.set(activity.id, activity));
+    return map;
   });
+  // Convert Map to array for rendering, filter out text_chunk activities
+  // text_chunk activities are already rendered as messages - don't duplicate them
+  const activities = useMemo(() => {
+    return Array.from(activitiesMap.values()).filter(
+      (activity) => activity.type !== 'text_chunk'
+    );
+  }, [activitiesMap]);
+  
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerPadding = isMobile ? '0.5rem' : '0.75rem';
@@ -663,18 +678,23 @@ export function ChatPane({
       setIsStreaming(false);
       setStreamingMessage('');
       setStreamingStartedAt(null);
-      setActivities([]);
+      // Clear activities map when switching agents
+      setActivitiesMap(new Map());
     }
   }, [agent?.id, currentAgentId]);
 
-  // Sync local activity list with the parent-provided history so unmounts/remounts keep state.
+  // Sync local activity map with the parent-provided history
   useEffect(() => {
     if (!agent?.id) {
-      setActivities([]);
+      setActivitiesMap(new Map());
       return;
     }
 
-    setActivities(externalActivities.filter((activity) => activity.agentId === agent.id));
+    const map = new Map<string, Activity>();
+    externalActivities
+      .filter((activity) => activity.agentId === agent.id)
+      .forEach((activity) => map.set(activity.id, activity));
+    setActivitiesMap(map);
   }, [agent?.id, externalActivities]);
 
   const visibleMessages = useMemo(() => {
@@ -833,28 +853,13 @@ export function ChatPane({
               console.log(`Event ${eventCount}:`, data.type, data.content?.substring(0, 50) || data.tool || '...');
               
               if (data.type === 'chunk') {
-                // Add text chunks as activities for proper interleaving with tool use
-                const targetAgentId = agent?.id ?? currentAgentId;
-                if (targetAgentId) {
-                  const activity: Activity = {
-                    id: `activity-${Date.now()}-${Math.random()}`,
-                    agentId: targetAgentId,
-                    type: 'text_chunk',
-                    content: data.content,
-                    timestamp: new Date().toISOString()
-                  };
-                  setActivities(prev => [...prev, activity]);
-                  
-                  if (onActivity) {
-                    onActivity(activity);
-                  }
-                }
-                // Also accumulate for the streaming message display
+                // Just accumulate for the streaming message display
+                // Don't create activities for text chunks - they become messages
                 setStreamingMessage(prev => prev + data.content);
               } else if (data.type === 'complete') {
                 console.log('✓ Stream completed, sessionId:', data.sessionId);
 
-                // Set completion flag but keep the streaming message visible until reload
+                // Set completion flag
                 setSessionId(data.sessionId);
                 setIsStreaming(false);
                 setStreamingStartedAt(null);
@@ -867,14 +872,18 @@ export function ChatPane({
                 }
               } else if (data.type === 'messages-reloaded') {
                 // Custom event to indicate messages have been reloaded
-                console.log('✓ Messages reloaded, clearing streaming state');
+                console.log('✓ Messages reloaded, clearing streaming state and ephemeral activities');
                 setStreamingMessage('');
+                // Clear all ephemeral activities - they were just progress indicators
+                setActivitiesMap(new Map());
               } else if (data.type === 'error') {
                 console.error('❌ Streaming error:', data.error);
                 setIsStreaming(false);
                 setStreamingMessage('');
                 setStreamingStartedAt(null);
                 setContextUsage(null); // Clear on error
+                // Clear activities on error too
+                setActivitiesMap(new Map());
               } else if (data.type === 'context_usage') {
                 // Update context usage state
                 if (data.contextPercentage !== undefined && data.totalTokens !== undefined) {
@@ -924,7 +933,12 @@ export function ChatPane({
                   message: activity.message
                 });
                 if (activity.agentId === (agent?.id ?? currentAgentId)) {
-                  setActivities(prev => [...prev, activity]);
+                  // Use Map for automatic deduplication
+                  setActivitiesMap(prev => {
+                    const next = new Map(prev);
+                    next.set(activity.id, activity);
+                    return next;
+                  });
                 }
 
                 // Also forward to parent if callback exists
@@ -950,6 +964,8 @@ export function ChatPane({
       setIsStreaming(false);
       setStreamingMessage('');
       setStreamingStartedAt(null);
+      // Clear activities on error
+      setActivitiesMap(new Map());
     }
   };
 
