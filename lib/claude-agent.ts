@@ -108,6 +108,7 @@ export async function initializeAgent(): Promise<{ client: Anthropic; instructio
     // Initialize Anthropic client
     anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
+      ...(process.env.ANTHROPIC_BASE_URL && { baseURL: process.env.ANTHROPIC_BASE_URL }),
     });
     console.log('✓ Anthropic client initialized');
 
