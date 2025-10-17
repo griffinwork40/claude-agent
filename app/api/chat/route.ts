@@ -196,15 +196,9 @@ export async function POST(request: NextRequest) {
                     activityData.startedAt = new Date().toISOString();
                   }
 
-                  // Forward activity event as SSE
+                  // Forward activity event as SSE (ephemeral - not persisted)
                   const activityEvent = `data: ${JSON.stringify(activityData)}\n\n`;
                   controller.enqueue(encoder.encode(activityEvent));
-
-                  // Persist activity asynchronously (non-blocking)
-                  if (activityData.type !== 'thinking_preview') {
-                    // Don't persist thinking_preview events (too ephemeral)
-                    pendingActivities.push(persistActivity(activityData));
-                  }
                 } catch (parseError) {
                   console.error('Failed to parse activity JSON:', activityJson, parseError);
                 }
@@ -246,12 +240,6 @@ export async function POST(request: NextRequest) {
             fullResponseLength: fullResponse.length,
             chunkCount
           });
-
-          // Persist any pending activities even on error
-          if (pendingActivities.length > 0) {
-            console.log(`Waiting for ${pendingActivities.length} pending activity writes due to error...`);
-            await Promise.allSettled(pendingActivities);
-          }
 
           // Ensure client receives an error SSE event before closing
           try {
