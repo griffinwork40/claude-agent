@@ -438,6 +438,39 @@ function ActivityCard({ activity }: { activity: Activity }) {
 /**
  * Chat pane listing messages for the selected agent and a simple input box.
  */
+const SCROLL_PIN_THRESHOLD_PX = 32;
+const SCROLL_EVENT_DEBOUNCE_MS = 16;
+
+type DebouncedFunction<T extends (...args: any[]) => void> = ((
+  ...args: Parameters<T>
+) => void) & { cancel: () => void };
+
+function debounce<T extends (...args: any[]) => void>(
+  fn: T,
+  delay: number
+): DebouncedFunction<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const debounced = (...args: Parameters<T>) => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+
+    timeoutId = setTimeout(() => {
+      fn(...args);
+    }, delay);
+  };
+
+  debounced.cancel = () => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
+  return debounced as DebouncedFunction<T>;
+}
+
 export function ChatPane({
   agent,
   messages,
@@ -467,8 +500,31 @@ export function ChatPane({
     return externalActivities.filter((activity) => activity.agentId === agent.id);
   });
   const endRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
+  const hasUserScrolledWhileStreamingRef = useRef(false);
   const composerPadding = isMobile ? '0.5rem' : '0.75rem';
+
+  const updatePinnedState = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+    const pinned = distanceFromBottom <= SCROLL_PIN_THRESHOLD_PX;
+
+    setIsPinnedToBottom((previous) => (previous === pinned ? previous : pinned));
+  }, []);
+
+  const debouncedUpdatePinnedState = useMemo(
+    () => debounce(updatePinnedState, SCROLL_EVENT_DEBOUNCE_MS),
+    [updatePinnedState]
+  );
+
+  useEffect(() => () => debouncedUpdatePinnedState.cancel(), [debouncedUpdatePinnedState]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -491,6 +547,8 @@ export function ChatPane({
 
     const handleMessagesReloaded: EventListener = () => {
       setStreamingMessage('');
+      setIsPinnedToBottom(true);
+      hasUserScrolledWhileStreamingRef.current = false;
     };
 
     window.addEventListener('messages-reloaded', handleMessagesReloaded);
@@ -499,6 +557,56 @@ export function ChatPane({
       window.removeEventListener('messages-reloaded', handleMessagesReloaded);
     };
   }, []);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleScroll = () => {
+      debouncedUpdatePinnedState();
+
+      if (isStreaming && !isPinnedToBottom) {
+        hasUserScrolledWhileStreamingRef.current = true;
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    debouncedUpdatePinnedState();
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      debouncedUpdatePinnedState.cancel();
+    };
+  }, [debouncedUpdatePinnedState, isStreaming, isPinnedToBottom]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      debouncedUpdatePinnedState();
+    });
+
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [debouncedUpdatePinnedState]);
+
+  useEffect(() => {
+    if (!isStreaming) {
+      if (!hasUserScrolledWhileStreamingRef.current) {
+        setIsPinnedToBottom(true);
+      }
+
+      hasUserScrolledWhileStreamingRef.current = false;
+    }
+  }, [isStreaming]);
 
   useEffect(() => {
     return () => {
@@ -722,8 +830,18 @@ export function ChatPane({
 
   // Auto-scroll to bottom when new messages arrive or streaming updates
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [timelineItems]);
+    if (timelineItems.length === 0) {
+      return;
+    }
+
+    const latestItem = timelineItems[timelineItems.length - 1];
+    const isUserMessage = latestItem.itemType === 'message' && latestItem.role === 'user';
+    const shouldScroll = isPinnedToBottom || isUserMessage;
+
+    if (shouldScroll) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [timelineItems, isPinnedToBottom]);
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -741,14 +859,16 @@ export function ChatPane({
 
   const handleStreamingSend = async (content: string) => {
     if (!agent || isStreaming) return;
-    
+
     console.log('Starting streaming send...', {
       agentId: agent.id,
       content: content.substring(0, 50) + '...',
       sessionId,
       isStreaming
     });
-    
+
+    setIsPinnedToBottom(true);
+
     // Add user message to local state immediately
     const userMessageId = `msg-${Date.now()}-user`;
     const userMessage: Message = {
@@ -762,6 +882,7 @@ export function ChatPane({
     // Call onSend to add the user message to parent state
     onSend(content, agent.id, userMessage);
     
+    hasUserScrolledWhileStreamingRef.current = false;
     setIsStreaming(true);
     setStreamingMessage('');
     setStreamingStartedAt(new Date().toISOString());
@@ -845,6 +966,7 @@ export function ChatPane({
                 // Custom event to indicate messages have been reloaded
                 console.log('✓ Messages reloaded, clearing streaming state');
                 setStreamingMessage('');
+                setIsPinnedToBottom(true);
               } else if (data.type === 'error') {
                 console.error('❌ Streaming error:', data.error);
                 setIsStreaming(false);
@@ -943,7 +1065,11 @@ export function ChatPane({
       )}
 
       {/* Scrollable messages area */}
-      <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isMobile ? 'px-3 py-4' : 'p-3'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div
+        ref={messagesContainerRef}
+        className={`flex-1 overflow-y-auto overflow-x-hidden ${isMobile ? 'px-3 py-4' : 'p-3'}`}
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
         {timelineItems.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="w-full max-w-xl px-4">
