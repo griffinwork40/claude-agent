@@ -458,6 +458,7 @@ export function ChatPane({
   const [streamingMessage, setStreamingMessage] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamingStartedAt, setStreamingStartedAt] = useState<string | null>(null);
+  const [streamingError, setStreamingError] = useState<string | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(agent?.id ?? null);
   const [activities, setActivities] = useState<Activity[]>(() => {
     if (!agent?.id) {
@@ -741,7 +742,7 @@ export function ChatPane({
 
   const handleStreamingSend = async (content: string) => {
     if (!agent || isStreaming) return;
-    
+
     console.log('Starting streaming send...', {
       agentId: agent.id,
       content: content.substring(0, 50) + '...',
@@ -758,14 +759,15 @@ export function ChatPane({
       content: content,
       createdAt: new Date().toISOString(),
     };
-    
+
     // Call onSend to add the user message to parent state
     onSend(content, agent.id, userMessage);
-    
+
+    setStreamingError(null);
     setIsStreaming(true);
     setStreamingMessage('');
     setStreamingStartedAt(new Date().toISOString());
-    
+
     try {
       console.log('Sending request to /api/chat...');
       const response = await fetch('/api/chat', {
@@ -850,11 +852,16 @@ export function ChatPane({
                 setIsStreaming(false);
                 setStreamingMessage('');
                 setStreamingStartedAt(null);
+                setStreamingError(
+                  typeof data.error === 'string'
+                    ? data.error
+                    : 'The assistant reported an unknown streaming error.'
+                );
               } else if (
-                data.type === 'tool_start' || 
-                data.type === 'tool_params' || 
-                data.type === 'tool_executing' || 
-                data.type === 'tool_result' || 
+                data.type === 'tool_start' ||
+                data.type === 'tool_params' ||
+                data.type === 'tool_executing' ||
+                data.type === 'tool_result' ||
                 data.type === 'thinking' ||
                 data.type === 'status'
               ) {
@@ -913,6 +920,12 @@ export function ChatPane({
       setIsStreaming(false);
       setStreamingMessage('');
       setStreamingStartedAt(null);
+      const fallbackMessage = 'We were unable to send your message. Please try again in a moment.';
+      if (error instanceof Error) {
+        setStreamingError(`${fallbackMessage} (${error.message})`);
+      } else {
+        setStreamingError(fallbackMessage);
+      }
     }
   };
 
@@ -1141,6 +1154,19 @@ export function ChatPane({
           }}
           className="flex flex-col gap-2"
         >
+          {streamingError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+            >
+              <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+              <div className="space-y-1">
+                <p className="font-medium">We couldn&apos;t send your message.</p>
+                <p className="text-xs text-red-700/80">Edit your prompt or try again in a moment.</p>
+                <p className="text-xs text-red-600/70">{streamingError}</p>
+              </div>
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <div className="flex flex-1 items-end gap-2">
               <textarea
@@ -1150,7 +1176,12 @@ export function ChatPane({
                 className="flex-1 resize-none rounded-xl bg-[var(--card)] text-[var(--fg)] placeholder-[var(--timestamp-subtle)] px-3 py-2.5 text-base border border-[var(--border)] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all duration-150"
                 placeholder="Type a message..."
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e) => {
+                  if (streamingError) {
+                    setStreamingError(null);
+                  }
+                  setText(e.target.value);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
