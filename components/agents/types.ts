@@ -64,6 +64,12 @@ export interface Activity {
 
   tool?: string;
   toolId?: string;
+  previousTool?: string;
+  previousToolId?: string;
+  previousToolLabel?: string;
+  nextTool?: string;
+  nextToolId?: string;
+  nextToolLabel?: string;
 
   // Batch tracking (Phase 2)
   batchId?: string;

@@ -812,7 +812,15 @@ async function executeTools(
     } : {}
   );
 
-  for (const toolUse of toolUses) {
+  const formatToolName = (rawName: string | undefined): string => {
+    if (!rawName) {
+      return 'tool';
+    }
+    return rawName.replace(/_/g, ' ');
+  };
+
+  for (let index = 0; index < toolUses.length; index++) {
+    const toolUse = toolUses[index];
     // Add batch context to tool activities
     const executingBatchContext = buildBatchContext(completedCount);
 
@@ -1131,7 +1139,7 @@ async function executeTools(
             });
           }
         }
-        
+
       } catch (error: unknown) {
         console.error(`❌ Error executing tool ${toolUse.name}:`, error);
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1167,7 +1175,25 @@ async function executeTools(
           }
         }
       }
+
+    const hasMoreTools = index < toolUses.length - 1;
+    if (sendActivity && hasMoreTools) {
+      const nextTool = toolUses[index + 1];
+      const formattedNextTool = formatToolName(nextTool?.name);
+      const formattedCurrentTool = formatToolName(toolUse.name);
+
+      sendActivity('thinking', {
+        content: `Thinking about using ${formattedNextTool} next...`,
+        previousTool: toolUse.name,
+        previousToolId: toolUse.id,
+        previousToolLabel: formattedCurrentTool,
+        nextTool: nextTool?.name,
+        nextToolId: nextTool?.id,
+        nextToolLabel: formattedNextTool,
+        ...resultBatchContext
+      });
     }
+  }
 
   // Send batch completion event if this was a batch execution
   if (batchId && sendActivity) {
