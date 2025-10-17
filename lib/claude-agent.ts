@@ -979,6 +979,58 @@ async function executeTools(
               };
             }
             break;
+
+          case 'find_company_careers_page':
+            console.log('🔍 Finding company careers page:', input);
+            try {
+              const careersResult = await browserService.findCompanyCareersPage({
+                companyName: input.companyName,
+                jobTitle: input.jobTitle
+              });
+              result = {
+                success: true,
+                data: careersResult,
+                message: `Found careers page: ${careersResult.careersUrl}`
+              };
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              result = {
+                success: false,
+                error: errMessage,
+                message: `Failed to find careers page: ${errMessage}`
+              };
+            }
+            break;
+
+          case 'extract_company_application_url':
+            console.log('🔍 Extracting company application URL:', input);
+            try {
+              const extractResult = await browserService.extractCompanyApplicationUrl({
+                jobBoardUrl: input.jobBoardUrl
+              });
+              
+              if (extractResult.companyApplicationUrl) {
+                result = {
+                  success: true,
+                  data: extractResult,
+                  message: `Found company application URL: ${extractResult.companyApplicationUrl}`
+                };
+              } else {
+                result = {
+                  success: false,
+                  data: extractResult,
+                  message: `This job requires applying through the job board (no direct company application available)`
+                };
+              }
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              result = {
+                success: false,
+                error: errMessage,
+                message: `Failed to extract company URL: ${errMessage}`
+              };
+            }
+            break;
             
           default:
             result = {

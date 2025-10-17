@@ -389,6 +389,69 @@ app.post('/api/search-linkedin', authenticate, async (req: Request, res: Respons
   }
 });
 
+// Extract company application URL from job board listing
+app.post('/api/extract-company-url', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { jobBoardUrl } = req.body;
+    
+    if (!jobBoardUrl) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'jobBoardUrl is required' 
+      });
+    }
+    
+    console.log('🔍 Extract company URL request:', { jobBoardUrl });
+    
+    const browserService = getBrowserJobService();
+    const result = await browserService.extractCompanyApplicationUrl(jobBoardUrl);
+    
+    if (result.companyApplicationUrl) {
+      console.log(`✓ Found company application URL: ${result.companyApplicationUrl}`);
+    } else {
+      console.log('ℹ️ Job requires application through job board');
+    }
+    
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('❌ Error extracting company URL:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Find company careers page
+app.post('/api/find-careers-page', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { companyName, jobTitle } = req.body;
+    
+    if (!companyName) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'companyName is required' 
+      });
+    }
+    
+    console.log('🔍 Find careers page request:', { companyName, jobTitle });
+    
+    const browserService = getBrowserJobService();
+    const result = await browserService.findCompanyCareersPage(companyName, jobTitle);
+    
+    console.log(`✓ Found careers page: ${result.careersUrl}`);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('❌ Error finding careers page:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Get detailed job information
 app.post('/api/job-details', authenticate, async (req: Request, res: Response) => {
   try {

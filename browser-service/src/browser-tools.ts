@@ -1030,6 +1030,208 @@ export class BrowserJobService {
       console.log(`Could not fill field ${selector}: ${errMessage}`);
     }
   }
+
+  // Extract company application URL from job board listing
+  async extractCompanyApplicationUrl(jobBoardUrl: string): Promise<{ companyApplicationUrl: string | null; requiresJobBoard: boolean }> {
+    if (!this.browser) {
+      await this.initialize();
+    }
+
+    const page = await this.createStealthPage();
+    
+    try {
+      console.log('🔍 Extracting company URL from:', jobBoardUrl);
+      await page.goto(jobBoardUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(2000);
+      
+      let companyUrl: string | null = null;
+      
+      // Try Indeed selectors
+      if (jobBoardUrl.includes('indeed.com')) {
+        // Look for "Apply on company website" button
+        const selectors = [
+          '[data-indeed-apply-button-type="offsite"]',
+          'a[href*="company"]:has-text("Apply on company website")',
+          'a[href*="apply"]:has-text("Company website")',
+          '.jobsearch-IndeedApplyButton-newDesign[href*="http"]'
+        ];
+        
+        for (const selector of selectors) {
+          try {
+            const element = page.locator(selector).first();
+            if (await element.isVisible({ timeout: 2000 })) {
+              companyUrl = await element.getAttribute('href');
+              if (companyUrl && !companyUrl.includes('indeed.com')) {
+                console.log('✓ Found company URL via selector:', selector);
+                break;
+              }
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+      
+      // Try LinkedIn selectors
+      if (jobBoardUrl.includes('linkedin.com')) {
+        const selectors = [
+          '[data-tracking-control-name="public_jobs_apply-link-offsite"]',
+          'a[href*="apply"]:has-text("Apply on company website")',
+          '.jobs-apply-button--top-card a[href*="http"]'
+        ];
+        
+        for (const selector of selectors) {
+          try {
+            const element = page.locator(selector).first();
+            if (await element.isVisible({ timeout: 2000 })) {
+              companyUrl = await element.getAttribute('href');
+              if (companyUrl && !companyUrl.includes('linkedin.com')) {
+                console.log('✓ Found company URL via selector:', selector);
+                break;
+              }
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+      
+      // Generic fallback: look for external links with application-related text
+      if (!companyUrl) {
+        const genericSelectors = [
+          'a:has-text("Apply on company")',
+          'a:has-text("Apply directly")',
+          'a:has-text("Company website")',
+          'a[href*="careers"]:has-text("Apply")',
+          'a[href*="jobs"]:has-text("Apply")'
+        ];
+        
+        for (const selector of genericSelectors) {
+          try {
+            const element = page.locator(selector).first();
+            if (await element.isVisible({ timeout: 1000 })) {
+              companyUrl = await element.getAttribute('href');
+              if (companyUrl && !companyUrl.includes('indeed.com') && !companyUrl.includes('linkedin.com')) {
+                console.log('✓ Found company URL via generic selector:', selector);
+                break;
+              }
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+      
+      await page.close();
+      
+      if (companyUrl) {
+        // Ensure full URL
+        if (companyUrl.startsWith('/')) {
+          const url = new URL(jobBoardUrl);
+          companyUrl = `${url.protocol}//${url.host}${companyUrl}`;
+        }
+        
+        return {
+          companyApplicationUrl: companyUrl,
+          requiresJobBoard: false
+        };
+      }
+      
+      console.log('ℹ️ No company application URL found - requires job board application');
+      return {
+        companyApplicationUrl: null,
+        requiresJobBoard: true
+      };
+      
+    } catch (error: unknown) {
+      await page.close();
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Error extracting company URL:', errMessage);
+      throw new Error(`Failed to extract company URL: ${errMessage}`);
+    }
+  }
+
+  // Find company careers page via Google search
+  async findCompanyCareersPage(companyName: string, jobTitle?: string): Promise<{ careersUrl: string; companyWebsite: string }> {
+    if (!this.browser) {
+      await this.initialize();
+    }
+
+    const page = await this.createStealthPage();
+    
+    try {
+      // Build search query
+      const searchQuery = `"${companyName}" careers OR jobs ${jobTitle || ''}`.trim();
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+      
+      console.log('🔍 Searching Google for careers page:', searchQuery);
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(2000);
+      
+      // Extract search results
+      const results = await page.locator('div.g a[href]').evaluateAll((elements) => {
+        return elements
+          .map(el => (el as HTMLAnchorElement).href)
+          .filter(href => href && !href.includes('google.com') && !href.includes('indeed.com') && !href.includes('linkedin.com'));
+      });
+      
+      let careersUrl = '';
+      let companyWebsite = '';
+      
+      // Find careers page (contains career/jobs/apply keywords)
+      const careersKeywords = ['career', 'careers', 'jobs', 'apply', 'join', 'opportunities', 'hiring'];
+      for (const url of results) {
+        const lowerUrl = url.toLowerCase();
+        if (careersKeywords.some(keyword => lowerUrl.includes(keyword))) {
+          careersUrl = url;
+          break;
+        }
+      }
+      
+      // Find company homepage (first result without career keywords)
+      for (const url of results) {
+        const lowerUrl = url.toLowerCase();
+        if (!careersKeywords.some(keyword => lowerUrl.includes(keyword))) {
+          companyWebsite = url;
+          break;
+        }
+      }
+      
+      // If no distinct homepage found, use careers URL as base
+      if (!companyWebsite && careersUrl) {
+        try {
+          const urlObj = new URL(careersUrl);
+          companyWebsite = `${urlObj.protocol}//${urlObj.host}`;
+        } catch {
+          companyWebsite = careersUrl;
+        }
+      }
+      
+      // If no careers page found, use first result
+      if (!careersUrl && results.length > 0) {
+        careersUrl = results[0];
+        companyWebsite = results[0];
+      }
+      
+      await page.close();
+      
+      if (!careersUrl) {
+        throw new Error(`No careers page found for ${companyName}`);
+      }
+      
+      console.log('✓ Found careers page:', careersUrl);
+      return {
+        careersUrl,
+        companyWebsite: companyWebsite || careersUrl
+      };
+      
+    } catch (error: unknown) {
+      await page.close();
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Error finding careers page:', errMessage);
+      throw new Error(`Failed to find careers page: ${errMessage}`);
+    }
+  }
 }
 
 // Singleton instance

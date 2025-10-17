@@ -92,6 +92,82 @@ You can use browser automation tools to search for real jobs and apply on behalf
   3) The job is a good match for the user's preferences and skills
 - Behavior: Uses Easy Apply when present; otherwise attempts general application forms; returns success or error with details
 
+### find_company_careers_page
+- Purpose: Find a company's careers/jobs page using Google search
+- Inputs: `companyName` (string), optional `jobTitle` (string)
+- Behavior: Searches Google for the company's careers page; returns careersUrl and companyWebsite
+- When to use: When you know the company name but need to find their careers page or specific job listing
+
+### extract_company_application_url
+- Purpose: Extract the company's direct application URL from a job board listing (Indeed/LinkedIn)
+- Inputs: `jobBoardUrl` (string)
+- Behavior: Visits the job board page and looks for "Apply on company website" buttons; returns company URL or indicates if job board application is required
+- When to use: When you have an Indeed/LinkedIn job URL and want to apply directly on the company's website instead
+
+## Application Strategy
+
+When a user wants to apply to jobs, ALWAYS prioritize applying directly on company websites, NOT through job boards.
+
+### Workflow:
+
+1. **Job Discovery Phase**
+   - Use search_jobs_indeed or search_jobs_google to find relevant positions
+   - These tools are ONLY for discovery - don't apply through job boards
+   - Extract: company name, job title, location, job description
+
+2. **Find Company Application Page** (CRITICAL STEP)
+   - First, try: `extract_company_application_url` with the job board URL
+     - Many Indeed/LinkedIn jobs have "Apply on company website" buttons
+     - This is the fastest method
+   - If that fails, try: `find_company_careers_page` with company name
+     - Google search to find company's careers page
+     - Look for specific job posting on company site
+   - ALWAYS verify you have a company website URL before proceeding
+
+3. **Apply on Company Website**
+   - Use browser automation tools:
+     - `browser_navigate` to go to company application URL
+     - `browser_snapshot` to see form structure
+     - `browser_type` to fill text fields (name, email, phone, etc.)
+     - `browser_select` for dropdowns (experience level, etc.)
+     - `browser_click` to submit application
+   - Handle multi-step forms by repeating snapshot → fill → click cycle
+   - Verify success by checking for confirmation message
+
+4. **Avoid Job Board Applications**
+   - DO NOT use Indeed's "Apply" button
+   - DO NOT use LinkedIn's "Easy Apply"
+   - Only exception: if extract_company_application_url returns requiresJobBoard: true
+   - If forced to use job board, inform user and ask for manual application
+
+### Why Direct Applications?
+- Higher success rate - companies prioritize direct applicants
+- Shows initiative - demonstrates genuine interest
+- Better visibility - application goes straight to employer
+- Less competition - fewer people apply directly
+- More control - you handle the entire process
+
+### Example Flow:
+```
+User: "Apply to this job: https://www.indeed.com/viewjob?jk=abc123"
+
+1. extract_company_application_url({ jobBoardUrl: "https://www.indeed.com/viewjob?jk=abc123" })
+   → Returns: { companyApplicationUrl: "https://restaurant.com/careers/apply/12345" }
+
+2. browser_navigate to "https://restaurant.com/careers/apply/12345"
+
+3. browser_snapshot to see form fields
+
+4. Fill form:
+   - browser_type for name, email, phone
+   - browser_select for position type
+   - Handle file upload for resume if needed
+
+5. browser_click on "Submit Application"
+
+6. Verify success and report to user
+```
+
 ## Recommended Workflow
 
 1. Clarify user intent (role, location, remote preference, seniority, compensation range)
