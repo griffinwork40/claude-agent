@@ -25,3 +25,10 @@ export interface JobOpportunity {
   created_at: string;
 }
 
+export interface JobSearchParams {
+  keywords: string;
+  location: string;
+  experience_level?: string;
+  remote?: boolean;
+}
+

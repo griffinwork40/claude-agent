@@ -1,7 +1,8 @@
 // browser-service/src/browser-tools.ts
 // Playwright-based browser automation for job searching (server-side implementation)
 import { chromium, Browser, Page } from 'playwright';
-import { JobOpportunity } from './types';
+import { JobOpportunity, JobSearchParams } from './types';
+import { getSerpClient } from './serp-client';
 import fs from 'fs/promises';
 
 const toRecord = (value: unknown): Record<string, unknown> =>
@@ -562,6 +563,11 @@ export class BrowserJobService {
       },
       fallbackUrls
     );
+  }
+
+  async searchJobsSerp(params: JobSearchParams): Promise<JobOpportunity[]> {
+    const serpClient = getSerpClient();
+    return serpClient.searchJobs(params);
   }
 
   // Search jobs on LinkedIn (requires authentication)

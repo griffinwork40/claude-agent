@@ -4,6 +4,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { getBrowserJobService } from './browser-tools';
 import { getBrowserController } from './browser-controller';
 import { getBrowserSessionManager } from './browser-session';
+import { getSerpClient } from './serp-client';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -243,6 +244,41 @@ app.post('/api/browser/close', authenticate, async (req: Request, res: Response)
 // ============================================================================
 // Legacy Job Scraping Endpoints (deprecated, kept for backwards compatibility)
 // ============================================================================
+
+// SERP API job search endpoint
+app.post('/api/search-serp', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { keywords, location, experience_level, remote } = req.body;
+
+    if (!keywords || !location) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: keywords and location are required',
+        details: { keywords: !!keywords, location: !!location }
+      });
+    }
+
+    console.log('🔍 SERP API search request:', { keywords, location, experience_level, remote });
+
+    const serpClient = getSerpClient();
+    const results = await serpClient.searchJobs({
+      keywords,
+      location,
+      experience_level,
+      remote
+    });
+
+    console.log(`✓ SERP API returned ${results.length} opportunities`);
+    res.json({ success: true, data: results });
+  } catch (error: any) {
+    console.error('❌ Error searching via SERP API:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
 
 // Search jobs on Indeed
 app.post('/api/search-indeed', authenticate, async (req: Request, res: Response) => {
