@@ -167,6 +167,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
             aria-invalid={Boolean(fieldErrors.email)}
             aria-describedby="email-helper"
@@ -191,6 +192,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             required
             aria-invalid={Boolean(fieldErrors.password)}
             aria-describedby="password-helper"
