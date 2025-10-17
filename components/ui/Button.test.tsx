@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Button } from './Button';
+import type { MouseEvent } from 'react';
 
 describe('Button asChild behavior', () => {
   it('retains forwarded attributes on the rendered child element', () => {
@@ -45,5 +46,27 @@ describe('Button asChild behavior', () => {
     expect(parentHandler).toHaveBeenCalled();
     expect(childHandler.mock.calls.length).toBeGreaterThan(1);
     expect(parentHandler.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('does not call parent handler when the child prevents default', async () => {
+    const user = userEvent.setup();
+    const parentHandler = vi.fn();
+    const childHandler = vi.fn((event: MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+    });
+
+    render(
+      <Button asChild onClick={parentHandler}>
+        <a href="#test" onClick={childHandler}>
+          Cancel
+        </a>
+      </Button>
+    );
+
+    const link = screen.getByRole('link', { name: /cancel/i });
+    await user.click(link);
+
+    expect(childHandler).toHaveBeenCalledTimes(1);
+    expect(parentHandler).not.toHaveBeenCalled();
   });
 });

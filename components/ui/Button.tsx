@@ -35,6 +35,17 @@ export function Button({ variant = 'primary', className = '', asChild = false, c
         if (typeof existingHandler === 'function') {
           composedProps[key] = (...args: unknown[]) => {
             (existingHandler as (...args: unknown[]) => void)(...args);
+
+            const [event] = args;
+            const maybeEvent = event as {
+              defaultPrevented?: boolean;
+              isPropagationStopped?: () => boolean;
+            } | undefined;
+
+            if (maybeEvent?.defaultPrevented || maybeEvent?.isPropagationStopped?.()) {
+              return;
+            }
+
             (value as (...args: unknown[]) => void)(...args);
           };
           return;
