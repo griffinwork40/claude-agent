@@ -8,6 +8,9 @@ import fs from 'fs/promises';
 const toRecord = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
+const stripHtml = (value: string): string =>
+  value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
 // Browser automation service for job searching and application
 export class BrowserJobService {
   private browser: Browser | null = null;
@@ -19,28 +22,39 @@ export class BrowserJobService {
   private async withRetryAndFallback<T>(
     operation: () => Promise<T>,
     fallbackUrls: string[] = [],
-    maxRetries: number = 3
+    maxRetries: number = 3,
+    fallbackOperation?: (error: Error) => Promise<T | null>
   ): Promise<T> {
-    let lastError: Error;
-    
+    let lastError: Error = new Error('Unknown error');
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await operation();
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         if (attempt === maxRetries) {
-          // Return fallback response with manual search URLs
-          return this.createFallbackResponse(fallbackUrls, lastError.message) as T;
+          break;
         }
-        
+
         const delay = 2000 * Math.pow(2, attempt); // Exponential backoff: 2s, 4s, 8s
         console.log(`⚠️ Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-    
-    throw lastError!;
+
+    if (fallbackOperation) {
+      try {
+        const fallbackResult = await fallbackOperation(lastError);
+        if (fallbackResult) {
+          return fallbackResult;
+        }
+      } catch (fallbackError) {
+        console.warn('⚠️ Fallback operation failed:', fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
+      }
+    }
+
+    return this.createFallbackResponse(fallbackUrls, lastError.message) as T;
   }
 
   // Create fallback response with manual search URLs
@@ -228,6 +242,500 @@ export class BrowserJobService {
     return page;
   }
 
+  // Visit Google landing page once per session to obtain cookies/consent
+  private async prepareGoogleSession(page: Page): Promise<void> {
+    try {
+      console.log('🧭 Preparing Google session');
+      await page.goto('https://www.google.com/?hl=en', { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForTimeout(1000 + Math.random() * 800);
+
+      const consentButtons = await page.$$(
+        'button#L2AGLb, button:has-text("Accept all"), button:has-text("Accept & continue"), button:has-text("I agree"), button:has-text("Agree")'
+      );
+
+      if (consentButtons.length > 0) {
+        console.log('✅ Accepting Google consent dialog');
+        await consentButtons[0].click();
+        await page.waitForTimeout(800 + Math.random() * 600);
+      }
+    } catch (error: unknown) {
+      console.warn('⚠️ Unable to prepare Google session:', error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  // Detect Google anti-bot / captcha responses
+  private async detectGoogleCaptcha(page: Page): Promise<boolean> {
+    try {
+      const currentUrl = page.url();
+      if (currentUrl.includes('/sorry/') || currentUrl.includes('/recaptcha/')) {
+        return true;
+      }
+
+      const captchaForm = await page.$('#captcha-form, form[action*="sorry"], form[action*="recaptcha"]');
+      if (captchaForm) {
+        return true;
+      }
+
+      const bodyText = await page.evaluate(() => document.body?.innerText?.toLowerCase().slice(0, 4000) || '');
+      if (!bodyText) return false;
+
+      if (bodyText.includes('unusual traffic') || bodyText.includes('verify that you are not a robot') || bodyText.includes('enter the characters')) {
+        return true;
+      }
+    } catch (error: unknown) {
+      console.warn('⚠️ Failed to evaluate captcha state:', error instanceof Error ? error.message : String(error));
+    }
+    return false;
+  }
+
+  // Extract Google Jobs listings from a frame
+  private async extractGoogleJobsFromFrame(frame: Frame): Promise<Array<Record<string, unknown>>> {
+    try {
+      return await frame.evaluate(() => {
+        const jobCards: Element[] = [];
+        const selectors = [
+          '[data-testid="job-card"]',
+          '.iFjolb.gws-plugins-horizon-jobs__li-ed',
+          'li[role="treeitem"]',
+          'div[role="listitem"]',
+          'div[jsname="M9KdWb"]',
+          'div[data-hveid][data-ved]',
+          'div[class*="job-result-card"]',
+          'div[class*="PwjeAc"]'
+        ];
+
+        for (const selector of selectors) {
+          const nodes = document.querySelectorAll(selector);
+          nodes.forEach(node => {
+            if (!jobCards.includes(node)) {
+              jobCards.push(node);
+            }
+          });
+        }
+
+        const getText = (root: Element, textSelectors: string[]): string => {
+          for (const selector of textSelectors) {
+            const el = root.querySelector(selector);
+            if (el && el.textContent) {
+              const text = el.textContent.replace(/\s+/g, ' ').trim();
+              if (text.length > 0) {
+                return text;
+              }
+            }
+          }
+          return '';
+        };
+
+        const getAttr = (root: Element, attrs: string[]): string => {
+          for (const attr of attrs) {
+            const value = root.getAttribute?.(attr);
+            if (value) {
+              return value;
+            }
+          }
+          return '';
+        };
+
+        const resolveUrl = (value: string): string => {
+          if (!value) return '';
+          if (value.startsWith('http://') || value.startsWith('https://')) {
+            return value;
+          }
+          if (value.startsWith('//')) {
+            return `https:${value}`;
+          }
+          if (value.startsWith('/')) {
+            try {
+              return new URL(value, window.location.origin).toString();
+            } catch {
+              return value;
+            }
+          }
+          return value;
+        };
+
+        return jobCards.slice(0, 20).map((card, index) => {
+          const title = getText(card, [
+            '[data-testid="job-title"]',
+            'h2',
+            'h3',
+            'a[role="link"]',
+            'div[role="heading"]',
+            '.BjJfJf',
+            '.sH3zD'
+          ]);
+
+          const company = getText(card, [
+            '[data-testid="company-name"]',
+            '.vNEEBe',
+            '.nJlQNd',
+            '.gws-plugins-horizon-jobs__company-name',
+            '.Qk80Jf',
+            '.fNKvhd'
+          ]);
+
+          const location = getText(card, [
+            '[data-testid="job-location"]',
+            '.LCX52d',
+            '.Qk80Jf',
+            '.wHYlTd',
+            '.gws-plugins-horizon-jobs__location',
+            '.iFjolb span'
+          ]);
+
+          const salary = getText(card, [
+            '[data-testid="salary"]',
+            '.LL4CD',
+            '.Q8K3Le',
+            '.gws-plugins-horizon-jobs__salary'
+          ]);
+
+          const description = getText(card, [
+            '[data-testid="job-snippet"]',
+            '.HBvzbc',
+            '.sMzDkb',
+            '.gws-plugins-horizon-jobs__job-description-snippet'
+          ]);
+
+          let url = '';
+          const linkCandidates = [
+            'a[data-share-url]',
+            'a[data-url]',
+            'a[data-href]',
+            'a[href^="https://www.google.com/url"]',
+            'a[href^="https://"]',
+            'a[href^="http://"]',
+            'a[href]'
+          ];
+
+          for (const selector of linkCandidates) {
+            const anchor = card.querySelector(selector);
+            if (anchor instanceof HTMLAnchorElement && anchor.href) {
+              url = resolveUrl(anchor.href);
+              break;
+            }
+
+            if (!url && anchor) {
+              const dataHref = anchor.getAttribute('data-share-url') || anchor.getAttribute('data-url') || anchor.getAttribute('data-href');
+              if (dataHref) {
+                url = resolveUrl(dataHref);
+                break;
+              }
+            }
+          }
+
+          if (!url) {
+            const attrUrl = getAttr(card, ['data-share-url', 'data-url', 'data-href', 'data-ol-href', 'data-job-url']);
+            url = resolveUrl(attrUrl);
+          }
+
+          const textContent = (card.textContent || '').toLowerCase();
+          const remoteHint = textContent.includes('remote') ? 'remote' : textContent.includes('hybrid') ? 'hybrid' : 'unknown';
+          const postedAt = getText(card, ['[data-testid="post-date"]', '.LL4CD span', '.gws-plugins-horizon-jobs__posting-time', '.WVWNg']);
+
+          return {
+            id: getAttr(card, ['data-id', 'data-job-id', 'data-ved']) || `frame_${index}`,
+            title,
+            company,
+            location,
+            salary,
+            url,
+            description,
+            postedAt,
+            remoteHint
+          };
+        }).filter(job => job.title || job.company || job.url);
+      });
+    } catch (error: unknown) {
+      console.warn('⚠️ Failed to extract jobs from frame:', error instanceof Error ? error.message : String(error));
+      return [];
+    }
+  }
+
+  private normalizeGoogleJobs(
+    rawJobs: Array<Record<string, unknown>>,
+    params: { keywords: string; location: string; experience_level?: string; remote?: boolean },
+    searchUrl: string
+  ): JobOpportunity[] {
+    const normalized = new Map<string, JobOpportunity>();
+    const now = Date.now();
+
+    rawJobs.forEach((job, index) => {
+      const title = String(job.title || '').trim() || 'Unknown Title';
+      const company = String(job.company || '').trim() || 'Unknown Company';
+      const location = String(job.location || '').trim() || (params.remote ? 'Remote' : params.location || 'Unknown Location');
+      const salaryRaw = String(job.salary || '').trim();
+      let url = String(job.url || '').trim();
+      if (!url) {
+        url = searchUrl;
+      }
+
+      if (url.startsWith('/')) {
+        url = `https://www.google.com${url}`;
+      }
+
+      const description = String(job.description || '').trim();
+      const remoteHint = String(job.remoteHint || '').toLowerCase();
+      const remoteType =
+        remoteHint === 'remote' || location.toLowerCase().includes('remote') || params.remote
+          ? 'remote'
+          : remoteHint === 'hybrid' || location.toLowerCase().includes('hybrid')
+            ? 'hybrid'
+            : 'unknown';
+
+      const jobType = 'full-time';
+      const experienceLevel = params.experience_level || 'unknown';
+      const salary = salaryRaw.length > 0 ? salaryRaw : undefined;
+
+      const normalizedJob: JobOpportunity = {
+        id: String(job.id || `google_${now}_${index}`),
+        title,
+        company,
+        location,
+        salary,
+        url,
+        description,
+        application_url: url,
+        source: 'google',
+        skills: [],
+        experience_level: experienceLevel,
+        job_type: jobType,
+        remote_type: remoteType as 'remote' | 'hybrid' | 'unknown',
+        applied: false,
+        status: 'discovered',
+        created_at: new Date().toISOString()
+      };
+
+      const dedupeKey = `${normalizedJob.title.toLowerCase()}__${normalizedJob.company.toLowerCase()}__${normalizedJob.location.toLowerCase()}__${normalizedJob.url}`;
+      if (!normalized.has(dedupeKey)) {
+        normalized.set(dedupeKey, normalizedJob);
+      }
+    });
+
+    return Array.from(normalized.values()).slice(0, 10);
+  }
+
+  private async fetchGoogleJobsViaSerpApi(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[] | null> {
+    const apiKey = process.env.SERPAPI_API_KEY || process.env.GOOGLE_JOBS_SERPAPI_KEY;
+    if (!apiKey) {
+      return null;
+    }
+
+    try {
+      const queryParts = [params.keywords, 'jobs'];
+      if (params.remote) queryParts.push('remote');
+      if (params.location && params.location.toLowerCase() !== 'remote') {
+        queryParts.push(params.location);
+      }
+      if (params.experience_level) {
+        queryParts.push(params.experience_level);
+      }
+
+      const apiUrl = new URL('https://serpapi.com/search.json');
+      apiUrl.searchParams.set('engine', 'google_jobs');
+      apiUrl.searchParams.set('api_key', apiKey);
+      apiUrl.searchParams.set('q', queryParts.join(' ').trim());
+      if (params.location) {
+        apiUrl.searchParams.set('location', params.location);
+      }
+
+      console.log('🌐 Fetching Google Jobs via SerpApi:', apiUrl.toString());
+
+      const response = await fetch(apiUrl.toString(), {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'application/json'
+        },
+        signal: AbortSignal.timeout(15000)
+      });
+
+      if (!response.ok) {
+        console.warn('⚠️ SerpApi request failed:', response.status, await response.text());
+        return null;
+      }
+
+      const data = await response.json();
+      const jobs = Array.isArray(data?.jobs_results) ? data.jobs_results : [];
+
+      if (!jobs.length) {
+        return null;
+      }
+
+      const normalizedJobs: JobOpportunity[] = jobs.slice(0, 10).map((job: Record<string, unknown>, index: number) => {
+        const detectedExtensions = job.detected_extensions as Record<string, unknown> | undefined;
+        const salary = typeof detectedExtensions?.salary === 'string' ? detectedExtensions.salary : undefined;
+        const shareLink = typeof job.share_link === 'string' ? job.share_link : '';
+        const applyLink = Array.isArray(job.apply_options)
+          ? job.apply_options.find((option: Record<string, unknown>) => typeof option?.link === 'string')?.link
+          : undefined;
+        const relatedLink = Array.isArray(job.related_links)
+          ? job.related_links.find((link: Record<string, unknown>) => typeof link?.link === 'string')?.link
+          : undefined;
+
+        const url = (shareLink || applyLink || relatedLink || '') as string;
+
+        return {
+          id: typeof job.job_id === 'string' ? `google_serpapi_${job.job_id}` : `google_serpapi_${Date.now()}_${index}`,
+          title: typeof job.title === 'string' ? job.title : 'Unknown Title',
+          company: typeof job.company_name === 'string' ? job.company_name : (typeof job.via === 'string' ? job.via : 'Unknown Company'),
+          location: typeof job.location === 'string' ? job.location : (params.location || 'Unknown Location'),
+          salary,
+          url,
+          description: typeof job.description === 'string'
+            ? job.description
+            : Array.isArray(job.job_highlights)
+              ? (job.job_highlights as Array<Record<string, unknown>>)
+                  .flatMap(highlight => Array.isArray(highlight?.items) ? highlight.items : [])
+                  .filter(item => typeof item === 'string')
+                  .slice(0, 3)
+                  .join('\n')
+              : '',
+          application_url: url,
+          source: 'google',
+          skills: [],
+          experience_level: params.experience_level || 'unknown',
+          job_type: typeof detectedExtensions?.schedule_type === 'string' ? detectedExtensions.schedule_type : 'full-time',
+          remote_type: params.remote || (typeof detectedExtensions?.work_from_home === 'boolean' && detectedExtensions.work_from_home)
+            ? 'remote'
+            : 'unknown',
+          applied: false,
+          status: 'discovered',
+          created_at: new Date().toISOString()
+        };
+      });
+
+      const filteredJobs = normalizedJobs.filter((job: JobOpportunity) => Boolean(job.url && job.url.length > 0));
+
+      if (!filteredJobs.length) {
+        return null;
+      }
+
+      console.log(`✅ Retrieved ${filteredJobs.length} jobs from SerpApi`);
+      return filteredJobs;
+    } catch (error: unknown) {
+      console.error('❌ SerpApi request failed:', error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
+  private async fetchJobsViaRemotive(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[] | null> {
+    const remotiveUrl = new URL('https://remotive.com/api/remote-jobs');
+    const queryParts: string[] = [];
+
+    if (params.keywords) {
+      queryParts.push(params.keywords);
+    }
+    if (params.experience_level) {
+      queryParts.push(params.experience_level);
+    }
+
+    if (queryParts.length) {
+      remotiveUrl.searchParams.set('search', queryParts.join(' ').trim());
+    }
+
+    if (params.location && params.location.trim().length && !params.remote && params.location.toLowerCase() !== 'remote') {
+      remotiveUrl.searchParams.set('location', params.location);
+    }
+
+    try {
+      console.log('🌐 Attempting Remotive API fallback:', remotiveUrl.toString());
+      const response = await fetch(remotiveUrl.toString(), {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'claude-agent-job-search/1.0 (+https://remotive.com/)',
+          'Accept': 'application/json'
+        },
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (!response.ok) {
+        console.warn('⚠️ Remotive API responded with non-OK status:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      const jobs = Array.isArray(data?.jobs) ? data.jobs : [];
+
+      if (!jobs.length) {
+        console.warn('⚠️ Remotive API returned no jobs for query');
+        return null;
+      }
+
+      const requestedLocation = params.location?.toLowerCase() || '';
+      const isRemoteQuery = params.remote || requestedLocation === 'remote';
+
+      const normalizedJobs: JobOpportunity[] = jobs
+        .filter((job: Record<string, unknown>) => {
+          if (isRemoteQuery) {
+            return true;
+          }
+          const candidateLocation = String(job?.candidate_required_location || '').toLowerCase();
+          if (!candidateLocation) {
+            return true;
+          }
+          return candidateLocation.includes(requestedLocation) || requestedLocation.includes(candidateLocation);
+        })
+        .slice(0, 10)
+        .map((job: Record<string, unknown>, index: number) => {
+          const idValue = typeof job.id === 'number' || typeof job.id === 'string' ? job.id : `${Date.now()}_${index}`;
+          const rawDescription = typeof job.description === 'string' ? job.description : '';
+          const cleanedDescription = stripHtml(rawDescription).slice(0, 600);
+          const jobTypeRaw = typeof job.job_type === 'string' ? job.job_type : 'full_time';
+          const jobType = jobTypeRaw.replace(/_/g, ' ').toLowerCase();
+          const publicationDate = typeof job.publication_date === 'string' ? job.publication_date : undefined;
+          const createdAt = publicationDate ? new Date(publicationDate).toISOString() : new Date().toISOString();
+          const salary = typeof job.salary === 'string' && job.salary.trim().length > 0 ? job.salary.trim() : undefined;
+          const tags = Array.isArray(job.tags) ? job.tags.filter((tag) => typeof tag === 'string').slice(0, 10) : [];
+          const url = typeof job.url === 'string' ? job.url : '';
+          const company = typeof job.company_name === 'string' ? job.company_name : 'Unknown Company';
+          const location = typeof job.candidate_required_location === 'string' && job.candidate_required_location.trim().length
+            ? job.candidate_required_location.trim()
+            : params.location || 'Remote';
+
+          return {
+            id: `remotive_${idValue}`,
+            title: typeof job.title === 'string' ? job.title : 'Unknown Title',
+            company,
+            location,
+            salary,
+            url,
+            description: cleanedDescription,
+            application_url: url,
+            source: 'remotive',
+            skills: tags,
+            experience_level: params.experience_level || 'unknown',
+            job_type: jobType,
+            remote_type: 'remote',
+            applied: false,
+            status: 'discovered',
+            created_at: createdAt,
+            raw_data: toRecord(job)
+          };
+        });
+
+      if (!normalizedJobs.length) {
+        return null;
+      }
+
+      console.log(`✅ Retrieved ${normalizedJobs.length} jobs from Remotive fallback`);
+      return normalizedJobs;
+    } catch (error: unknown) {
+      console.warn('⚠️ Remotive fallback failed:', error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
   // Search jobs on Indeed (no authentication required)
   async searchJobsIndeed(params: {
     keywords: string;
@@ -243,10 +751,11 @@ export class BrowserJobService {
     }
 
     const fallbackUrls = this.generateFallbackUrls(params);
-    
+
     const searchUrl = this.buildIndeedSearchUrl(params);
-    
-    return this.withRetryAndFallback(
+    const remotePreference = params.remote ?? params.location.trim().toLowerCase() === 'remote';
+
+    const results = await this.withRetryAndFallback<JobOpportunity[]>(
       async () => {
         const page = await this.createStealthPage();
         
@@ -383,8 +892,31 @@ export class BrowserJobService {
           await page.close();
         }
       },
-      fallbackUrls
+      fallbackUrls,
+      3,
+      async (_error: Error) => {
+        const remotiveJobs = await this.fetchJobsViaRemotive({ ...params, remote: remotePreference });
+        if (remotiveJobs && remotiveJobs.length) {
+          this.setCachedResults(cacheKey, remotiveJobs);
+          return remotiveJobs;
+        }
+        return null;
+      }
     );
+
+    const hasUsableJobs = results.some((job) => {
+      const status = job.status as JobOpportunity['status'];
+      return status !== 'error' && status !== 'fallback';
+    });
+    if (!hasUsableJobs) {
+      const remotiveJobs = await this.fetchJobsViaRemotive({ ...params, remote: remotePreference });
+      if (remotiveJobs && remotiveJobs.length) {
+        this.setCachedResults(cacheKey, remotiveJobs);
+        return remotiveJobs;
+      }
+    }
+
+    return results;
   }
 
   // Search jobs on Google Jobs (no authentication required)
@@ -402,122 +934,118 @@ export class BrowserJobService {
     }
 
     const fallbackUrls = this.generateFallbackUrls(params);
-    
     const searchUrl = this.buildGoogleJobsSearchUrl(params);
-    
-    return this.withRetryAndFallback(
+    const remotePreference = params.remote ?? params.location.trim().toLowerCase() === 'remote';
+
+    // Try SerpApi first if configured (avoids Playwright + captcha risk)
+    const serpApiResults = await this.fetchGoogleJobsViaSerpApi(params);
+    if (serpApiResults && serpApiResults.length > 0) {
+      this.setCachedResults(cacheKey, serpApiResults);
+      return serpApiResults;
+    }
+
+    const results = await this.withRetryAndFallback<JobOpportunity[]>(
       async () => {
         const page = await this.createStealthPage();
-        
+
         try {
           console.log('🔍 Searching Google Jobs:', searchUrl);
           console.log('📋 Search params:', params);
-          
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          
-          // Add random delay to look more human
-          await page.waitForTimeout(1000 + Math.random() * 2000);
-      
-      // Wait for Google Jobs results to load
-      console.log('⏳ Waiting for Google Jobs results...');
-      await page.waitForSelector('[data-ved], .g, .jobsearch-ResultsList', { timeout: 15000 }).catch((selectorError) => {
-        console.log('⚠️ Primary selector not found, trying alternative approach:', selectorError.message);
-      });
-      
-      // Wait a bit for dynamic content
-      await page.waitForTimeout(3000 + Math.random() * 1000);
-      
-      // Check if we're on the right page
-      const currentUrl = page.url();
-      const pageTitle = await page.title();
-      console.log('📍 Current page:', { url: currentUrl, title: pageTitle });
-      
-      // Extract job listings from Google Jobs
-      const jobs = await page.evaluate(() => {
-        // Google Jobs can appear in different formats, so we try multiple selectors
-        const jobCards = Array.from(document.querySelectorAll(
-          '[data-ved] .g, .jobsearch-ResultsList li, [data-testid="job-card"], .g[data-ved]'
-        ));
-        console.log(`Found ${jobCards.length} job cards on Google Jobs page`);
-        
-        return jobCards.slice(0, 10).map((el, index) => {
-          // Try multiple selectors for job title
-          const titleEl = el.querySelector('h3 a, h2 a, .jobTitle a, [data-testid="job-title"], .g h3 a') ||
-                         el.querySelector('h3, h2, .jobTitle, [data-testid="job-title"]');
-          
-          // Try multiple selectors for company
-          const companyEl = el.querySelector('.companyName, [data-testid="company-name"], .company, .g .company') ||
-                           el.querySelector('.company, .companyName');
-          
-          // Try multiple selectors for location
-          const locationEl = el.querySelector('.companyLocation, [data-testid="job-location"], .location, .g .location') ||
-                            el.querySelector('.location, .companyLocation');
-          
-          // Try multiple selectors for salary
-          const salaryEl = el.querySelector('.salary-snippet, [data-testid="salary"], .salary, .g .salary') ||
-                          el.querySelector('.salary, .salary-snippet');
-          
-          // Try multiple selectors for description
-          const descEl = el.querySelector('.job-snippet, [data-testid="job-snippet"], .description, .g .snippet') ||
-                        el.querySelector('.snippet, .job-snippet, .description');
-          
-          // Try multiple selectors for job link
-          const linkEl = el.querySelector('a[href*="/rc/clk"], a[href*="/viewjob"], h3 a, h2 a, .g a') as HTMLAnchorElement | null;
-          
-          return {
-            id: `google_${Date.now()}_${index}`,
-            title: titleEl?.textContent?.trim() || 'Unknown Title',
-            company: companyEl?.textContent?.trim() || 'Unknown Company',
-            location: locationEl?.textContent?.trim() || 'Unknown Location',
-            salary: salaryEl?.textContent?.trim() || undefined,
-            url: linkEl?.href || '',
-            description: descEl?.textContent?.trim() || '',
-            application_url: linkEl?.href || '',
-            source: 'google' as const,
-            skills: [],
-            experience_level: 'unknown',
-            job_type: 'full-time',
-            remote_type: 'unknown',
-            applied: false,
-            status: 'discovered' as const,
-            created_at: new Date().toISOString()
-          };
-        });
-      });
 
-          console.log(`✅ Found ${jobs.length} jobs on Google Jobs`);
-          
-          // If no jobs found, return a structured error response instead of empty array
+          await this.prepareGoogleSession(page);
+
+          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+          // Add random delay to look more human
+          await page.waitForTimeout(1200 + Math.random() * 2000);
+
+          if (await this.detectGoogleCaptcha(page)) {
+            console.warn('⚠️ Google presented a CAPTCHA challenge');
+            const captchaJobs: JobOpportunity[] = [{
+              id: `google_captcha_${Date.now()}`,
+              title: 'Google blocked automated search',
+              company: 'Google Jobs',
+              location: params.location,
+              description: `Google is requesting a CAPTCHA before showing job results for "${params.keywords}" in ${params.location}. This usually happens when their anti-bot systems flag the request. Please open the fallback links manually or retry later.`,
+              url: searchUrl,
+              application_url: searchUrl,
+              source: 'google',
+              skills: [],
+              experience_level: params.experience_level || 'unknown',
+              job_type: 'full-time',
+              remote_type: params.remote ? 'remote' : 'unknown',
+              applied: false,
+              status: 'error',
+              created_at: new Date().toISOString(),
+              error: 'Google presented a CAPTCHA challenge (anti-bot protection)'
+            }];
+            this.setCachedResults(cacheKey, captchaJobs);
+            return captchaJobs;
+          }
+
+          console.log('⏳ Waiting for Google Jobs results...');
+          await page
+            .waitForSelector('iframe, [data-testid="job-card"], .iFjolb.gws-plugins-horizon-jobs__li-ed', { timeout: 15000 })
+            .catch((selectorError) => {
+              console.log('⚠️ Initial job selectors not found yet:', selectorError instanceof Error ? selectorError.message : selectorError);
+            });
+
+          await page.waitForTimeout(2000 + Math.random() * 1000);
+
+          let rawJobs: Array<Record<string, unknown>> = [];
+          const frames = Array.from(new Set(page.frames()));
+
+          for (const frame of frames) {
+            const jobsFromFrame = await this.extractGoogleJobsFromFrame(frame);
+            if (jobsFromFrame.length) {
+              console.log(`📥 Extracted ${jobsFromFrame.length} jobs from frame: ${frame.url()}`);
+              rawJobs = rawJobs.concat(jobsFromFrame);
+            }
+          }
+
+          if (rawJobs.length === 0) {
+            console.log('🔄 No jobs found on initial attempt, scrolling & retrying extraction');
+            await page.mouse.wheel(0, 1000);
+            await page.waitForTimeout(1500);
+
+            for (const frame of frames) {
+              const jobsFromFrame = await this.extractGoogleJobsFromFrame(frame);
+              if (jobsFromFrame.length) {
+                console.log(`📥 Extracted ${jobsFromFrame.length} jobs after scroll from frame: ${frame.url()}`);
+                rawJobs = rawJobs.concat(jobsFromFrame);
+              }
+            }
+          }
+
+          const jobs = this.normalizeGoogleJobs(rawJobs, params, searchUrl);
+          console.log(`✅ Found ${jobs.length} jobs on Google Jobs after normalization`);
+
           if (jobs.length === 0) {
-            console.log('⚠️ No jobs found - returning error response');
-            const errorJobs = [{
+            console.log('⚠️ No jobs extracted - returning structured error');
+            const errorJobs: JobOpportunity[] = [{
               id: `google_no_results_${Date.now()}`,
               title: 'No Jobs Found',
               company: 'Google Jobs',
               location: params.location,
-              description: `No job listings found for "${params.keywords}" in ${params.location}. This could be due to: 1) No jobs matching criteria, 2) Google's anti-bot protection, 3) Selector changes, 4) Search query format issues.`,
+              description: `No job listings were found for "${params.keywords}" in ${params.location}. Possible reasons: 1) No roles match the filters, 2) Google returned an empty widget, 3) HTML structure changed, or 4) Anti-bot throttling blocked detailed results. Try adjusting the query or using the fallback links.`,
               url: searchUrl,
-              application_url: '',
-              source: 'google' as const,
+              application_url: searchUrl,
+              source: 'google',
               skills: [],
-              experience_level: 'unknown',
+              experience_level: params.experience_level || 'unknown',
               job_type: 'full-time',
-              remote_type: 'unknown',
+              remote_type: params.remote ? 'remote' : 'unknown',
               applied: false,
-              status: 'error' as const,
+              status: 'error',
               created_at: new Date().toISOString(),
-              error: 'No jobs found - possible selector issues or anti-bot protection'
+              error: 'No jobs extracted - possible selector changes or anti-bot throttling'
             }];
-            
-            // Cache error results
             this.setCachedResults(cacheKey, errorJobs);
             return errorJobs;
           }
-          
-          // Cache successful results
+
           this.setCachedResults(cacheKey, jobs);
           return jobs;
-      
         } catch (error: unknown) {
           const errMessage = error instanceof Error ? error.message : String(error);
           console.error('❌ Google Jobs search failed:', {
@@ -525,44 +1053,64 @@ export class BrowserJobService {
             url: searchUrl,
             params
           });
-          
+
           // Capture page state for debugging
           let pageState = 'unknown';
           let pageTitle = 'unknown';
           try {
             pageState = page.url();
             pageTitle = await page.title();
-          } catch {}
-          
-          // Return structured error instead of throwing
-          const errorJobs = [{
+          } catch {
+            // ignore
+          }
+
+          const errorJobs: JobOpportunity[] = [{
             id: `google_error_${Date.now()}`,
             title: 'Search Failed',
-            company: 'Error',
-            location: 'N/A',
-            description: `Google Jobs search failed: ${errMessage}. Page: ${pageState} (${pageTitle})`,
+            company: 'Google Jobs',
+            location: params.location,
+            description: `Google Jobs search failed: ${errMessage}. Page: ${pageState} (${pageTitle}). Try again later or open the fallback links manually.`,
             url: searchUrl,
-            application_url: '',
-            source: 'google' as const,
+            application_url: searchUrl,
+            source: 'google',
             skills: [],
-            experience_level: 'unknown',
+            experience_level: params.experience_level || 'unknown',
             job_type: 'full-time',
-            remote_type: 'unknown',
+            remote_type: params.remote ? 'remote' : 'unknown',
             applied: false,
-            status: 'error' as const,
+            status: 'error',
             created_at: new Date().toISOString(),
             error: errMessage
           }];
-          
-          // Cache error results
+
           this.setCachedResults(cacheKey, errorJobs);
           return errorJobs;
         } finally {
           await page.close();
         }
       },
-      fallbackUrls
+      fallbackUrls,
+      3,
+      async (_error: Error) => {
+        const remotiveJobs = await this.fetchJobsViaRemotive({ ...params, remote: remotePreference });
+        if (remotiveJobs && remotiveJobs.length) {
+          this.setCachedResults(cacheKey, remotiveJobs);
+          return remotiveJobs;
+        }
+        return null;
+      }
     );
+
+    const hasUsableJobs = results.some((job) => job.status !== 'error' && job.status !== 'fallback');
+    if (!hasUsableJobs) {
+      const remotiveJobs = await this.fetchJobsViaRemotive({ ...params, remote: remotePreference });
+      if (remotiveJobs && remotiveJobs.length) {
+        this.setCachedResults(cacheKey, remotiveJobs);
+        return remotiveJobs;
+      }
+    }
+
+    return results;
   }
 
   async searchJobsSerp(params: JobSearchParams): Promise<JobOpportunity[]> {
@@ -1303,4 +1851,3 @@ export const getBrowserJobService = (): BrowserJobService => {
   }
   return browserJobService;
 };
-

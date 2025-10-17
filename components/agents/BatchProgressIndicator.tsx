@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useId } from 'react';
 import { CheckCircle, XCircle, Zap } from 'lucide-react';
 import { Activity } from './types';
 import { formatDuration, getBatchProgressTitle } from '@/lib/activity-utils';
@@ -40,6 +40,7 @@ export function BatchProgressIndicator({
   className = ''
 }: BatchProgressIndicatorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const detailsRegionId = useId();
 
   // Group activities by batch and calculate progress
   const batchData = useMemo(() => {
@@ -196,9 +197,12 @@ export function BatchProgressIndicator({
   return (
     <div className={`my-1 py-0.5 animate-fadeIn w-full ${className}`}>
       {/* Summary line - always visible */}
-      <div
-        className="flex items-center gap-2 cursor-pointer hover:bg-[var(--muted)]/20 rounded px-1 py-0.5 transition-colors"
+      <button
+        type="button"
+        className="flex items-center gap-2 cursor-pointer hover:bg-[var(--muted)]/20 rounded px-1 py-0.5 transition-colors w-full text-left"
         onClick={handleToggle}
+        aria-expanded={isExpanded}
+        aria-controls={isExpanded ? detailsRegionId : undefined}
       >
         {/* Expand/collapse indicator */}
         <div className="flex-shrink-0 text-gray-400/60">
@@ -228,11 +232,11 @@ export function BatchProgressIndicator({
         <time className="text-[11px] text-[var(--fg)]/40 whitespace-nowrap flex-shrink-0">
           {formattedTime}
         </time>
-      </div>
+      </button>
 
       {/* Expanded tree view */}
       {isExpanded && (
-        <div className="ml-5 mt-1 animate-fadeIn">
+        <div id={detailsRegionId} className="ml-5 mt-1 animate-fadeIn">
           <div className="border-l border-gray-400/20 pl-2 space-y-1">
             {batchData.tools.map((tool, index) => (
               <div key={`${tool.activity.tool}-${index}`} className="flex items-center gap-2">
