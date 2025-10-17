@@ -14,7 +14,8 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "puppeteer-extra-plugin-user-data-dir": "^2.4.1",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "google-search-results-nodejs": "^2.1.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
