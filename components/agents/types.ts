@@ -94,6 +94,11 @@ export interface Activity {
   // Metadata
   timestamp: string;
   isRedacted?: boolean;
+  /**
+   * Ephemeral activities are only needed for in-flight UX (streaming text, thinking previews, etc.)
+   * and should not be persisted in the parent activity store to avoid duplicate rendering.
+   */
+  ephemeral?: boolean;
 }
 
 export interface BrowserPaneProps {
@@ -178,5 +183,4 @@ export interface ActivitiesResponse {
 export interface CreateActivityRequest {
   activity: Omit<Activity, 'id' | 'timestamp'>;
 }
-
 

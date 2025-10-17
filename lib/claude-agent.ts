@@ -390,12 +390,9 @@ export async function runClaudeAgentStream(
                 if (content) {
                   console.log(`✓ Streaming chunk: ${content.length} chars`);
                   
-                  // Send as both raw text chunk AND as thinking activity for proper interleaving
+                  // Send ONLY as raw text bytes - no activity event to avoid duplication
                   const encoded = new TextEncoder().encode(content);
                   controller.enqueue(encoded);
-                  
-                  // Also send as a chunk event for the streaming message
-                  sendActivity('chunk', { content });
                   
                   // Accumulate in current text chunk
                   currentTextChunk += content;

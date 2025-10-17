@@ -1,6 +1,6 @@
 // browser-service/src/browser-tools.ts
 // Playwright-based browser automation for job searching (server-side implementation)
-import { chromium, Browser, Page } from 'playwright';
+import { chromium, Browser, Page, Frame } from 'playwright';
 import { JobOpportunity, JobSearchParams } from './types';
 import { getSerpClient } from './serp-client';
 import fs from 'fs/promises';

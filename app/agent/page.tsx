@@ -341,6 +341,10 @@ export default function AgentPage() {
       console.warn('Received activity without agentId, skipping', activity);
       return;
     }
+    if (activity.ephemeral) {
+      // Ephemeral activities (e.g. streaming text chunks) should remain local to the chat pane
+      return;
+    }
     // Update local state with the new activity
     setActivitiesByAgent(prev => {
       const existing = prev[activity.agentId] ?? [];
@@ -623,5 +627,4 @@ export default function AgentPage() {
     </>
   );
 }
-
 
