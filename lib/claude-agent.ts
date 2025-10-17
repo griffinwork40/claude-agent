@@ -359,7 +359,7 @@ export async function runClaudeAgentStream(
           const systemPromptWithContext = `${instructions}\n\n${userContext}`;
           
           const stream = await client.messages.create({
-            model: 'claude-sonnet-4-5-20250929',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 4096,
             system: systemPromptWithContext,
             messages: messages,
@@ -512,7 +512,7 @@ export async function runClaudeAgentStream(
                   console.log(`🔄 Starting continuation iteration ${iteration}/${MAX_TOOL_ITERATIONS}...`);
                   
                 const continuationStream = await client.messages.create({
-                  model: 'claude-sonnet-4-5-20250929',
+                  model: 'claude-haiku-4-5-20251001',
                   max_tokens: 4096,
                   system: systemPromptWithContext,
                   messages: continuationMessages,
@@ -1074,7 +1074,7 @@ export async function runClaudeAgent(userMessage: string) {
     const { client, instructions } = await initializeAgent();
     
     const result = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1000,
       system: instructions,
       messages: [

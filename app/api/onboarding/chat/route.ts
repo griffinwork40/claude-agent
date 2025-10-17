@@ -15,11 +15,13 @@ Your goal is to collect and confirm the following information:
 1. Personal Information: name, email, phone, location
 2. Skills: technical skills, soft skills, certifications
 3. Experience: years of experience, previous roles/companies
-4. Job Preferences: desired roles, locations, salary range, remote work preference
+4. Education: degrees, institutions, graduation years
+5. Job Preferences: desired roles, locations, salary range, remote work preference
 
 The user has already uploaded their resume, and we have extracted some initial data. Your job is to:
 - Review the extracted data with the user
 - Ask clarifying questions about missing or unclear information
+- If work experience (previous_roles) is empty, ask the user directly about their work history
 - Help them refine their job preferences
 - Be conversational, friendly, and efficient
 - Once all information is confirmed, say "Great! Your profile is complete. Let's get started!" and the system will mark onboarding as complete.
@@ -28,6 +30,11 @@ Keep responses concise (2-3 sentences max). Ask one question at a time.
 
 Current user data:
 {USER_DATA}
+
+If any fields above are empty or incomplete, reference the resume excerpt below to infer missing details before asking follow-up questions. Confirm anything you infer with the user.
+
+Resume excerpt (use to fill gaps when needed):
+{RESUME_TEXT}
 
 If the user says they're done or everything looks good, confirm completion.`;
 
@@ -108,10 +115,23 @@ export async function POST(req: NextRequest) {
     const userData = profile ? JSON.stringify({
       personal_info: profile.personal_info,
       experience: profile.experience,
+      education: profile.education,
+      summary: profile.summary,
       preferences: profile.preferences
     }, null, 2) : 'No data collected yet';
     
-    const systemPrompt = ONBOARDING_SYSTEM_PROMPT.replace('{USER_DATA}', userData);
+    const resumeText =
+      profile && typeof profile.resume_text === 'string' && profile.resume_text.trim().length > 0
+        ? profile.resume_text.trim().slice(0, 4000)
+        : null;
+
+    const resumeExcerptForPrompt = resumeText
+      ? resumeText
+      : 'Resume text not available. Ask the user to re-upload their resume if needed.';
+    
+    const systemPrompt = ONBOARDING_SYSTEM_PROMPT
+      .replace('{USER_DATA}', userData)
+      .replace('{RESUME_TEXT}', resumeExcerptForPrompt);
     
     // Initialize Claude
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -127,7 +147,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           const messageStream = await anthropic.messages.create({
-            model: 'claude-sonnet-4-5-20250929',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 1024,
             system: systemPrompt,
             messages: messages as any,
