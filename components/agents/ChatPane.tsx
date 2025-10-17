@@ -467,8 +467,23 @@ export function ChatPane({
     return externalActivities.filter((activity) => activity.agentId === agent.id);
   });
   const endRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const composerPadding = isMobile ? '0.5rem' : '0.75rem';
+
+  const updatePinnedState = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+    const pinned = distanceFromBottom <= 32;
+
+    setIsPinnedToBottom((previous) => (previous === pinned ? previous : pinned));
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -491,6 +506,7 @@ export function ChatPane({
 
     const handleMessagesReloaded: EventListener = () => {
       setStreamingMessage('');
+      setIsPinnedToBottom(true);
     };
 
     window.addEventListener('messages-reloaded', handleMessagesReloaded);
@@ -499,6 +515,30 @@ export function ChatPane({
       window.removeEventListener('messages-reloaded', handleMessagesReloaded);
     };
   }, []);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleScroll = () => {
+      updatePinnedState();
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    updatePinnedState();
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [updatePinnedState, isMobile]);
+
+  useEffect(() => {
+    if (!isStreaming) {
+      setIsPinnedToBottom(true);
+    }
+  }, [isStreaming]);
 
   useEffect(() => {
     return () => {
@@ -722,8 +762,18 @@ export function ChatPane({
 
   // Auto-scroll to bottom when new messages arrive or streaming updates
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [timelineItems]);
+    if (timelineItems.length === 0) {
+      return;
+    }
+
+    const latestItem = timelineItems[timelineItems.length - 1];
+    const isUserMessage = latestItem.itemType === 'message' && latestItem.role === 'user';
+    const shouldScroll = isPinnedToBottom || isUserMessage;
+
+    if (shouldScroll) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [timelineItems, isPinnedToBottom]);
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -741,14 +791,16 @@ export function ChatPane({
 
   const handleStreamingSend = async (content: string) => {
     if (!agent || isStreaming) return;
-    
+
     console.log('Starting streaming send...', {
       agentId: agent.id,
       content: content.substring(0, 50) + '...',
       sessionId,
       isStreaming
     });
-    
+
+    setIsPinnedToBottom(true);
+
     // Add user message to local state immediately
     const userMessageId = `msg-${Date.now()}-user`;
     const userMessage: Message = {
@@ -845,6 +897,7 @@ export function ChatPane({
                 // Custom event to indicate messages have been reloaded
                 console.log('✓ Messages reloaded, clearing streaming state');
                 setStreamingMessage('');
+                setIsPinnedToBottom(true);
               } else if (data.type === 'error') {
                 console.error('❌ Streaming error:', data.error);
                 setIsStreaming(false);
@@ -943,7 +996,11 @@ export function ChatPane({
       )}
 
       {/* Scrollable messages area */}
-      <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isMobile ? 'px-3 py-4' : 'p-3'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div
+        ref={messagesContainerRef}
+        className={`flex-1 overflow-y-auto overflow-x-hidden ${isMobile ? 'px-3 py-4' : 'p-3'}`}
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
         {timelineItems.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="w-full max-w-xl px-4">
