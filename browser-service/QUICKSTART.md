@@ -28,9 +28,10 @@ Expected: All tests pass ✓
 
 The service uses `.env.local`:
 - `API_KEY` - Authentication key for API requests
+- `SERP_API_KEY` - Google SERP API key for Google Jobs integration
 - `PORT` - Port to run on (default: 3001)
 
-For local dev, the defaults work fine. For production, set a secure API_KEY.
+For local dev, the defaults work fine. For production, set a secure API_KEY and SERP_API_KEY.
 
 ## Next Steps
 
@@ -40,6 +41,7 @@ For local dev, the defaults work fine. For production, set a secure API_KEY.
 ## API Endpoints
 
 - `GET /health` - Health check (no auth)
+- `POST /api/search-serp` - Search Google Jobs via SERP API
 - `POST /api/search-indeed` - Search Indeed jobs
 - `POST /api/search-linkedin` - Search LinkedIn jobs  
 - `POST /api/job-details` - Get job details
