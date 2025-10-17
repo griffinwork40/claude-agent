@@ -380,6 +380,16 @@ export async function runClaudeAgentStream(
           // Track text chunks separately - save to DB when tool usage interrupts
           let currentTextChunk = '';
           
+          // Track token usage for the initial stream
+          let initialStopReason: string | null = null;
+          let initialInputTokens = 0;
+          let initialOutputTokens = 0;
+          
+          // Token limits for Claude Haiku 4.5 (200K context window - stop at 95%)
+          const CONTEXT_LIMIT = 200000;
+          const CONTEXT_THRESHOLD = 0.95;
+          const MAX_TOKENS = Math.floor(CONTEXT_LIMIT * CONTEXT_THRESHOLD);
+          
           for await (const chunk of stream) {
             if (chunk.type === 'content_block_start') {
               if (chunk.content_block.type === 'text') {
@@ -474,8 +484,42 @@ export async function runClaudeAgentStream(
               }
               currentToolUse = null;
               toolInputJson = '';
+            } else if (chunk.type === 'message_delta') {
+              // Capture usage and stop_reason from message_delta
+              if (chunk.delta.stop_reason) {
+                initialStopReason = chunk.delta.stop_reason;
+                console.log(`📊 Initial stop reason: ${initialStopReason}`);
+              }
+              if (chunk.usage) {
+                initialOutputTokens = chunk.usage.output_tokens || 0;
+                console.log(`📊 Initial usage: output_tokens=${initialOutputTokens}`);
+              }
+            } else if (chunk.type === 'message_start') {
+              // Capture input tokens from message_start
+              if (chunk.message?.usage) {
+                initialInputTokens = chunk.message.usage.input_tokens || 0;
+                console.log(`📊 Initial usage: input_tokens=${initialInputTokens}`);
+              }
             } else if (chunk.type === 'message_stop') {
               console.log('✓ Stream completed, executing tools...');
+              
+              // Initialize cumulative token tracking with initial stream usage
+              let cumulativeInputTokens = initialInputTokens;
+              let cumulativeOutputTokens = initialOutputTokens;
+              const initialTotalTokens = cumulativeInputTokens + cumulativeOutputTokens;
+              const initialContextPercentage = (initialTotalTokens / CONTEXT_LIMIT) * 100;
+              
+              console.log(`📊 Initial tokens: ${initialTotalTokens} (${initialContextPercentage.toFixed(1)}% of ${CONTEXT_LIMIT})`);
+              
+              // Send initial context usage event
+              sendActivity('context_usage', {
+                content: `Context: ${initialContextPercentage.toFixed(1)}% (${initialTotalTokens.toLocaleString()}/${CONTEXT_LIMIT.toLocaleString()} tokens)`,
+                inputTokens: cumulativeInputTokens,
+                outputTokens: cumulativeOutputTokens,
+                totalTokens: initialTotalTokens,
+                contextPercentage: initialContextPercentage,
+                iteration: 0
+              });
               
               // Execute tools if any were requested - use iterative approach instead of recursion
               if (toolUses.length > 0) {
@@ -503,14 +547,13 @@ export async function runClaudeAgentStream(
                   }
                 ];
                 
-                // Iteratively continue conversation until Claude stops using tools or we hit max iterations
-                const MAX_TOOL_ITERATIONS = 10;
+                // Iteratively continue conversation until natural completion or context limit
                 let iteration = 0;
                 let shouldContinue = true;
                 
-                while (shouldContinue && iteration < MAX_TOOL_ITERATIONS) {
+                while (shouldContinue) {
                   iteration++;
-                  console.log(`🔄 Starting continuation iteration ${iteration}/${MAX_TOOL_ITERATIONS}...`);
+                  console.log(`🔄 Starting continuation iteration ${iteration}...`);
                   
                 const continuationStream = await client.messages.create({
                   model: 'claude-haiku-4-5-20251001',
@@ -527,6 +570,9 @@ export async function runClaudeAgentStream(
                   let continuationToolInputJson = '';
                   const continuationAssistantContent: Array<TextBlockParam | ToolUseBlockParam> = [];
                   let hasText = false;
+                  let stopReason: string | null = null;
+                  let iterationInputTokens = 0;
+                  let iterationOutputTokens = 0;
                 
                 // Stream the continuation response
                 for await (const chunk of continuationStream) {
@@ -616,8 +662,65 @@ export async function runClaudeAgentStream(
                       }
                       continuationCurrentToolUse = null;
                       continuationToolInputJson = '';
+                    } else if (chunk.type === 'message_delta') {
+                      // Capture usage and stop_reason from message_delta
+                      if (chunk.delta.stop_reason) {
+                        stopReason = chunk.delta.stop_reason;
+                        console.log(`📊 Stop reason: ${stopReason}`);
+                      }
+                      if (chunk.usage) {
+                        iterationOutputTokens = chunk.usage.output_tokens || 0;
+                        console.log(`📊 Usage: output_tokens=${iterationOutputTokens}`);
+                      }
+                    } else if (chunk.type === 'message_start') {
+                      // Capture input tokens from message_start
+                      if (chunk.message?.usage) {
+                        iterationInputTokens = chunk.message.usage.input_tokens || 0;
+                        console.log(`📊 Usage: input_tokens=${iterationInputTokens}`);
+                      }
                     } else if (chunk.type === 'message_stop') {
                       console.log(`✓ Continuation ${iteration} completed. Text: ${hasText}, Tools: ${continuationToolUses.length}`);
+                      
+                      // Update cumulative token counts
+                      cumulativeInputTokens += iterationInputTokens;
+                      cumulativeOutputTokens += iterationOutputTokens;
+                      const totalTokens = cumulativeInputTokens + cumulativeOutputTokens;
+                      const contextPercentage = (totalTokens / CONTEXT_LIMIT) * 100;
+                      
+                      console.log(`📊 Cumulative tokens: ${totalTokens} (${contextPercentage.toFixed(1)}% of ${CONTEXT_LIMIT})`);
+                      console.log(`   Input: ${cumulativeInputTokens}, Output: ${cumulativeOutputTokens}`);
+                      
+                      // Send context usage event
+                      sendActivity('context_usage', {
+                        content: `Context: ${contextPercentage.toFixed(1)}% (${totalTokens.toLocaleString()}/${CONTEXT_LIMIT.toLocaleString()} tokens)`,
+                        inputTokens: cumulativeInputTokens,
+                        outputTokens: cumulativeOutputTokens,
+                        totalTokens: totalTokens,
+                        contextPercentage: contextPercentage,
+                        iteration: iteration
+                      });
+                      
+                      // Check termination conditions
+                      if (totalTokens >= MAX_TOKENS) {
+                        console.log(`⚠️ Context limit reached (${totalTokens}/${MAX_TOKENS}), stopping`);
+                        sendActivity('thinking', {
+                          content: `Reached context limit (${contextPercentage.toFixed(0)}% used). Completing response...`
+                        });
+                        shouldContinue = false;
+                        break;
+                      }
+                      
+                      if (stopReason === 'end_turn') {
+                        console.log(`✓ Natural completion (end_turn), stopping`);
+                        shouldContinue = false;
+                        break;
+                      }
+                      
+                      if (stopReason === 'max_tokens') {
+                        console.log(`⚠️ Hit max_tokens in response, stopping`);
+                        shouldContinue = false;
+                        break;
+                      }
                       
                       // Check if we should continue looping
                       if (continuationToolUses.length > 0) {

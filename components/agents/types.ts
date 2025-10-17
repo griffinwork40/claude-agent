@@ -53,7 +53,8 @@ export interface Activity {
     | 'tool_result'
     | 'batch_start'       // NEW: Batch execution starts
     | 'batch_progress'    // NEW: Batch progress update
-    | 'batch_complete';   // NEW: Batch execution completes
+    | 'batch_complete'    // NEW: Batch execution completes
+    | 'context_usage';    // NEW: Token/context usage tracking
 
   tool?: string;
   toolId?: string;
@@ -71,6 +72,13 @@ export interface Activity {
   content?: string;
   error?: string;
   fallback_url?: string;
+  
+  // Token/context usage fields
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  contextPercentage?: number;
+  iteration?: number;
 
   // Timing (Phase 2)
   startedAt?: string;

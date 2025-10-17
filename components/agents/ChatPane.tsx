@@ -459,6 +459,12 @@ export function ChatPane({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamingStartedAt, setStreamingStartedAt] = useState<string | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(agent?.id ?? null);
+  const [contextUsage, setContextUsage] = useState<{
+    percentage: number;
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+  } | null>(null);
   const [activities, setActivities] = useState<Activity[]>(() => {
     if (!agent?.id) {
       return [];
@@ -835,6 +841,7 @@ export function ChatPane({
                 setSessionId(data.sessionId);
                 setIsStreaming(false);
                 setStreamingStartedAt(null);
+                setContextUsage(null); // Clear context usage when stream completes
 
                 // Reload messages from database to show the complete assistant response
                 // This prevents duplicates since we're using the DB as source of truth
@@ -850,13 +857,26 @@ export function ChatPane({
                 setIsStreaming(false);
                 setStreamingMessage('');
                 setStreamingStartedAt(null);
+                setContextUsage(null); // Clear on error
+              } else if (data.type === 'context_usage') {
+                // Update context usage state
+                if (data.contextPercentage !== undefined && data.totalTokens !== undefined) {
+                  setContextUsage({
+                    percentage: data.contextPercentage,
+                    totalTokens: data.totalTokens,
+                    inputTokens: data.inputTokens || 0,
+                    outputTokens: data.outputTokens || 0
+                  });
+                  console.log(`📊 Context usage: ${data.contextPercentage.toFixed(1)}% (${data.totalTokens} tokens)`);
+                }
               } else if (
                 data.type === 'tool_start' || 
                 data.type === 'tool_params' || 
                 data.type === 'tool_executing' || 
                 data.type === 'tool_result' || 
                 data.type === 'thinking' ||
-                data.type === 'status'
+                data.type === 'status' ||
+                data.type === 'context_usage'
               ) {
                 const targetAgentId = agent?.id ?? currentAgentId;
                 if (!targetAgentId) {
@@ -936,8 +956,28 @@ export function ChatPane({
       {/* Desktop header - hidden on mobile to save space */}
       {!isMobile && (
         <header className="px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
-          <div className="text-sm font-medium text-[var(--fg)]">
-            {agent ? `Chat — ${agent.name}` : 'Chat — no agent selected'}
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-medium text-[var(--fg)]">
+              {agent ? `Chat — ${agent.name}` : 'Chat — no agent selected'}
+            </div>
+            {/* Context usage indicator - only shown during streaming */}
+            {isStreaming && contextUsage && (
+              <div 
+                className={`flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                  contextUsage.percentage < 70 
+                    ? 'bg-green-50 text-green-700 border border-green-200' 
+                    : contextUsage.percentage < 90 
+                    ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' 
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+                title={`Input: ${contextUsage.inputTokens.toLocaleString()} | Output: ${contextUsage.outputTokens.toLocaleString()}`}
+              >
+                <Brain className="w-3.5 h-3.5" />
+                <span>
+                  {contextUsage.percentage.toFixed(1)}% ({(contextUsage.totalTokens / 1000).toFixed(1)}K/200K)
+                </span>
+              </div>
+            )}
           </div>
         </header>
       )}
