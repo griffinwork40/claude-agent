@@ -1037,6 +1037,40 @@ export class BrowserJobService {
       await this.initialize();
     }
 
+    // First, check if this is already a direct company application URL (ATS platforms)
+    const atsPlatforms = [
+      'ashbyhq.com',
+      'greenhouse.io', 
+      'workday.com',
+      'bamboohr.com',
+      'lever.co',
+      'smartrecruiters.com',
+      'jobvite.com',
+      'icims.com',
+      'taleo.net',
+      'successfactors.com',
+      'workable.com',
+      'recruitee.com',
+      'breezy.hr',
+      'personio.com',
+      'zoho.com/recruit',
+      'hiring.workday.com',
+      'jobs.lever.co',
+      'boards.greenhouse.io',
+      'careers.smartrecruiters.com'
+    ];
+
+    const url = new URL(jobBoardUrl);
+    const isAtsPlatform = atsPlatforms.some(platform => url.hostname.includes(platform));
+    
+    if (isAtsPlatform) {
+      console.log('✓ URL is already a direct company application (ATS platform):', jobBoardUrl);
+      return {
+        companyApplicationUrl: jobBoardUrl,
+        requiresJobBoard: false
+      };
+    }
+
     const page = await this.createStealthPage();
     
     try {
@@ -1103,7 +1137,9 @@ export class BrowserJobService {
           'a:has-text("Apply directly")',
           'a:has-text("Company website")',
           'a[href*="careers"]:has-text("Apply")',
-          'a[href*="jobs"]:has-text("Apply")'
+          'a[href*="jobs"]:has-text("Apply")',
+          'a[href*="apply"]:has-text("Apply")',
+          'a[href*="application"]:has-text("Apply")'
         ];
         
         for (const selector of genericSelectors) {
@@ -1119,6 +1155,30 @@ export class BrowserJobService {
           } catch {
             continue;
           }
+        }
+      }
+
+      // Additional check: if the current page looks like an application form, it might be a direct application
+      if (!companyUrl) {
+        try {
+          const pageTitle = await page.title();
+          const hasApplicationKeywords = [
+            'application', 'apply', 'careers', 'jobs', 'employment', 'join our team',
+            'work with us', 'opportunity', 'position'
+          ].some(keyword => 
+            pageTitle.toLowerCase().includes(keyword) || 
+            jobBoardUrl.toLowerCase().includes(keyword)
+          );
+
+          // Check if page has form elements typical of job applications
+          const hasFormElements = await page.locator('form, input[type="text"], input[type="email"], textarea, select').count() > 0;
+          
+          if (hasApplicationKeywords && hasFormElements) {
+            console.log('✓ Page appears to be a direct application form');
+            companyUrl = jobBoardUrl;
+          }
+        } catch {
+          // Ignore errors in this check
         }
       }
       
