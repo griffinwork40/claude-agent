@@ -15,6 +15,8 @@ export interface Agent {
   description?: string;
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
+  archived?: boolean;
+  archivedAt?: string; // ISO timestamp
 }
 
 /**
@@ -36,6 +38,9 @@ export interface AgentListProps {
   selectedAgentId: string | null;
   onSelect: (agentId: string) => void;
   onCreate: () => void;
+  onArchive?: (agentId: string, archived: boolean) => void;
+  showArchived?: boolean;
+  onToggleArchived?: () => void;
 }
 
 export interface Activity {
@@ -44,6 +49,7 @@ export interface Activity {
 
   // Phase 2 extended event types
   type:
+    | 'text_chunk'        // NEW: Streaming text content chunks
     | 'thinking_preview'  // NEW: Thought before tool execution
     | 'thinking'
     | 'status'

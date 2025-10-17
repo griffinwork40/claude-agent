@@ -355,6 +355,16 @@ function getActivityTitle(activity: Activity): string {
 function ActivityCard({ activity }: { activity: Activity }) {
   const [expanded, setExpanded] = useState(false);
   const [hovering, setHovering] = useState(false);
+  
+  // Special handling for text_chunk: render as inline text with markdown support
+  if (activity.type === 'text_chunk') {
+    return (
+      <div className="text-[var(--assistant-text)] text-sm leading-relaxed">
+        {renderInlineMarkdown(activity.content || '', `text-chunk-${activity.id}`)}
+      </div>
+    );
+  }
+  
   const { Icon, color } = getActivityIcon(activity);
   const title = getActivityTitle(activity);
   const hasDetails = activity.params || activity.result;
@@ -697,18 +707,8 @@ export function ChatPane({
       items.push({ ...activity, itemType: 'activity' as const });
     });
     
-    // Add streaming message if applicable (including during completion-reload transition)
-    if (isStreaming || streamingMessage) {
-      items.push({
-        id: 'streaming',
-        agentId: agent.id,
-        role: 'assistant',
-        content: streamingMessage,
-        createdAt: streamingStartedAt ?? new Date().toISOString(),
-        isStreaming: isStreaming,
-        itemType: 'message' as const,
-      });
-    }
+    // Note: We no longer add a separate streaming message bubble
+    // because text is now streamed as text_chunk activities that are interleaved with tool use
     
     // Sort by timestamp
     items.sort((a, b) => {
@@ -724,7 +724,7 @@ export function ChatPane({
     });
     
     return items;
-  }, [agent, visibleMessages, activities, isStreaming, streamingMessage, streamingStartedAt]);
+  }, [agent, visibleMessages, activities]);
 
   // Auto-scroll to bottom when new messages arrive or streaming updates
   useEffect(() => {
@@ -833,6 +833,23 @@ export function ChatPane({
               console.log(`Event ${eventCount}:`, data.type, data.content?.substring(0, 50) || data.tool || '...');
               
               if (data.type === 'chunk') {
+                // Add text chunks as activities for proper interleaving with tool use
+                const targetAgentId = agent?.id ?? currentAgentId;
+                if (targetAgentId) {
+                  const activity: Activity = {
+                    id: `activity-${Date.now()}-${Math.random()}`,
+                    agentId: targetAgentId,
+                    type: 'text_chunk',
+                    content: data.content,
+                    timestamp: new Date().toISOString()
+                  };
+                  setActivities(prev => [...prev, activity]);
+                  
+                  if (onActivity) {
+                    onActivity(activity);
+                  }
+                }
+                // Also accumulate for the streaming message display
                 setStreamingMessage(prev => prev + data.content);
               } else if (data.type === 'complete') {
                 console.log('✓ Stream completed, sessionId:', data.sessionId);
@@ -1082,78 +1099,140 @@ export function ChatPane({
           </div>
         ) : (
           <>
-            {timelineItems.map((item, index) => {
-              // Check if this is an activity or message
-              if (item.itemType === 'activity') {
-                // Only render activities that have valid content
-                const hasDisplayableContent = Boolean(
-                  item.tool ||
-                    item.content ||
-                    item.message ||
-                    item.params ||
-                    item.result ||
-                    item.error ||
-                    item.type === 'thinking' ||
-                    item.type === 'status'
-                );
-                if (!hasDisplayableContent) {
-                  console.warn('Skipping activity with no content:', item);
-                  return null;
-                }
-                return <ActivityCard key={item.id} activity={item} />;
-              }
+            {(() => {
+              const renderedItems: ReactNode[] = [];
+              let i = 0;
               
-              // Otherwise, render as a message
-              const message = item as RenderMessage & { itemType: 'message' };
-              const previous = timelineItems[index - 1];
-              const next = timelineItems[index + 1];
-              const isFirstInGroup = !previous || previous.itemType !== 'message' || (previous as any).role !== message.role;
-              const isLastInGroup = !next || next.itemType !== 'message' || (next as any).role !== message.role;
-              const theme = ROLE_THEMES[message.role];
-              const containerDirection = message.role === 'user' ? 'flex-row-reverse text-right' : 'flex-row text-left';
-              const roleLabel = message.role === 'user' ? 'You' : message.role === 'assistant' ? (agent?.name ?? 'Assistant') : 'System';
-              const timestamp = formatAbsoluteTimestamp(message.createdAt);
-              const relative = formatRelativeTimestamp(message.createdAt);
-              const timestampLabel = relative ? `${timestamp} · ${relative}` : timestamp;
-              const messageKeyPrefix = `${message.id}-${index}`;
-              
-              // User messages get rounded corners, assistant messages are borderless
-              const bubbleClasses = message.role === 'user' 
-                ? 'rounded-2xl px-4 py-3' 
-                : 'py-2 px-0';
-
-              return (
-                <div
-                  key={`${message.id}-${message.createdAt}`}
-                  className={`flex gap-2 ${containerDirection} ${isFirstInGroup ? 'mt-4' : 'mt-1'} animate-fadeIn`}
-                >
-                  <div className={`flex ${message.role === 'user' ? 'max-w-[75%]' : 'max-w-[90%]'} flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} gap-1`}>
-                    {isFirstInGroup && (
-                      <div className={`flex items-baseline gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <span className={`rounded-md px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider ${theme.badge}`}>
-                          {roleLabel}
-                        </span>
-                        <time className={`text-[0.6875rem] ${theme.timestamp}`} dateTime={new Date(message.createdAt).toISOString()}>
-                          {timestampLabel}
-                        </time>
-                      </div>
-                    )}
+              while (i < timelineItems.length) {
+                const item = timelineItems[i];
+                
+                // Group consecutive text_chunk activities into a single assistant message
+                if (item.itemType === 'activity' && item.type === 'text_chunk') {
+                  const textChunks: Activity[] = [item];
+                  let j = i + 1;
+                  
+                  // Collect consecutive text chunks
+                  while (j < timelineItems.length && 
+                         timelineItems[j].itemType === 'activity' && 
+                         (timelineItems[j] as Activity).type === 'text_chunk') {
+                    textChunks.push(timelineItems[j] as Activity);
+                    j++;
+                  }
+                  
+                  // Combine all text chunks into a single message
+                  const combinedText = textChunks.map(chunk => chunk.content || '').join('');
+                  const firstChunk = textChunks[0];
+                  const timestamp = formatAbsoluteTimestamp(firstChunk.timestamp);
+                  const relative = formatRelativeTimestamp(firstChunk.timestamp);
+                  const timestampLabel = relative ? `${timestamp} · ${relative}` : timestamp;
+                  const theme = ROLE_THEMES.assistant;
+                  
+                  // Check if this is the first text chunk group (no previous message or activity)
+                  const isFirstInGroup = i === 0 || 
+                    (timelineItems[i - 1].itemType === 'activity' && (timelineItems[i - 1] as Activity).type !== 'text_chunk');
+                  
+                  renderedItems.push(
                     <div
-                      className={`w-full text-left ${theme.bubble} ${bubbleClasses}`}
+                      key={`text-chunk-group-${i}`}
+                      className={`flex gap-2 flex-row text-left ${isFirstInGroup ? 'mt-4' : 'mt-1'} animate-fadeIn`}
                     >
-                      {renderMarkdown(message.content, messageKeyPrefix)}
-                      {message.isStreaming && !message.content && (
-                        <span className={`inline-block text-sm ${message.role === 'assistant' ? 'text-[var(--assistant-text)]/60' : 'text-white/80'}`}>
-                          <span className="animate-ellipsisDot1">.</span>
-                          <span className="animate-ellipsisDot2">.</span>
-                          <span className="animate-ellipsisDot3">.</span>
-                        </span>
+                      <div className="flex max-w-[90%] flex-col items-start gap-1">
+                        {isFirstInGroup && (
+                          <div className="flex items-baseline gap-2 justify-start">
+                            <span className={`rounded-md px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider ${theme.badge}`}>
+                              {agent?.name ?? 'Assistant'}
+                            </span>
+                            <time className={`text-[0.6875rem] ${theme.timestamp}`}>
+                              {timestampLabel}
+                            </time>
+                          </div>
+                        )}
+                        <div className="w-full text-left bg-transparent text-[var(--assistant-text)] py-2 px-0">
+                          {renderMarkdown(combinedText, `text-chunk-group-${i}`)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                  
+                  i = j; // Skip past all the text chunks we just processed
+                  continue;
+                }
+                
+                // Regular activity (not text_chunk)
+                if (item.itemType === 'activity') {
+                  const hasDisplayableContent = Boolean(
+                    item.tool ||
+                      item.content ||
+                      item.message ||
+                      item.params ||
+                      item.result ||
+                      item.error ||
+                      item.type === 'thinking' ||
+                      item.type === 'status'
+                  );
+                  if (hasDisplayableContent) {
+                    renderedItems.push(<ActivityCard key={item.id} activity={item} />);
+                  }
+                  i++;
+                  continue;
+                }
+                
+                // Regular message
+                const message = item as RenderMessage & { itemType: 'message' };
+                const previous = timelineItems[i - 1];
+                const next = timelineItems[i + 1];
+                const isFirstInGroup = !previous || previous.itemType !== 'message' || (previous as any).role !== message.role;
+                const isLastInGroup = !next || next.itemType !== 'message' || (next as any).role !== message.role;
+                const theme = ROLE_THEMES[message.role];
+                const containerDirection = message.role === 'user' ? 'flex-row-reverse text-right' : 'flex-row text-left';
+                const roleLabel = message.role === 'user' ? 'You' : message.role === 'assistant' ? (agent?.name ?? 'Assistant') : 'System';
+                const timestamp = formatAbsoluteTimestamp(message.createdAt);
+                const relative = formatRelativeTimestamp(message.createdAt);
+                const timestampLabel = relative ? `${timestamp} · ${relative}` : timestamp;
+                const messageKeyPrefix = `${message.id}-${i}`;
+                
+                // User messages get rounded corners, assistant messages are borderless
+                const bubbleClasses = message.role === 'user' 
+                  ? 'rounded-2xl px-4 py-3' 
+                  : 'py-2 px-0';
+
+                renderedItems.push(
+                  <div
+                    key={`${message.id}-${message.createdAt}`}
+                    className={`flex gap-2 ${containerDirection} ${isFirstInGroup ? 'mt-4' : 'mt-1'} animate-fadeIn`}
+                  >
+                    <div className={`flex ${message.role === 'user' ? 'max-w-[75%]' : 'max-w-[90%]'} flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} gap-1`}>
+                      {isFirstInGroup && (
+                        <div className={`flex items-baseline gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <span className={`rounded-md px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider ${theme.badge}`}>
+                            {roleLabel}
+                          </span>
+                          <time className={`text-[0.6875rem] ${theme.timestamp}`} dateTime={new Date(message.createdAt).toISOString()}>
+                            {timestampLabel}
+                          </time>
+                        </div>
                       )}
+                      <div
+                        className={`w-full text-left ${theme.bubble} ${bubbleClasses}`}
+                      >
+                        {renderMarkdown(message.content, messageKeyPrefix)}
+                        {message.isStreaming && !message.content && (
+                          <span className={`inline-block text-sm ${message.role === 'assistant' ? 'text-[var(--assistant-text)]/60' : 'text-white/80'}`}>
+                            <span className="animate-ellipsisDot1">.</span>
+                            <span className="animate-ellipsisDot2">.</span>
+                            <span className="animate-ellipsisDot3">.</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+                
+                i++;
+              }
+              
+              return renderedItems;
+            })()}
           </>
         )}
         <div ref={endRef} />

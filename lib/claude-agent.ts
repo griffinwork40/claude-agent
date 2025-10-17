@@ -441,8 +441,13 @@ export async function runClaudeAgentStream(
                 const content = chunk.delta.text;
                 if (content) {
                   console.log(`✓ Streaming chunk: ${content.length} chars`);
+                  
+                  // Send as both raw text chunk AND as thinking activity for proper interleaving
                   const encoded = new TextEncoder().encode(content);
                   controller.enqueue(encoded);
+                  
+                  // Also send as a chunk event for the streaming message
+                  sendActivity('chunk', { content });
                   
                   // Accumulate in current text chunk
                   currentTextChunk += content;
@@ -625,6 +630,9 @@ export async function runClaudeAgentStream(
                           hasText = true;
                       const encoded = new TextEncoder().encode(content);
                       controller.enqueue(encoded);
+                      
+                      // Send as chunk event for streaming message
+                      sendActivity('chunk', { content });
                       
                       // Accumulate continuation text in current chunk
                       currentTextChunk += content;

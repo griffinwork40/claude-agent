@@ -30,10 +30,10 @@ export async function POST(request: NextRequest) {
     }
     console.log('✓ User authenticated:', session.user.id);
     
-    const { message, sessionId, agentId } = await request.json();
+    const { message, sessionId: requestSessionId, agentId } = await request.json();
     console.log('Request data:', { 
       messageLength: message?.length, 
-      sessionId,
+      sessionId: requestSessionId,
       agentId,
       hasMessage: !!message,
       requestHeaders: Object.fromEntries(request.headers.entries())
@@ -44,16 +44,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
+    // Create or update conversation
+    console.log('Creating/updating conversation...');
+    const sessionId = agentId || 'default-agent';
+    const supabase = getSupabaseAdmin();
+    const { error: conversationError } = await supabase
+      .from('conversations')
+      .upsert({
+        user_id: session.user.id,
+        session_id: sessionId,
+        agent_id: sessionId,
+        name: message.length > 60 ? `${message.slice(0, 60)}...` : message,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,session_id'
+      });
+
+    if (conversationError) {
+      console.error('❌ Error creating/updating conversation:', conversationError);
+      // Continue anyway - this is not critical
+    } else {
+      console.log('✓ Conversation created/updated');
+    }
+
     // Store user message in database
     console.log('Saving user message to database...');
-    const supabase = getSupabaseAdmin();
     const { data: userMessage, error: userMessageError } = await supabase
       .from('messages')
       .insert([{ 
         content: message, 
         sender: 'user',
         user_id: session.user.id,
-        session_id: agentId || 'default-agent',
+        session_id: sessionId,
         created_at: new Date().toISOString()
       }])
       .select()
