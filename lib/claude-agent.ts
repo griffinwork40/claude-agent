@@ -979,6 +979,52 @@ async function executeTools(
             }
             break;
             
+          case 'research_company':
+            console.log('🔍 Executing research_company:', input);
+            try {
+              const companyResult = await browserService.researchCompany(input.company_name);
+              console.log(`✓ Company research completed for ${input.company_name}`);
+              result = {
+                success: true,
+                data: companyResult,
+                message: `Company research completed for ${input.company_name}`
+              };
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Company research tool failed:', errMessage);
+              result = {
+                success: false,
+                error: `Company research failed: ${errMessage}`,
+                message: `Failed to research company: ${errMessage}`
+              };
+            }
+            break;
+            
+          case 'get_salary_data':
+            console.log('💰 Executing get_salary_data:', input);
+            try {
+              const salaryResult = await browserService.getSalaryData({
+                job_title: input.job_title,
+                location: input.location,
+                experience_level: input.experience_level
+              });
+              console.log(`✓ Salary data retrieved for ${input.job_title} in ${input.location}`);
+              result = {
+                success: true,
+                data: salaryResult,
+                message: `Salary data retrieved for ${input.job_title} in ${input.location}`
+              };
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Salary data tool failed:', errMessage);
+              result = {
+                success: false,
+                error: `Salary data retrieval failed: ${errMessage}`,
+                message: `Failed to get salary data: ${errMessage}`
+              };
+            }
+            break;
+            
           default:
             result = {
               success: false,

@@ -133,6 +133,20 @@ export class BrowserService {
   }): Promise<JobOpportunity[]> {
     return this.request('/api/search-linkedin', params);
   }
+
+  // Research company information
+  async researchCompany(companyName: string): Promise<any> {
+    return this.request('/api/research-company', { company_name: companyName });
+  }
+
+  // Get salary data
+  async getSalaryData(params: {
+    job_title: string;
+    location: string;
+    experience_level?: string;
+  }): Promise<any> {
+    return this.request('/api/salary-data', params);
+  }
 }
 
 // Singleton instance
@@ -414,6 +428,43 @@ export const browserTools = [
         }
       },
       required: ['keywords', 'location', 'userId']
+    }
+  },
+  {
+    name: 'research_company',
+    description: 'Research company information including business details, recent news, reviews, and financial information.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        company_name: {
+          type: 'string',
+          description: 'Name of the company to research (e.g., "Google", "Microsoft", "Apple")'
+        }
+      },
+      required: ['company_name']
+    }
+  },
+  {
+    name: 'get_salary_data',
+    description: 'Get comprehensive salary data for a specific job title and location, including salary ranges, averages, and company-specific data.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        job_title: {
+          type: 'string',
+          description: 'Job title to research salary for (e.g., "Software Engineer", "Data Scientist", "Product Manager")'
+        },
+        location: {
+          type: 'string',
+          description: 'Location for salary research (e.g., "San Francisco", "New York", "Remote")'
+        },
+        experience_level: {
+          type: 'string',
+          description: 'Experience level to filter salary data (entry, mid, senior, executive)',
+          enum: ['entry', 'mid', 'senior', 'executive']
+        }
+      },
+      required: ['job_title', 'location']
     }
   }
 ];

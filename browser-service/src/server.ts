@@ -407,7 +407,73 @@ app.post('/api/apply-to-job', authenticate, async (req: Request, res: Response) 
   }
 });
 
-const PORT = process.env.PORT || 3001;
+// Research company information
+app.post('/api/research-company', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { company_name } = req.body;
+    
+    // Validate required parameters
+    if (!company_name) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameter: company_name is required',
+        details: { company_name: !!company_name }
+      });
+    }
+    
+    console.log('🔍 Company research request:', { company_name });
+    
+    const browserService = getBrowserJobService();
+    const result = await browserService.researchCompany(company_name);
+    
+    console.log(`✓ Company research completed for ${company_name}`);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('❌ Error researching company:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Get salary data
+app.post('/api/salary-data', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { job_title, location, experience_level } = req.body;
+    
+    // Validate required parameters
+    if (!job_title || !location) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameters: job_title and location are required',
+        details: { job_title: !!job_title, location: !!location }
+      });
+    }
+    
+    console.log('💰 Salary data request:', { job_title, location, experience_level });
+    
+    const browserService = getBrowserJobService();
+    const result = await browserService.getSalaryData({
+      job_title,
+      location,
+      experience_level
+    });
+    
+    console.log(`✓ Salary data retrieved for ${job_title} in ${location}`);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('❌ Error getting salary data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+const PORT = process.env.PORT || 3002;
 const server = app.listen(PORT, () => {
   console.log('🚀 LLM-controlled browser service running on http://localhost:' + PORT);
   console.log('📝 API Key:', process.env.API_KEY ? 'Set' : 'Not set (warning!)');

@@ -2,6 +2,7 @@
 // Playwright-based browser automation for job searching (server-side implementation)
 import { chromium, Browser, Page } from 'playwright';
 import { JobOpportunity } from './types';
+import { getSerpApiClient } from './serp-client';
 import fs from 'fs/promises';
 
 const toRecord = (value: unknown): Record<string, unknown> =>
@@ -386,7 +387,7 @@ export class BrowserJobService {
     );
   }
 
-  // Search jobs on Google Jobs (no authentication required)
+  // Search jobs on Google Jobs using SERP API (no authentication required)
   async searchJobsGoogle(params: {
     keywords: string;
     location: string;
@@ -400,168 +401,46 @@ export class BrowserJobService {
       return cachedResults;
     }
 
-    const fallbackUrls = this.generateFallbackUrls(params);
-    
-    const searchUrl = this.buildGoogleJobsSearchUrl(params);
-    
-    return this.withRetryAndFallback(
-      async () => {
-        const page = await this.createStealthPage();
-        
-        try {
-          console.log('🔍 Searching Google Jobs:', searchUrl);
-          console.log('📋 Search params:', params);
-          
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          
-          // Add random delay to look more human
-          await page.waitForTimeout(1000 + Math.random() * 2000);
+    try {
+      console.log('🔍 Searching Google Jobs via SERP API:', params);
       
-      // Wait for Google Jobs results to load
-      console.log('⏳ Waiting for Google Jobs results...');
-      await page.waitForSelector('[data-ved], .g, .jobsearch-ResultsList', { timeout: 15000 }).catch((selectorError) => {
-        console.log('⚠️ Primary selector not found, trying alternative approach:', selectorError.message);
-      });
+      const serpClient = getSerpApiClient();
+      const jobs = await serpClient.searchGoogleJobs(params);
       
-      // Wait a bit for dynamic content
-      await page.waitForTimeout(3000 + Math.random() * 1000);
+      console.log(`✅ Found ${jobs.length} jobs via SERP API`);
       
-      // Check if we're on the right page
-      const currentUrl = page.url();
-      const pageTitle = await page.title();
-      console.log('📍 Current page:', { url: currentUrl, title: pageTitle });
+      // Cache successful results
+      this.setCachedResults(cacheKey, jobs);
+      return jobs;
       
-      // Extract job listings from Google Jobs
-      const jobs = await page.evaluate(() => {
-        // Google Jobs can appear in different formats, so we try multiple selectors
-        const jobCards = Array.from(document.querySelectorAll(
-          '[data-ved] .g, .jobsearch-ResultsList li, [data-testid="job-card"], .g[data-ved]'
-        ));
-        console.log(`Found ${jobCards.length} job cards on Google Jobs page`);
-        
-        return jobCards.slice(0, 10).map((el, index) => {
-          // Try multiple selectors for job title
-          const titleEl = el.querySelector('h3 a, h2 a, .jobTitle a, [data-testid="job-title"], .g h3 a') ||
-                         el.querySelector('h3, h2, .jobTitle, [data-testid="job-title"]');
-          
-          // Try multiple selectors for company
-          const companyEl = el.querySelector('.companyName, [data-testid="company-name"], .company, .g .company') ||
-                           el.querySelector('.company, .companyName');
-          
-          // Try multiple selectors for location
-          const locationEl = el.querySelector('.companyLocation, [data-testid="job-location"], .location, .g .location') ||
-                            el.querySelector('.location, .companyLocation');
-          
-          // Try multiple selectors for salary
-          const salaryEl = el.querySelector('.salary-snippet, [data-testid="salary"], .salary, .g .salary') ||
-                          el.querySelector('.salary, .salary-snippet');
-          
-          // Try multiple selectors for description
-          const descEl = el.querySelector('.job-snippet, [data-testid="job-snippet"], .description, .g .snippet') ||
-                        el.querySelector('.snippet, .job-snippet, .description');
-          
-          // Try multiple selectors for job link
-          const linkEl = el.querySelector('a[href*="/rc/clk"], a[href*="/viewjob"], h3 a, h2 a, .g a') as HTMLAnchorElement | null;
-          
-          return {
-            id: `google_${Date.now()}_${index}`,
-            title: titleEl?.textContent?.trim() || 'Unknown Title',
-            company: companyEl?.textContent?.trim() || 'Unknown Company',
-            location: locationEl?.textContent?.trim() || 'Unknown Location',
-            salary: salaryEl?.textContent?.trim() || undefined,
-            url: linkEl?.href || '',
-            description: descEl?.textContent?.trim() || '',
-            application_url: linkEl?.href || '',
-            source: 'google' as const,
-            skills: [],
-            experience_level: 'unknown',
-            job_type: 'full-time',
-            remote_type: 'unknown',
-            applied: false,
-            status: 'discovered' as const,
-            created_at: new Date().toISOString()
-          };
-        });
-      });
-
-          console.log(`✅ Found ${jobs.length} jobs on Google Jobs`);
-          
-          // If no jobs found, return a structured error response instead of empty array
-          if (jobs.length === 0) {
-            console.log('⚠️ No jobs found - returning error response');
-            const errorJobs = [{
-              id: `google_no_results_${Date.now()}`,
-              title: 'No Jobs Found',
-              company: 'Google Jobs',
-              location: params.location,
-              description: `No job listings found for "${params.keywords}" in ${params.location}. This could be due to: 1) No jobs matching criteria, 2) Google's anti-bot protection, 3) Selector changes, 4) Search query format issues.`,
-              url: searchUrl,
-              application_url: '',
-              source: 'google' as const,
-              skills: [],
-              experience_level: 'unknown',
-              job_type: 'full-time',
-              remote_type: 'unknown',
-              applied: false,
-              status: 'error' as const,
-              created_at: new Date().toISOString(),
-              error: 'No jobs found - possible selector issues or anti-bot protection'
-            }];
-            
-            // Cache error results
-            this.setCachedResults(cacheKey, errorJobs);
-            return errorJobs;
-          }
-          
-          // Cache successful results
-          this.setCachedResults(cacheKey, jobs);
-          return jobs;
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ SERP API Google Jobs search failed:', errMessage);
       
-        } catch (error: unknown) {
-          const errMessage = error instanceof Error ? error.message : String(error);
-          console.error('❌ Google Jobs search failed:', {
-            error: errMessage,
-            url: searchUrl,
-            params
-          });
-          
-          // Capture page state for debugging
-          let pageState = 'unknown';
-          let pageTitle = 'unknown';
-          try {
-            pageState = page.url();
-            pageTitle = await page.title();
-          } catch {}
-          
-          // Return structured error instead of throwing
-          const errorJobs = [{
-            id: `google_error_${Date.now()}`,
-            title: 'Search Failed',
-            company: 'Error',
-            location: 'N/A',
-            description: `Google Jobs search failed: ${errMessage}. Page: ${pageState} (${pageTitle})`,
-            url: searchUrl,
-            application_url: '',
-            source: 'google' as const,
-            skills: [],
-            experience_level: 'unknown',
-            job_type: 'full-time',
-            remote_type: 'unknown',
-            applied: false,
-            status: 'error' as const,
-            created_at: new Date().toISOString(),
-            error: errMessage
-          }];
-          
-          // Cache error results
-          this.setCachedResults(cacheKey, errorJobs);
-          return errorJobs;
-        } finally {
-          await page.close();
-        }
-      },
-      fallbackUrls
-    );
+      // Return structured error instead of throwing
+      const errorJobs = [{
+        id: `google_serp_error_${Date.now()}`,
+        title: 'Search Failed',
+        company: 'Error',
+        location: 'N/A',
+        description: `Google Jobs search via SERP API failed: ${errMessage}`,
+        url: '',
+        application_url: '',
+        source: 'google' as const,
+        skills: [],
+        experience_level: 'unknown',
+        job_type: 'full-time',
+        remote_type: 'unknown',
+        applied: false,
+        status: 'error' as const,
+        created_at: new Date().toISOString(),
+        error: errMessage
+      }];
+      
+      // Cache error results
+      this.setCachedResults(cacheKey, errorJobs);
+      return errorJobs;
+    }
   }
 
   // Search jobs on LinkedIn (requires authentication)
@@ -762,6 +641,57 @@ export class BrowserJobService {
       throw new Error(`Failed to get job details: ${errMessage}`);
     } finally {
       await page.close();
+    }
+  }
+
+  // Research company information using SERP API
+  async researchCompany(companyName: string): Promise<any> {
+    try {
+      console.log('🔍 Researching company via SERP API:', companyName);
+      
+      const serpClient = getSerpApiClient();
+      const result = await serpClient.researchCompany(companyName);
+      
+      console.log(`✅ Company research completed for ${companyName}`);
+      return result;
+      
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ SERP API company research failed:', errMessage);
+      
+      return {
+        company_name: companyName,
+        description: `Company research failed: ${errMessage}`,
+        created_at: new Date().toISOString()
+      };
+    }
+  }
+
+  // Get salary data using SERP API
+  async getSalaryData(params: {
+    job_title: string;
+    location: string;
+    experience_level?: string;
+  }): Promise<any> {
+    try {
+      console.log('💰 Getting salary data via SERP API:', params);
+      
+      const serpClient = getSerpApiClient();
+      const result = await serpClient.getSalaryData(params);
+      
+      console.log(`✅ Salary data retrieved for ${params.job_title} in ${params.location}`);
+      return result;
+      
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ SERP API salary data retrieval failed:', errMessage);
+      
+      return {
+        job_title: params.job_title,
+        location: params.location,
+        salary_ranges: [],
+        created_at: new Date().toISOString()
+      };
     }
   }
 

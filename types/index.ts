@@ -79,3 +79,76 @@ export interface BrowserToolResult {
   error?: string;
   message?: string;
 }
+
+// Company research result
+export interface CompanyResearchResult {
+  company_name: string;
+  website?: string;
+  description?: string;
+  industry?: string;
+  size?: string;
+  founded?: string;
+  headquarters?: string;
+  recent_news?: Array<{
+    title: string;
+    snippet: string;
+    link: string;
+    date?: string;
+  }>;
+  reviews?: Array<{
+    source: string;
+    rating?: number;
+    review_count?: number;
+    url?: string;
+  }>;
+  social_media?: {
+    linkedin?: string;
+    twitter?: string;
+    facebook?: string;
+  };
+  financial_info?: {
+    revenue?: string;
+    employees?: string;
+    market_cap?: string;
+  };
+  created_at: string;
+}
+
+// Salary data result
+export interface SalaryDataResult {
+  job_title: string;
+  location: string;
+  salary_ranges: Array<{
+    min: number;
+    max: number;
+    currency: string;
+    source: string;
+    job_count: number;
+  }>;
+  average_salary?: {
+    min: number;
+    max: number;
+    currency: string;
+  };
+  salary_trends?: Array<{
+    year: number;
+    average_min: number;
+    average_max: number;
+    currency: string;
+  }>;
+  benefits?: string[];
+  experience_levels?: Array<{
+    level: string;
+    min_salary: number;
+    max_salary: number;
+    currency: string;
+  }>;
+  companies?: Array<{
+    name: string;
+    min_salary: number;
+    max_salary: number;
+    currency: string;
+    job_count: number;
+  }>;
+  created_at: string;
+}
