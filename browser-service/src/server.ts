@@ -473,7 +473,7 @@ app.post('/api/salary-data', authenticate, async (req: Request, res: Response) =
   }
 });
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
   console.log('🚀 LLM-controlled browser service running on http://localhost:' + PORT);
   console.log('📝 API Key:', process.env.API_KEY ? 'Set' : 'Not set (warning!)');
