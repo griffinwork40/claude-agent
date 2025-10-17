@@ -23,10 +23,10 @@ export default function EnlistLanding() {
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>
-            <a href="/agent">Open agents</a>
+            <Link href="/agent">Open agents</Link>
           </Button>
           <Button variant="outline" asChild>
-            <a href="#how-it-works">See how it works</a>
+            <Link href="#how-it-works">See how it works</Link>
           </Button>
         </div>
       </Card>
