@@ -11,6 +11,7 @@
     "lint:next": "next lint",
     "test": "vitest",
     "test:watch": "vitest --watch",
+    "test:playwright": "playwright test -c playwright.config.ts",
     "prepare": "husky"
   },
   "dependencies": {
