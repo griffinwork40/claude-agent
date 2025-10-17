@@ -1,6 +1,7 @@
 // app/page.tsx
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { getSiteName } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,7 +14,7 @@ export default function EnlistLanding() {
       {/* Hero matching light theme */}
       <Card className="p-8">
         <div className="flex items-center gap-3 mb-4">
-          <img src="/logo.svg" alt="Enlist" className="h-16 w-16" />
+          <Image src="/logo.svg" alt="Enlist" width={64} height={64} className="h-16 w-16" />
           <p className="uppercase tracking-wide text-sm text-[var(--fg)]/70">{siteName} — Job Search Agent</p>
         </div>
         <h1 className="mt-2 text-display md:text-5xl text-[var(--fg)]">
