@@ -2,6 +2,7 @@
 import { redirect } from 'next/navigation';
 import { getServerSupabase } from '@/lib/supabase/server';
 import GmailIntegrationCard from '@/components/dashboard/GmailIntegrationCard';
+import ResumeGallery from '@/components/dashboard/ResumeGallery';
 import { getGmailCredentials } from '@/lib/supabase/gmail-credentials';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
+    <div className="mx-auto max-w-6xl px-6 py-10">
       <h1 className="text-2xl font-bold">Dashboard</h1>
       <p className="mt-2 text-gray-600">
         Manage your integrations and track how Enlist coordinates your job search workflow.
@@ -37,6 +38,8 @@ export default async function DashboardPage() {
         connectUrl="/api/integrations/gmail/start"
         disconnectUrl="/api/integrations/gmail/disconnect"
       />
+
+      <ResumeGallery />
     </div>
   );
 }
