@@ -9,24 +9,33 @@ interface GmailIntegrationCardProps {
   isConnected: boolean;
   connectUrl: string;
   disconnectUrl: string;
+  error?: string | null;
 }
 
+/**
+ * Renders the Gmail integration management card, exposing connect and disconnect actions
+ * while surfacing any errors related to the integration state or user-triggered requests.
+ *
+ * @param {GmailIntegrationCardProps} props - Component props containing integration state and URLs.
+ * @returns {JSX.Element} The rendered Gmail integration card.
+ */
 export default function GmailIntegrationCard({
   isConnected,
   connectUrl,
-  disconnectUrl
+  disconnectUrl,
+  error,
 }: GmailIntegrationCardProps) {
   const [connected, setConnected] = useState(isConnected);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleConnect = () => {
-    setError(null);
+    setActionError(null);
     window.location.href = connectUrl;
   };
 
   const handleDisconnect = () => {
-    setError(null);
+    setActionError(null);
     startTransition(async () => {
       try {
         const response = await fetch(disconnectUrl, { method: 'POST' });
@@ -37,7 +46,7 @@ export default function GmailIntegrationCard({
         setConnected(false);
       } catch (disconnectError) {
         const message = disconnectError instanceof Error ? disconnectError.message : 'Failed to disconnect Gmail';
-        setError(message);
+        setActionError(message);
       }
     });
   };
@@ -58,9 +67,9 @@ export default function GmailIntegrationCard({
         </span>
       </div>
 
-      {error && (
+      {(actionError ?? error) && (
         <p className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-          {error}
+          {actionError ?? error}
         </p>
       )}
 
