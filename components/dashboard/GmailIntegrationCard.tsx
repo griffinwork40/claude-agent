@@ -10,14 +10,16 @@ interface GmailIntegrationCardProps {
   isConnected: boolean;
   connectUrl: string;
   disconnectUrl: string;
+  error?: string | null;
   onNavigateToConnect?: (destination: string) => void;
   onDisconnected?: () => void;
 }
 
 /**
- * Renders the Gmail integration status card and orchestrates connect/disconnect flows for the dashboard.
+ * Renders the Gmail integration management card, exposing connect and disconnect actions
+ * while surfacing any errors related to the integration state or user-triggered requests.
  *
- * @param {GmailIntegrationCardProps} props - Connection metadata and action endpoints.
+ * @param {GmailIntegrationCardProps} props - Component props containing integration state and URLs.
  * @returns {JSX.Element} The rendered Gmail integration card.
  */
 export default function GmailIntegrationCard({
@@ -26,12 +28,14 @@ export default function GmailIntegrationCard({
   disconnectUrl,
   onNavigateToConnect,
   onDisconnected
+  error,
 }: GmailIntegrationCardProps) {
   const router = useRouter();
   const [connected, setConnected] = useState(isConnected);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -60,6 +64,12 @@ export default function GmailIntegrationCard({
   const handleDisconnect = () => {
     setError(null);
     setSuccessMessage(null);
+    setActionError(null);
+    window.location.href = connectUrl;
+  };
+
+  const handleDisconnect = () => {
+    setActionError(null);
     startTransition(async () => {
       try {
         const response = await fetch(disconnectUrl, { method: 'POST' });
@@ -73,7 +83,7 @@ export default function GmailIntegrationCard({
         router.refresh();
       } catch (disconnectError) {
         const message = disconnectError instanceof Error ? disconnectError.message : 'Failed to disconnect Gmail';
-        setError(message);
+        setActionError(message);
       }
     });
   };
@@ -94,9 +104,9 @@ export default function GmailIntegrationCard({
         </span>
       </div>
 
-      {error && (
+      {(actionError ?? error) && (
         <p className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-          {error}
+          {actionError ?? error}
         </p>
       )}
 
