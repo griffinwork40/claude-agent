@@ -5,9 +5,16 @@ import Image from 'next/image';
 import { getSiteName } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { getFlyerCount } from '@/lib/flyers';
 
-export default function EnlistLanding() {
+/**
+ * Renders the public-facing landing page for the marketing site.
+ * Displays a hero section, product overview, and footer navigation.
+ */
+export default async function EnlistLanding() {
   const siteName = getSiteName();
+  const flyerCount = await getFlyerCount();
+  const formattedFlyerCount = typeof flyerCount === 'number' ? flyerCount.toLocaleString() : null;
 
   return (
     <div className="space-y-8">
@@ -25,6 +32,16 @@ export default function EnlistLanding() {
         <p className="mt-3 text-readable text-[var(--fg)]/80 max-w-2xl">
           Stop wasting time on endless job boards. {siteName} uses AI to find perfect roles, craft tailored applications, and apply to multiple jobs simultaneously—saving you 10+ hours per week while you stay in complete control.
         </p>
+        {formattedFlyerCount && (
+          <div className="mt-5 flex flex-col gap-3 text-[var(--fg)]/80 text-sm md:text-base md:flex-row md:items-center">
+            <span className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-[var(--muted)] px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--fg)]/70">
+              {formattedFlyerCount}+ flyers created
+            </span>
+            <span className="max-w-xl text-readable">
+              Join thousands of candidates already using {siteName} to launch beautifully branded job search flyers.
+            </span>
+          </div>
+        )}
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>
             <a href="/agent">Open agents</a>
