@@ -287,6 +287,12 @@ export async function runClaudeAgentStream(
     // Add user message to session
     session.messages.push({ role: 'user', content: userMessage });
 
+    if (!sessionId) {
+      throw new Error('Failed to resolve session ID for streaming agent run');
+    }
+
+    const resolvedSessionId = sessionId;
+
     // Create messages array for the API call using full conversation history
     const messages = session.messages.map(msg => ({
       role: msg.role as 'user' | 'assistant',
@@ -568,9 +574,6 @@ export async function runClaudeAgentStream(
                       const encoded = new TextEncoder().encode(content);
                       controller.enqueue(encoded);
                       
-                      // Send as chunk event for streaming message
-                      sendActivity('chunk', { content });
-                      
                       // Accumulate continuation text in current chunk
                       currentTextChunk += content;
                           
@@ -721,7 +724,7 @@ export async function runClaudeAgentStream(
                         content: currentTextChunk,
                         sender: 'bot',
                         user_id: userId,
-                        session_id: agentId || 'default-agent',
+                        session_id: resolvedSessionId,
                         created_at: new Date().toISOString(),
                       },
                     ])
