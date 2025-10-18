@@ -967,7 +967,52 @@ async function executeTools(
               message: closeResult.message
             };
             break;
-            
+
+          case 'browser_get_preview':
+            const preview = await browserService.getSessionPreview(input.sessionId);
+            result = {
+              success: Boolean(preview),
+              data: preview,
+              message: preview ? 'Preview credentials retrieved' : 'Preview not available'
+            };
+            break;
+
+          case 'browser_request_user_help':
+            const helpResult = await browserService.requestUserHelp(input.sessionId, input.reason ?? 'Assistance requested');
+            result = {
+              success: true,
+              data: helpResult,
+              message: 'Requested user assistance'
+            };
+            break;
+
+          case 'browser_wait_for_user':
+            const waitForUserResult = await browserService.waitForUserAction(input.sessionId, input.timeoutMs);
+            result = {
+              success: true,
+              data: waitForUserResult,
+              message: waitForUserResult.message
+            };
+            break;
+
+          case 'browser_narrate_action':
+            const narrateResult = await browserService.narrateAction(input.sessionId, input.message);
+            result = {
+              success: true,
+              data: narrateResult,
+              message: 'Narration sent'
+            };
+            break;
+
+          case 'browser_start_automation':
+            const automationResult = await browserService.startAutomation(input.sessionId, input.objective);
+            result = {
+              success: true,
+              data: automationResult,
+              message: 'Automation started'
+            };
+            break;
+
           case 'search_jobs_indeed':
             console.log('🔍 Executing search_jobs_indeed:', input);
             try {

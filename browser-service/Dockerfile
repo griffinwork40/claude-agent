@@ -17,6 +17,11 @@ RUN apt-get update && apt-get install -y \
     libnss3 \
     libatk-bridge2.0-0 \
     libgtk-3-0 \
+    xvfb \
+    x11vnc \
+    fluxbox \
+    novnc \
+    websockify \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -44,8 +49,9 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
 # Create directory for LinkedIn sessions
 RUN mkdir -p /app/linkedin-sessions
 
-# Expose port
+# Expose ports for HTTP API and noVNC websocket
 EXPOSE 3001
+EXPOSE 6080
 
 CMD ["npm", "start"]
 

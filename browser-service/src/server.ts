@@ -1,10 +1,14 @@
 // browser-service/src/server.ts
-// Express API server for LLM-controlled browser automation
+// Express + WebSocket API server for LLM-controlled browser automation
 import express, { Request, Response, NextFunction } from 'express';
+import { createServer } from 'http';
+import crypto from 'crypto';
 import { getBrowserJobService } from './browser-tools';
 import { getBrowserController } from './browser-controller';
 import { getBrowserSessionManager } from './browser-session';
 import { getSerpClient } from './serp-client';
+import { getAutomationWebSocketServer } from './websocket-server';
+import { getIntelligentAutomationService } from './intelligent-automation';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -12,6 +16,91 @@ dotenv.config({ path: '.env.local' });
 
 const app = express();
 app.use(express.json({ limit: '50mb' })); // Increase limit for screenshots
+
+const httpServer = createServer(app);
+const websocketServer = getAutomationWebSocketServer();
+websocketServer.attach(httpServer);
+
+const sharedSessionManager = getBrowserSessionManager();
+const automationService = getIntelligentAutomationService();
+
+websocketServer.onUserCommand(async (sessionId, command) => {
+  try {
+    const action = typeof command.action === 'string' ? command.action : '';
+    const browserController = getBrowserController();
+
+    if (action === 'request_control') {
+      const granted = sharedSessionManager.requestControl(sessionId, 'user');
+      websocketServer.broadcast({
+        sessionId,
+        type: granted ? 'user_takeover' : 'automation_error',
+        payload: granted
+          ? { message: 'User control granted' }
+          : { message: 'Unable to take control; AI currently owns the session.' },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (action === 'release_control') {
+      sharedSessionManager.releaseControl(sessionId, 'user');
+      websocketServer.broadcast({
+        sessionId,
+        type: 'user_release',
+        payload: { message: 'User released control back to AI.' },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (action === 'navigate' && typeof command.url === 'string') {
+      await browserController.navigate(sessionId, command.url);
+      websocketServer.broadcast({
+        sessionId,
+        type: 'automation_progress',
+        payload: { message: `User navigated to ${command.url}` },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (action === 'click' && typeof command.selector === 'string') {
+      await browserController.click(sessionId, command.selector);
+      websocketServer.broadcast({
+        sessionId,
+        type: 'automation_progress',
+        payload: { message: `User clicked ${command.selector}` },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (action === 'type' && typeof command.selector === 'string' && typeof command.text === 'string') {
+      await browserController.type(sessionId, command.selector, command.text, Boolean(command.submit));
+      websocketServer.broadcast({
+        sessionId,
+        type: 'automation_progress',
+        payload: { message: `User typed into ${command.selector}` },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_error',
+      payload: { message: `Unsupported user command: ${action}` },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_error',
+      payload: { message: error instanceof Error ? error.message : String(error) },
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
 
 // Prefer the shared browser service API key env var, but support legacy API_KEY for backwards compatibility.
 const expectedApiKey =
@@ -28,11 +117,10 @@ const authenticate = (req: Request, res: Response, next: NextFunction) => {
 
 // Health check endpoint (no auth required)
 app.get('/health', (req: Request, res: Response) => {
-  const sessionManager = getBrowserSessionManager();
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     service: 'llm-browser-automation',
-    activeSessions: sessionManager.getActiveSessions().length,
+    activeSessions: sharedSessionManager.getActiveSessions().length,
     timestamp: new Date().toISOString()
   });
 });
@@ -52,8 +140,14 @@ app.post('/api/browser/navigate', authenticate, async (req: Request, res: Respon
     console.log(`🌐 Navigate [${sessionId}]: ${url}`);
     const browserController = getBrowserController();
     const result = await browserController.navigate(sessionId, url);
-    
+
     console.log(`✓ Navigated to ${result.url}`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'navigate', url: result.url },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Navigate error:', error);
@@ -72,8 +166,14 @@ app.post('/api/browser/snapshot', authenticate, async (req: Request, res: Respon
     console.log(`📸 Snapshot [${sessionId}]`);
     const browserController = getBrowserController();
     const result = await browserController.snapshot(sessionId);
-    
+
     console.log(`✓ Snapshot captured (${result.snapshot.length} chars)`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'snapshot' },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Snapshot error:', error);
@@ -92,8 +192,14 @@ app.post('/api/browser/screenshot', authenticate, async (req: Request, res: Resp
     console.log(`📷 Screenshot [${sessionId}] (fullPage: ${fullPage})`);
     const browserController = getBrowserController();
     const result = await browserController.screenshot(sessionId, fullPage);
-    
+
     console.log(`✓ Screenshot captured (${result.screenshot.length} chars base64)`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'screenshot', fullPage },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Screenshot error:', error);
@@ -112,8 +218,14 @@ app.post('/api/browser/click', authenticate, async (req: Request, res: Response)
     console.log(`👆 Click [${sessionId}]: ${selector}`);
     const browserController = getBrowserController();
     const result = await browserController.click(sessionId, selector);
-    
+
     console.log(`✓ ${result.message}`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'click', selector },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Click error:', error);
@@ -132,8 +244,14 @@ app.post('/api/browser/type', authenticate, async (req: Request, res: Response) 
     console.log(`⌨️  Type [${sessionId}]: "${text}" into ${selector}`);
     const browserController = getBrowserController();
     const result = await browserController.type(sessionId, selector, text, submit);
-    
+
     console.log(`✓ ${result.message}`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'type', selector, text },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Type error:', error);
@@ -152,8 +270,14 @@ app.post('/api/browser/select', authenticate, async (req: Request, res: Response
     console.log(`📋 Select [${sessionId}]: ${value} in ${selector}`);
     const browserController = getBrowserController();
     const result = await browserController.select(sessionId, selector, value);
-    
+
     console.log(`✓ ${result.message}`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'select', selector, value },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Select error:', error);
@@ -172,8 +296,14 @@ app.post('/api/browser/wait', authenticate, async (req: Request, res: Response) 
     console.log(`⏳ Wait [${sessionId}]: ${selector || 'page load'}`);
     const browserController = getBrowserController();
     const result = await browserController.waitFor(sessionId, selector, timeout);
-    
+
     console.log(`✓ ${result.message}`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'wait', selector, timeout },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Wait error:', error);
@@ -192,8 +322,14 @@ app.post('/api/browser/evaluate', authenticate, async (req: Request, res: Respon
     console.log(`🔧 Evaluate [${sessionId}]: ${script.slice(0, 100)}...`);
     const browserController = getBrowserController();
     const result = await browserController.evaluate(sessionId, script);
-    
+
     console.log(`✓ Evaluation complete`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'evaluate' },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Evaluate error:', error);
@@ -212,8 +348,14 @@ app.post('/api/browser/content', authenticate, async (req: Request, res: Respons
     console.log(`📄 Get content [${sessionId}]`);
     const browserController = getBrowserController();
     const result = await browserController.getPageContent(sessionId);
-    
+
     console.log(`✓ Content retrieved (${result.text.length} chars)`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'content', length: result.text.length },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Get content error:', error);
@@ -228,17 +370,149 @@ app.post('/api/browser/close', authenticate, async (req: Request, res: Response)
     if (!sessionId) {
       return res.status(400).json({ success: false, error: 'sessionId is required' });
     }
-    
+
     console.log(`🚪 Close session [${sessionId}]`);
     const browserController = getBrowserController();
     const result = await browserController.closeSession(sessionId);
-    
+
     console.log(`✓ ${result.message}`);
+    websocketServer.broadcast({
+      sessionId,
+      type: 'automation_progress',
+      payload: { action: 'close' },
+      timestamp: new Date().toISOString(),
+    });
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Close session error:', error);
     res.status(500).json({ success: false, error: error.message || 'Close session failed' });
   }
+});
+
+// Explicitly create or resume a browser session
+app.post('/api/browser/session/create', authenticate, async (req: Request, res: Response) => {
+  try {
+    let { sessionId, headful = true } = req.body;
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+    }
+
+    sharedSessionManager.requestControl(sessionId, 'ai');
+    await sharedSessionManager.getOrCreateSession(sessionId, { headful });
+    const preview = sharedSessionManager.getPreview(sessionId);
+
+    res.json({
+      success: true,
+      data: {
+        sessionId,
+        preview,
+      },
+    });
+  } catch (error: any) {
+    console.error('❌ Session create error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Session creation failed' });
+  }
+});
+
+// Get preview metadata for a session
+app.post('/api/browser/preview', authenticate, async (req: Request, res: Response) => {
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, error: 'sessionId is required' });
+  }
+
+  const preview = sharedSessionManager.getPreview(sessionId);
+  if (!preview) {
+    return res.status(404).json({ success: false, error: 'Preview not available for this session' });
+  }
+
+  res.json({ success: true, data: preview });
+});
+
+// Request control of a session via REST
+app.post('/api/browser/control/request', authenticate, async (req: Request, res: Response) => {
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, error: 'sessionId is required' });
+  }
+
+  const granted = sharedSessionManager.requestControl(sessionId, 'user');
+  if (!granted) {
+    return res.status(423).json({ success: false, error: 'Control locked by AI' });
+  }
+
+  websocketServer.broadcast({
+    sessionId,
+    type: 'user_takeover',
+    payload: { message: 'User requested control via REST API.' },
+    timestamp: new Date().toISOString(),
+  });
+
+  res.json({ success: true, data: { message: 'Control granted' } });
+});
+
+// Release control back to AI via REST
+app.post('/api/browser/control/release', authenticate, async (req: Request, res: Response) => {
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, error: 'sessionId is required' });
+  }
+
+  sharedSessionManager.releaseControl(sessionId, 'user');
+  websocketServer.broadcast({
+    sessionId,
+    type: 'user_release',
+    payload: { message: 'User released control via REST API.' },
+    timestamp: new Date().toISOString(),
+  });
+
+  res.json({ success: true, data: { message: 'Control released' } });
+});
+
+// Retrieve session info snapshot
+app.get('/api/browser/session/:sessionId', authenticate, (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const info = sharedSessionManager.getSessionInfo(sessionId);
+  if (!info) {
+    return res.status(404).json({ success: false, error: 'Session not found' });
+  }
+  res.json({ success: true, data: info });
+});
+
+// Trigger intelligent automation workflow
+app.post('/api/browser/automation/run', authenticate, async (req: Request, res: Response) => {
+  const { sessionId, objective } = req.body;
+  if (!sessionId || !objective) {
+    return res.status(400).json({ success: false, error: 'sessionId and objective are required' });
+  }
+
+  automationService.execute({ sessionId, objective }).catch((error) => {
+    console.error('Automation execution failed:', error);
+  });
+
+  res.json({ success: true, data: { message: 'Automation started' } });
+});
+
+// Narrate an automation step to the user
+app.post('/api/browser/automation/narrate', authenticate, async (req: Request, res: Response) => {
+  const { sessionId, message } = req.body;
+  if (!sessionId || !message) {
+    return res.status(400).json({ success: false, error: 'sessionId and message are required' });
+  }
+
+  await automationService.narrate(sessionId, message);
+  res.json({ success: true, data: { message: 'Narration dispatched' } });
+});
+
+// Ask the user to assist the automation
+app.post('/api/browser/user-help', authenticate, async (req: Request, res: Response) => {
+  const { sessionId, reason } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, error: 'sessionId is required' });
+  }
+
+  await automationService.requestUserHelp(sessionId, reason || 'Assistance requested by automation');
+  res.json({ success: true, data: { message: 'User help requested' } });
 });
 
 // ============================================================================
@@ -506,8 +780,12 @@ app.post('/api/apply-to-job', authenticate, async (req: Request, res: Response) 
   }
 });
 
+const httpServer = createServer(app);
+const websocketServer = getAutomationWebSocketServer();
+websocketServer.attach(httpServer);
+
 const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log('🚀 LLM-controlled browser service running on http://localhost:' + PORT);
   console.log('📝 API Key:', process.env.API_KEY ? 'Set' : 'Not set (warning!)');
   console.log('🔧 Environment:', process.env.NODE_ENV || 'development');
@@ -522,14 +800,20 @@ const server = app.listen(PORT, () => {
   console.log('   POST /api/browser/evaluate    - Execute JavaScript');
   console.log('   POST /api/browser/content     - Get page HTML/text');
   console.log('   POST /api/browser/close       - Close session');
+  console.log('   POST /api/browser/session/create - Create or resume session');
+  console.log('   POST /api/browser/preview     - Retrieve VNC preview details');
+  console.log('   POST /api/browser/control/*   - Manage AI/user control handoff');
+  console.log('   POST /api/browser/automation/run - Kick off intelligent automation');
+  console.log('   POST /api/browser/automation/narrate - Narrate automation steps');
+  console.log('   POST /api/browser/user-help   - Broadcast user help requests');
+  console.log('   WS   /ws/automation           - Real-time automation events');
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('🛑 SIGTERM received, closing browser sessions...');
-  const sessionManager = getBrowserSessionManager();
-  await sessionManager.closeAll();
-  server.close(() => {
+  await sharedSessionManager.closeAll();
+  httpServer.close(() => {
     console.log('👋 Server closed');
     process.exit(0);
   });
@@ -537,9 +821,8 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   console.log('🛑 SIGINT received, closing browser sessions...');
-  const sessionManager = getBrowserSessionManager();
-  await sessionManager.closeAll();
-  server.close(() => {
+  await sharedSessionManager.closeAll();
+  httpServer.close(() => {
     console.log('👋 Server closed');
     process.exit(0);
   });

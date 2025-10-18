@@ -1,0 +1,36 @@
+# docker-compose.yml
+# Local development stack with Next.js frontend and enhanced browser service (with noVNC preview)
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: npm run dev
+    env_file:
+      - .env.local
+    ports:
+      - '3000:3000'
+    depends_on:
+      - browser-service
+    volumes:
+      - ./:/workspace/claude-agent
+    working_dir: /workspace/claude-agent
+
+  browser-service:
+    build:
+      context: ./browser-service
+    environment:
+      ENABLE_BROWSER_PREVIEW: 'true'
+      VNC_PASSWORD: ${VNC_PASSWORD:-changeme}
+      BROWSER_SERVICE_API_KEY: ${BROWSER_SERVICE_API_KEY:-test-key-12345}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - '3001:3001'
+      - '6080:6080'
+    volumes:
+      - browser-recordings:/app/recordings
+    command: npm start
+
+volumes:
+  browser-recordings:
+    driver: local

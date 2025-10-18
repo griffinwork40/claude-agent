@@ -6,7 +6,27 @@
   "deploy": {
     "startCommand": "npm start",
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
+    "restartPolicyMaxRetries": 10,
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
+    "servicePorts": [
+      {
+        "name": "api",
+        "port": 3001,
+        "protocol": "http"
+      },
+      {
+        "name": "vnc",
+        "port": 6080,
+        "protocol": "http"
+      }
+    ],
+    "volumes": [
+      {
+        "name": "session-recordings",
+        "mountPath": "/app/recordings"
+      }
+    ]
   }
 }
 

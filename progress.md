@@ -2,6 +2,9 @@
 
 # Progress
 
+- 2025-10-18: Enabled persistent, headful Playwright sessions with live noVNC preview, WebSocket activity streaming, Anthropic-powered orchestration, and Next.js control APIs/UI. Overall completion: 85% (browser visualization MVP shipped; recordings/testing follow-up pending).
+- 2025-10-18: Added docker-compose stack for local preview testing and updated environment templates for VNC preview, Anthropic credentials, and public service URL. Overall completion: 88%.
+
 - 2025-10-13: Added Whisper-powered speech-to-text composer with secure API proxying to OpenAI and UI microphone controls. Overall completion: 100%.
 - 2025-10-13: Required Terms of Service acceptance on account creation to harden onboarding compliance. Overall completion: 100%.
 - 2025-10-07: Fixed React key warnings on landing; implemented asChild in Button; updated web manifest to use existing SVG icon. Overall completion: 31%.

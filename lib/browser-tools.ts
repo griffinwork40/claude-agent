@@ -2,6 +2,13 @@
 // HTTP client for LLM-controlled browser automation service
 import { JobOpportunity } from '@/types';
 
+export interface SessionPreviewDetails {
+  websocketUrl: string;
+  password: string;
+  sessionToken: string;
+  expiresAt: string;
+}
+
 // LLM-controlled browser automation client
 export class BrowserService {
   private serviceUrl = process.env.BROWSER_SERVICE_URL || 'http://localhost:3001';
@@ -10,7 +17,7 @@ export class BrowserService {
   private async request(endpoint: string, body: Record<string, unknown>) {
     const url = `${this.serviceUrl}${endpoint}`;
     console.log(`🌐 Browser service request: ${endpoint}`, { params: body });
-    
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -53,57 +60,196 @@ export class BrowserService {
     }
   }
 
-  // Navigate to a URL
+  private async getRequest(endpoint: string) {
+    const url = `${this.serviceUrl}${endpoint}`;
+    console.log(`🌐 Browser service GET request: ${endpoint}`);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        signal: AbortSignal.timeout(30000)
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({
+          error: response.statusText,
+          status: response.status
+        }));
+        console.error(`❌ Browser service GET error (${response.status}):`, error);
+        throw new Error(`Browser service error (${response.status}): ${error.error || response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        console.error('❌ Browser service GET returned failure:', result);
+        throw new Error(result.error || 'Request failed');
+      }
+
+      return result.data;
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Browser service GET failed: ${endpoint}`, {
+        error: errMessage,
+        serviceUrl: this.serviceUrl,
+        endpoint
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Navigate the browser session to a specific URL.
+   */
   async navigate(sessionId: string, url: string): Promise<{ url: string }> {
     return this.request('/api/browser/navigate', { sessionId, url });
   }
 
-  // Get page snapshot (accessibility tree)
+  /**
+   * Retrieve an accessibility tree snapshot of the current page.
+   */
   async snapshot(sessionId: string): Promise<{ snapshot: string; url: string }> {
     return this.request('/api/browser/snapshot', { sessionId });
   }
 
-  // Take screenshot
+  /**
+   * Capture a PNG screenshot of the current page.
+   */
   async screenshot(sessionId: string, fullPage: boolean = false): Promise<{ screenshot: string }> {
     return this.request('/api/browser/screenshot', { sessionId, fullPage });
   }
 
-  // Click element
+  /**
+   * Click an element identified by a CSS selector.
+   */
   async click(sessionId: string, selector: string): Promise<{ message: string }> {
     return this.request('/api/browser/click', { sessionId, selector });
   }
 
-  // Type into element
+  /**
+   * Type text into an input element, optionally submitting the form afterwards.
+   */
   async type(sessionId: string, selector: string, text: string, submit: boolean = false): Promise<{ message: string }> {
     return this.request('/api/browser/type', { sessionId, selector, text, submit });
   }
 
-  // Select dropdown option
+  /**
+   * Select an option within a dropdown element.
+   */
   async select(sessionId: string, selector: string, value: string): Promise<{ message: string }> {
     return this.request('/api/browser/select', { sessionId, selector, value });
   }
 
-  // Wait for element or page load
+  /**
+   * Wait for a selector to appear or for the page to settle.
+   */
   async waitFor(sessionId: string, selector?: string, timeout: number = 10000): Promise<{ message: string }> {
     return this.request('/api/browser/wait', { sessionId, selector, timeout });
   }
 
-  // Evaluate JavaScript
+  /**
+   * Evaluate arbitrary JavaScript within the page context.
+   */
   async evaluate(sessionId: string, script: string): Promise<{ result: unknown }> {
     return this.request('/api/browser/evaluate', { sessionId, script });
   }
 
-  // Get page content
+  /**
+   * Retrieve the current page HTML and text content.
+   */
   async getContent(sessionId: string): Promise<{ html: string; text: string; url: string }> {
     return this.request('/api/browser/content', { sessionId });
   }
 
-  // Close browser session
+  /**
+   * Close the underlying Playwright browser session.
+   */
   async closeSession(sessionId: string): Promise<{ message: string }> {
     return this.request('/api/browser/close', { sessionId });
   }
 
-  // Search jobs on Indeed
+  /**
+   * Create or resume a browser session, returning optional preview metadata.
+   */
+  async createSession(params: { sessionId?: string; headful?: boolean }): Promise<{ sessionId: string; preview?: SessionPreviewDetails }> {
+    return this.request('/api/browser/session/create', params);
+  }
+
+  /**
+   * Retrieve preview credentials for embedding the noVNC stream.
+   */
+  async getSessionPreview(sessionId: string): Promise<SessionPreviewDetails | null> {
+    try {
+      return await this.request('/api/browser/preview', { sessionId });
+    } catch (error) {
+      console.warn('Preview not available for session', sessionId, error);
+      return null;
+    }
+  }
+
+  /**
+   * Request manual control of the browser for a human operator.
+   */
+  async requestUserControl(sessionId: string): Promise<{ message: string }> {
+    return this.request('/api/browser/control/request', { sessionId });
+  }
+
+  /**
+   * Release manual control back to the AI automation loop.
+   */
+  async releaseUserControl(sessionId: string): Promise<{ message: string }> {
+    return this.request('/api/browser/control/release', { sessionId });
+  }
+
+  /**
+   * Poll session metadata until the user releases control or the timeout elapses.
+   */
+  async waitForUserAction(sessionId: string, timeoutMs: number = 120000): Promise<{ message: string }> {
+    const start = Date.now();
+    const pollInterval = 2000;
+
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const info = await this.getRequest(`/api/browser/session/${sessionId}`);
+        if (!info || info.controlLockedBy !== 'user') {
+          return { message: 'User control released' };
+        }
+      } catch (error) {
+        console.warn('Waiting for user action failed, retrying...', error);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error('Timed out waiting for user action');
+  }
+
+  /**
+   * Ask the user to assist the automation workflow.
+   */
+  async requestUserHelp(sessionId: string, reason: string): Promise<{ message: string }> {
+    return this.request('/api/browser/user-help', { sessionId, reason });
+  }
+
+  /**
+   * Kick off an intelligent automation routine handled server-side.
+   */
+  async startAutomation(sessionId: string, objective: string): Promise<{ message: string }> {
+    return this.request('/api/browser/automation/run', { sessionId, objective });
+  }
+
+  /**
+   * Narrate the automation's current action for transparency in the UI.
+   */
+  async narrateAction(sessionId: string, message: string): Promise<{ message: string }> {
+    return this.request('/api/browser/automation/narrate', { sessionId, message });
+  }
+
+  /**
+   * Search job opportunities on Indeed.
+   */
   async searchJobsIndeed(params: {
     keywords: string;
     location: string;
@@ -113,7 +259,9 @@ export class BrowserService {
     return this.request('/api/search-indeed', params);
   }
 
-  // Search jobs on Google Jobs
+  /**
+   * Search job opportunities on Google Jobs.
+   */
   async searchJobsGoogle(params: {
     keywords: string;
     location: string;
@@ -123,7 +271,9 @@ export class BrowserService {
     return this.request('/api/search-google', params);
   }
 
-  // Search jobs on LinkedIn
+  /**
+   * Search job opportunities on LinkedIn.
+   */
   async searchJobsLinkedIn(params: {
     keywords: string;
     location: string;
@@ -134,7 +284,9 @@ export class BrowserService {
     return this.request('/api/search-linkedin', params);
   }
 
-  // Find company careers page
+  /**
+   * Locate a company's careers page given the company name and optional job title.
+   */
   async findCompanyCareersPage(params: {
     companyName: string;
     jobTitle?: string;
@@ -142,7 +294,9 @@ export class BrowserService {
     return this.request('/api/find-careers-page', params);
   }
 
-  // Extract company application URL from job board listing
+  /**
+   * Extract a direct application URL from a job board listing.
+   */
   async extractCompanyApplicationUrl(params: {
     jobBoardUrl: string;
   }): Promise<{ companyApplicationUrl: string | null; requiresJobBoard: boolean }> {
@@ -344,6 +498,92 @@ export const browserTools = [
         }
       },
       required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_get_preview',
+    description: 'Retrieve the noVNC preview credentials for an active browser session.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID to inspect'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_request_user_help',
+    description: 'Ask the end user to assist when automation cannot proceed safely.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session needing manual help'
+        },
+        reason: {
+          type: 'string',
+          description: 'Short explanation of why user assistance is required'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_wait_for_user',
+    description: 'Pause automation until the user releases control back to the AI.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session to monitor'
+        },
+        timeoutMs: {
+          type: 'number',
+          description: 'Maximum milliseconds to wait before timing out'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'browser_narrate_action',
+    description: 'Send a narration update describing the current automation step to the UI.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        message: {
+          type: 'string',
+          description: 'Narration text to present in the activity feed'
+        }
+      },
+      required: ['sessionId', 'message']
+    }
+  },
+  {
+    name: 'browser_start_automation',
+    description: 'Kick off an intelligent automation workflow with a high-level objective.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        objective: {
+          type: 'string',
+          description: 'High-level task for the automation service to pursue'
+        }
+      },
+      required: ['sessionId', 'objective']
     }
   },
   {
