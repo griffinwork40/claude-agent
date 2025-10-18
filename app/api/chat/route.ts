@@ -31,29 +31,57 @@ export async function POST(request: NextRequest) {
     console.log('✓ User authenticated:', session.user.id);
     
     const { message, sessionId: requestSessionId, agentId } = await request.json();
-    console.log('Request data:', { 
-      messageLength: message?.length, 
+    console.log('Request data:', {
+      messageLength: message?.length,
       sessionId: requestSessionId,
       agentId,
       hasMessage: !!message,
       requestHeaders: Object.fromEntries(request.headers.entries())
     });
-    
+
     if (!message) {
       console.error('❌ No message provided');
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Create or update conversation
-    console.log('Creating/updating conversation...');
-    const sessionId = agentId || 'default-agent';
+    // Run Claude Agent with streaming
+    console.log('Starting Claude agent stream...');
+    let agentSessionId: string;
+    let stream: ReadableStream;
+
+    const normalizedSessionId = typeof requestSessionId === 'string' && requestSessionId.trim().length > 0
+      ? requestSessionId.trim()
+      : undefined;
+
+    try {
+      const result = await runClaudeAgentStream(
+        message,
+        session.user.id,
+        normalizedSessionId,
+        agentId  // Pass agentId for proper message association
+      );
+      agentSessionId = result.sessionId;
+      stream = result.stream;
+      console.log('✓ Agent stream started, sessionId:', agentSessionId);
+    } catch (error: unknown) {
+      console.error('❌ Failed to start agent stream:', error);
+      const errMessage = error instanceof Error ? error.message : String(error);
+      return NextResponse.json({
+        error: 'Failed to start agent stream',
+        details: process.env.NODE_ENV === 'development' ? errMessage : undefined
+      }, { status: 500 });
+    }
+
     const supabase = getSupabaseAdmin();
+
+    // Create or update conversation using the agent session id
+    console.log('Creating/updating conversation...');
     const { error: conversationError } = await supabase
       .from('conversations')
       .upsert({
         user_id: session.user.id,
-        session_id: sessionId,
-        agent_id: sessionId,
+        session_id: agentSessionId,
+        agent_id: agentId ?? agentSessionId,
         name: message.length > 60 ? `${message.slice(0, 60)}...` : message,
         updated_at: new Date().toISOString()
       }, {
@@ -67,15 +95,15 @@ export async function POST(request: NextRequest) {
       console.log('✓ Conversation created/updated');
     }
 
-    // Store user message in database
+    // Store user message in database scoped to the agent session id
     console.log('Saving user message to database...');
     const { data: userMessage, error: userMessageError } = await supabase
       .from('messages')
-      .insert([{ 
-        content: message, 
+      .insert([{
+        content: message,
         sender: 'user',
         user_id: session.user.id,
-        session_id: sessionId,
+        session_id: agentSessionId,
         created_at: new Date().toISOString()
       }])
       .select()
@@ -86,30 +114,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save message' }, { status: 500 });
     }
     console.log('✓ User message saved:', userMessage.id);
-
-    // Run Claude Agent with streaming
-    console.log('Starting Claude agent stream...');
-    let agentSessionId: string;
-    let stream: ReadableStream;
-    
-    try {
-      const result = await runClaudeAgentStream(
-        message, 
-        session.user.id, 
-        sessionId,
-        agentId  // Pass agentId for proper message association
-      );
-      agentSessionId = result.sessionId;
-      stream = result.stream;
-      console.log('✓ Agent stream started, sessionId:', agentSessionId);
-    } catch (error: unknown) {
-      console.error('❌ Failed to start agent stream:', error);
-      const errMessage = error instanceof Error ? error.message : String(error);
-      return NextResponse.json({ 
-        error: 'Failed to start agent stream',
-        details: process.env.NODE_ENV === 'development' ? errMessage : undefined
-      }, { status: 500 });
-    }
 
     // Create a readable stream for Server-Sent Events
     const encoder = new TextEncoder();
