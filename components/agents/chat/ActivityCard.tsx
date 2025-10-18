@@ -3,17 +3,12 @@
  * Purpose: Activity display component extracted from ChatPane.tsx
  */
 import { useState } from 'react';
-import {
-  Wrench,
-  FileText,
-  Zap,
-  CheckCircle,
-  XCircle,
-  Brain,
-  Info,
-} from 'lucide-react';
+// import { ChevronDown } from 'lucide-react';
 import { Activity } from '../types';
 import { renderInlineMarkdown } from './markdown-utils';
+import { getActivityDisplay } from './activity-display-config';
+import { JobResultCard } from './JobResultCard';
+import { JobOpportunity } from '@/types';
 
 const ABSOLUTE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -23,53 +18,19 @@ const ABSOLUTE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
 });
 
 /**
- * Get icon and styling for activity type - Cursor-style muted colors
+ * Check if activity result contains job data
  */
-function getActivityIcon(activity: Activity): { Icon: typeof Wrench; color: string } {
-  if (activity.type === 'tool_result') {
-    if (activity.success === false) {
-      return { Icon: XCircle, color: 'text-red-400/70' };
-    }
-    return { Icon: CheckCircle, color: 'text-green-500/60' };
-  }
+function isJobResult(activity: Activity): boolean {
+  if (activity.type !== 'tool_result' || !activity.result) return false;
   
-  switch (activity.type) {
-    case 'tool_start':
-      return { Icon: Wrench, color: 'text-blue-400/60' };
-    case 'tool_params':
-      return { Icon: FileText, color: 'text-purple-400/60' };
-    case 'tool_executing':
-      return { Icon: Zap, color: 'text-amber-400/60' };
-    case 'thinking':
-      return { Icon: Brain, color: 'text-gray-400' };
-    case 'status':
-      return { Icon: Info, color: 'text-blue-400/60' };
-    default:
-      return { Icon: Info, color: 'text-gray-400' };
-  }
+  // Check if result contains job data
+  const result = activity.result;
+  return (
+    Array.isArray(result) && result.length > 0 && 
+    result[0].title && result[0].company && result[0].application_url
+  );
 }
 
-/**
- * Get display title for activity
- */
-function getActivityTitle(activity: Activity): string {
-  switch (activity.type) {
-    case 'tool_start':
-      return `Starting ${activity.tool?.replace(/_/g, ' ') || 'tool'}`;
-    case 'tool_params':
-      return `Parameters for ${activity.tool?.replace(/_/g, ' ') || 'tool'}`;
-    case 'tool_executing':
-      return `Executing ${activity.tool?.replace(/_/g, ' ') || 'tool'}`;
-    case 'tool_result':
-      return activity.message || `${activity.tool?.replace(/_/g, ' ') || 'Tool'} ${activity.success ? 'completed' : 'failed'}`;
-    case 'thinking':
-      return activity.content || 'Processing...';
-    case 'status':
-      return activity.content || 'Status update';
-    default:
-      return 'Activity';
-  }
-}
 
 /**
  * Activity card component - Cursor-style lightweight inline display
@@ -85,6 +46,11 @@ export function ActivityCard({ activity }: { activity: Activity }) {
   const [expanded, setExpanded] = useState(false);
   const [hovering, setHovering] = useState(false);
   
+  // Hide noisy activity types that users don't need to see
+  if (['tool_params', 'tool_executing'].includes(activity.type)) {
+    return null;
+  }
+  
   // Special handling for text_chunk: render as inline text with markdown support
   if (activity.type === 'text_chunk') {
     return (
@@ -94,8 +60,24 @@ export function ActivityCard({ activity }: { activity: Activity }) {
     );
   }
   
-  const { Icon, color } = getActivityIcon(activity);
-  const title = getActivityTitle(activity);
+  // Special handling for job results: render as job cards
+  if (isJobResult(activity)) {
+    const jobs = activity.result as JobOpportunity[];
+    return (
+      <div className="space-y-2">
+        <div className="text-sm font-medium text-[var(--fg)]/80 mb-2">
+          ✅ Found {jobs.length} matches
+        </div>
+        {jobs.map((job, idx) => (
+          <JobResultCard key={job.id || idx} job={job} />
+        ))}
+      </div>
+    );
+  }
+  
+  // Get display configuration for this activity
+  const config = getActivityDisplay(activity);
+  const title = typeof config.title === 'function' ? config.title(activity) : config.title;
   const hasDetails = activity.params || activity.result;
   const timestamp = ABSOLUTE_TIME_FORMATTER.format(new Date(activity.timestamp));
   
@@ -104,16 +86,16 @@ export function ActivityCard({ activity }: { activity: Activity }) {
   
   return (
     <div 
-      className="my-1 py-0.5 animate-fadeIn w-full"
+      className="my-1 py-0.5 animate-fadeIn w-full group"
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
       {/* Single line: icon + text + timestamp */}
       <div className="flex items-center gap-2">
-        {/* Icon - 14px, muted with opacity, hidden for subtle types */}
+        {/* Icon - use emoji from config, hidden for subtle types */}
         {!isSubtle && (
-          <div className={`flex-shrink-0 ${color}`}>
-            <Icon size={14} strokeWidth={1.5} />
+          <div className="flex-shrink-0 text-sm">
+            {config.icon}
           </div>
         )}
         
@@ -142,29 +124,43 @@ export function ActivityCard({ activity }: { activity: Activity }) {
           )}
         </div>
         
+        {/* Success/Failure indicator for tool results */}
+        {activity.success !== undefined && (
+          <span className={activity.success ? 'text-green-500/60' : 'text-red-400/70'}>
+            {activity.success ? '✓' : '✗'}
+          </span>
+        )}
+        
         {/* Timestamp - always visible, right-aligned */}
         <time className="text-[11px] text-[var(--fg)]/40 whitespace-nowrap flex-shrink-0">
           {timestamp}
         </time>
       </div>
       
-      {/* Show/Hide details link - always available so touch users can expand */}
-      {hasDetails && (
+      {/* Show/Hide details link - only show if expandable and has details */}
+      {config.expandable && hasDetails && (
         <div className="ml-5 mt-0.5">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-[11px] text-[var(--fg)]/50 hover:text-[var(--fg)]/70 transition-colors focus:outline-none focus:text-[var(--fg)]/70"
+            className="text-[11px] text-[var(--fg)]/50 hover:text-[var(--fg)]/70 transition-colors focus:outline-none focus:text-[var(--fg)]/70 flex items-center gap-1 group-hover:text-[var(--fg)]/60"
             aria-expanded={expanded}
             aria-label={expanded ? 'Hide details' : 'Show details'}
           >
-            {expanded ? '▼ Hide details' : '▶ Show details'}
+            <span 
+              className={`text-[var(--fg)]/40 transition-transform duration-200 ${
+                expanded ? 'rotate-180' : ''
+              }`}
+            >
+              ▼
+            </span>
+            {expanded ? 'Hide details' : 'Show details'}
           </button>
         </div>
       )}
       
       {/* Expandable details - simple indented text, no background */}
-      {hasDetails && expanded && (
-        <div className="ml-5 mt-1 animate-fadeIn">
+      {config.expandable && hasDetails && expanded && (
+        <div className="ml-5 mt-1 animate-slideDown">
           <pre className="text-[11px] text-[var(--fg)]/60 font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto leading-relaxed">
             {JSON.stringify(activity.params || activity.result, null, 2)}
           </pre>

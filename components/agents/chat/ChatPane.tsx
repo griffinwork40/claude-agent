@@ -68,6 +68,31 @@ export function ChatPane({
     return filtered;
   }, [agent, messages]);
 
+  // Consolidate related tool activities
+  const consolidatedActivities = useMemo(() => {
+    const consolidated: Activity[] = [];
+    const toolMap = new Map<string, Activity>();
+    
+    for (const activity of chatStream.activities) {
+      if (activity.type === 'tool_start' && activity.toolId) {
+        toolMap.set(activity.toolId, activity);
+        consolidated.push(activity);
+      } else if (activity.type === 'tool_result' && activity.toolId) {
+        const startActivity = toolMap.get(activity.toolId);
+        if (startActivity) {
+          // Merge result into start activity
+          startActivity.result = activity.result;
+          startActivity.success = activity.success;
+          startActivity.completedAt = activity.timestamp;
+        }
+      } else if (!['tool_params', 'tool_executing'].includes(activity.type)) {
+        consolidated.push(activity);
+      }
+    }
+    
+    return consolidated;
+  }, [chatStream.activities]);
+
   // Merge messages and activities, sorted by timestamp
   const timelineItems: TimelineItem[] = useMemo(() => {
     if (!agent) return [];
@@ -79,14 +104,14 @@ export function ChatPane({
       items.push({ ...message, itemType: 'message' as const });
     });
     
-    // Add activities
-    chatStream.activities.forEach((activity) => {
+    // Add consolidated activities
+    consolidatedActivities.forEach((activity) => {
       items.push({ ...activity, itemType: 'activity' as const });
     });
     
     // Add streaming message only if there are NO text_chunk activities
     // (text_chunks already contain the streaming text, so we avoid duplication)
-    const hasTextChunks = chatStream.activities.some(a => a.type === 'text_chunk');
+    const hasTextChunks = consolidatedActivities.some(a => a.type === 'text_chunk');
     if (chatStream.isStreaming && chatStream.streamingMessage && chatStream.streamingStartedAt && !hasTextChunks) {
       items.push({
         id: 'streaming-message',
@@ -115,7 +140,7 @@ export function ChatPane({
     });
     
     return items;
-  }, [agent, visibleMessages, chatStream.activities, chatStream.isStreaming, chatStream.streamingMessage, chatStream.streamingStartedAt]);
+  }, [agent, visibleMessages, consolidatedActivities, chatStream.isStreaming, chatStream.streamingMessage, chatStream.streamingStartedAt]);
 
   const handleSend = async (content: string) => {
     if (!agent || chatStream.isStreaming) return;

@@ -146,6 +146,32 @@ html, body {
   animation: ellipsisDot3 1.5s ease-in-out infinite;
 }
 
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes chevronRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(90deg); }
+}
+
+.chevron-expanded {
+  animation: chevronRotate 0.2s ease-out forwards;
+}
+
 /* Modern custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;

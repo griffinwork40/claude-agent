@@ -6,6 +6,7 @@ import { useMemo, useRef, useEffect, ReactNode } from 'react';
 import { Agent, Activity, Message } from '../types';
 import { renderMarkdown } from './markdown-utils';
 import { ActivityCard } from './ActivityCard';
+import { extractThinkingSteps } from './thinking-detection';
 
 interface RenderMessage extends Message {
   isStreaming?: boolean;
@@ -352,7 +353,30 @@ export function ChatTimeline({
                 <div
                   className={`w-full text-left ${theme.bubble} ${bubbleClasses}`}
                 >
-                  {renderMarkdown(message.content, messageKeyPrefix)}
+                  {message.role === 'assistant' ? (
+                    // For assistant messages, detect and render thinking steps
+                    <div className="space-y-2">
+                      {extractThinkingSteps(message.content).map((step, stepIdx) => {
+                        if (step.isThinking) {
+                          return (
+                            <div key={stepIdx} className="flex items-start gap-2 my-2">
+                              <span className="text-lg flex-shrink-0">{step.icon}</span>
+                              <span className="text-sm text-[var(--fg)]/70 flex-1">{step.text}</span>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div key={stepIdx}>
+                              {renderMarkdown(step.text, `${messageKeyPrefix}-${stepIdx}`)}
+                            </div>
+                          );
+                        }
+                      })}
+                    </div>
+                  ) : (
+                    // For user messages, render normally
+                    renderMarkdown(message.content, messageKeyPrefix)
+                  )}
                   {message.isStreaming && !message.content && (
                     <span className={`inline-block text-sm ${message.role === 'assistant' ? 'text-[var(--assistant-text)]/60' : 'text-white/80'}`}>
                       <span className="animate-ellipsisDot1">.</span>
