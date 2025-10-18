@@ -71,7 +71,7 @@ export interface GreenhouseApplication {
 
 export class GreenhouseClient {
   private apiKey?: string;
-  private baseUrl = 'https://api.greenhouse.io/v1';
+  private baseUrl = 'https://boards-api.greenhouse.io/v1';
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.GREENHOUSE_API_KEY;
