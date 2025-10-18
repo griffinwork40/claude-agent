@@ -11,7 +11,6 @@ tests/**
 docs/
 *.md
 !README.md
-!WARP.md
 
 # Exclude development files
 docker-compose.yml
