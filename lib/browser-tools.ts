@@ -148,6 +148,25 @@ export class BrowserService {
   }): Promise<{ companyApplicationUrl: string | null; requiresJobBoard: boolean }> {
     return this.request('/api/extract-company-url', params);
   }
+
+  // Search jobs on Greenhouse
+  async searchJobsGreenhouse(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[]> {
+    return this.request('/api/search-greenhouse', params);
+  }
+
+  // Apply to a Greenhouse job
+  async applyToGreenhouseJob(params: {
+    boardToken: string;
+    jobId: string;
+    userProfile: Record<string, unknown>;
+  }): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
+    return this.request('/api/apply-greenhouse', params);
+  }
 }
 
 // Singleton instance
@@ -461,6 +480,74 @@ export const browserTools = [
         }
       },
       required: ['jobBoardUrl']
+    }
+  },
+  {
+    name: 'search_jobs_greenhouse',
+    description: 'Search for jobs using Greenhouse API across multiple company boards. Returns real job postings from companies using Greenhouse for their career pages.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        keywords: {
+          type: 'string',
+          description: 'Job search keywords (e.g., "software engineer", "marketing manager")'
+        },
+        location: {
+          type: 'string',
+          description: 'Job location (e.g., "San Francisco", "Remote", "New York")'
+        },
+        experience_level: {
+          type: 'string',
+          description: 'Experience level (entry, mid, senior, executive)',
+          enum: ['entry', 'mid', 'senior', 'executive']
+        },
+        remote: {
+          type: 'boolean',
+          description: 'Whether to include remote jobs'
+        }
+      },
+      required: ['keywords', 'location']
+    }
+  },
+  {
+    name: 'apply_to_greenhouse_job',
+    description: 'Apply to a specific Greenhouse job using API first, then browser automation fallback. Requires board token and job ID from a Greenhouse job listing.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        boardToken: {
+          type: 'string',
+          description: 'Greenhouse board token (e.g., "airbnb", "stripe", "shopify")'
+        },
+        jobId: {
+          type: 'string',
+          description: 'Greenhouse job ID from the job listing'
+        },
+        userProfile: {
+          type: 'object',
+          description: 'User profile data for application submission',
+          properties: {
+            personal_info: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                email: { type: 'string' },
+                phone: { type: 'string' },
+                location: { type: 'string' }
+              }
+            },
+            experience: {
+              type: 'object',
+              properties: {
+                skills: { type: 'array', items: { type: 'string' } },
+                years_experience: { type: 'number' }
+              }
+            },
+            resume_path: { type: 'string' }
+          }
+        }
+      },
+      required: ['boardToken', 'jobId', 'userProfile']
     }
   }
 ];

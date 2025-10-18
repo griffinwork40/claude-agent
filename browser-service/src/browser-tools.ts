@@ -1448,6 +1448,226 @@ export class BrowserJobService {
       throw new Error(`Failed to find careers page: ${errMessage}`);
     }
   }
+
+  // Search jobs on Greenhouse using API
+  async searchJobsGreenhouse(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[]> {
+    // Check cache first
+    const cacheKey = this.getCacheKey(params, 'greenhouse');
+    const cachedResults = this.getCachedResults(cacheKey);
+    if (cachedResults) {
+      return cachedResults;
+    }
+
+    try {
+      console.log('🔍 Searching Greenhouse jobs:', params);
+      
+      // Import Greenhouse client from local copy
+      const { GreenhouseClient } = await import('./greenhouse-client');
+      const greenhouseClient = new GreenhouseClient();
+      
+      const filters = {
+        keywords: params.keywords,
+        location: params.location,
+        experience_level: params.experience_level,
+        remote: params.remote
+      };
+      
+      const jobs = await greenhouseClient.searchJobsDefault(filters);
+      
+      console.log(`✅ Found ${jobs.length} jobs on Greenhouse`);
+      this.setCachedResults(cacheKey, jobs);
+      return jobs;
+      
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Greenhouse search failed:', errMessage);
+      throw new Error(`Greenhouse search failed: ${errMessage}`);
+    }
+  }
+
+  // Apply to a Greenhouse job using API first, then browser automation fallback
+  async applyToGreenhouseJob(
+    boardToken: string, 
+    jobId: string, 
+    userProfile: Record<string, unknown>
+  ): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
+    try {
+      console.log(`📝 Applying to Greenhouse job: ${boardToken}/${jobId}`);
+      
+      // Import Greenhouse client from local copy
+      const { GreenhouseClient } = await import('./greenhouse-client');
+      const greenhouseClient = new GreenhouseClient();
+      
+      // First, try API submission
+      try {
+        const formData = this.buildGreenhouseFormData(userProfile);
+        const result = await greenhouseClient.submitApplication(boardToken, jobId, formData);
+        
+        if (result.success) {
+          console.log('✅ Application submitted via Greenhouse API');
+          return {
+            success: true,
+            message: 'Application submitted successfully via Greenhouse API',
+            details: { 
+              method: 'greenhouse_api', 
+              boardToken, 
+              jobId, 
+              applicationId: result.application_id 
+            }
+          };
+        } else {
+          console.log('⚠️ Greenhouse API submission failed, trying browser automation...');
+        }
+      } catch (apiError) {
+        console.log('⚠️ Greenhouse API error, trying browser automation:', apiError);
+      }
+      
+      // Fallback to browser automation
+      if (!this.browser) {
+        await this.initialize();
+      }
+      
+      const page = await this.createStealthPage();
+      
+      try {
+        const jobUrl = `https://boards.greenhouse.io/${boardToken}/jobs/${jobId}`;
+        console.log('🌐 Opening job page for browser automation:', jobUrl);
+        
+        await page.goto(jobUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(2000);
+        
+        // Look for application form
+        const applicationForm = await page.locator('form[action*="apply"], form[action*="application"]').first();
+        if (await applicationForm.isVisible()) {
+          console.log('📝 Filling out Greenhouse application form');
+          await this.fillGreenhouseApplicationForm(page, userProfile);
+          
+          // Submit the form
+          const submitButton = await page.locator('button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply")').first();
+          if (await submitButton.isVisible()) {
+            await submitButton.click();
+            await page.waitForTimeout(3000);
+            
+            // Check for success confirmation
+            const successMessage = await page.locator('text=Application submitted, text=Thank you for applying, text=Success').first();
+            if (await successMessage.isVisible()) {
+              return {
+                success: true,
+                message: 'Application submitted successfully via browser automation',
+                details: { method: 'browser_automation', boardToken, jobId }
+              };
+            }
+          }
+        }
+        
+        return {
+          success: false,
+          message: 'Could not find application form or submit button',
+          details: { method: 'browser_automation', boardToken, jobId }
+        };
+        
+      } finally {
+        await page.close();
+      }
+      
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Error applying to Greenhouse job:', errMessage);
+      return {
+        success: false,
+        message: `Application failed: ${errMessage}`,
+        details: { method: 'greenhouse', boardToken, jobId, error: errMessage }
+      };
+    }
+  }
+
+  // Build form data for Greenhouse API submission
+  private buildGreenhouseFormData(userProfile: Record<string, unknown>): Record<string, any> {
+    const personalInfo = toRecord(userProfile.personal_info);
+    const experience = toRecord(userProfile.experience);
+    
+    const formData: Record<string, any> = {
+      // Basic personal information
+      first_name: typeof personalInfo.name === 'string' ? personalInfo.name.split(' ')[0] : '',
+      last_name: typeof personalInfo.name === 'string' ? personalInfo.name.split(' ').slice(1).join(' ') : '',
+      email: typeof personalInfo.email === 'string' ? personalInfo.email : '',
+      phone: typeof personalInfo.phone === 'string' ? personalInfo.phone : '',
+      location: typeof personalInfo.location === 'string' ? personalInfo.location : '',
+      
+      // Experience information
+      resume: typeof userProfile.resume_path === 'string' ? userProfile.resume_path : '',
+      cover_letter: typeof userProfile.cover_letter === 'string' ? userProfile.cover_letter : '',
+      
+      // Skills
+      skills: Array.isArray(experience.skills) ? experience.skills.join(', ') : '',
+      
+      // Work authorization
+      authorized_to_work: true,
+      requires_sponsorship: false,
+      
+      // Additional fields that might be required
+      linkedin_url: typeof userProfile.linkedin_url === 'string' ? userProfile.linkedin_url : '',
+      github_url: typeof userProfile.github_url === 'string' ? userProfile.github_url : '',
+      portfolio_url: typeof userProfile.portfolio_url === 'string' ? userProfile.portfolio_url : '',
+    };
+    
+    return formData;
+  }
+
+  // Fill out Greenhouse application form using browser automation
+  private async fillGreenhouseApplicationForm(page: Page, userProfile: Record<string, unknown>) {
+    const personalInfo = toRecord(userProfile.personal_info);
+    const experience = toRecord(userProfile.experience);
+    
+    // Fill basic information
+    const fullName = typeof personalInfo.name === 'string' ? personalInfo.name : '';
+    const nameParts = fullName.split(' ');
+    
+    await this.fillField(page, 'input[name*="first_name"], input[name*="firstName"]', nameParts[0] || '');
+    await this.fillField(page, 'input[name*="last_name"], input[name*="lastName"]', nameParts.slice(1).join(' ') || '');
+    await this.fillField(page, 'input[name*="email"]', typeof personalInfo.email === 'string' ? personalInfo.email : '');
+    await this.fillField(page, 'input[name*="phone"]', typeof personalInfo.phone === 'string' ? personalInfo.phone : '');
+    await this.fillField(page, 'input[name*="location"], input[name*="city"]', typeof personalInfo.location === 'string' ? personalInfo.location : '');
+    
+    // Fill experience information
+    if (Array.isArray(experience.skills)) {
+      await this.fillField(page, 'textarea[name*="skills"], input[name*="skills"]', experience.skills.join(', '));
+    }
+    
+    // Handle work authorization
+    const authCheckbox = await page.locator('input[name*="authorized"], input[name*="eligible"]').first();
+    if (await authCheckbox.isVisible()) {
+      await authCheckbox.check();
+    }
+    
+    // Handle sponsorship
+    const sponsorshipCheckbox = await page.locator('input[name*="sponsorship"], input[name*="visa"]').first();
+    if (await sponsorshipCheckbox.isVisible()) {
+      await sponsorshipCheckbox.check();
+    }
+    
+    // Fill additional fields
+    await this.fillField(page, 'input[name*="linkedin"]', typeof userProfile.linkedin_url === 'string' ? userProfile.linkedin_url : '');
+    await this.fillField(page, 'input[name*="github"]', typeof userProfile.github_url === 'string' ? userProfile.github_url : '');
+    await this.fillField(page, 'input[name*="portfolio"]', typeof userProfile.portfolio_url === 'string' ? userProfile.portfolio_url : '');
+    
+    // Handle file uploads (resume, cover letter)
+    if (typeof userProfile.resume_path === 'string') {
+      const resumeInput = await page.locator('input[type="file"][name*="resume"], input[type="file"][name*="cv"]').first();
+      if (await resumeInput.isVisible()) {
+        await resumeInput.setInputFiles(userProfile.resume_path);
+      }
+    }
+    
+    if (typeof userProfile.cover_letter === 'string') {
+      await this.fillField(page, 'textarea[name*="cover"], textarea[name*="letter"]', userProfile.cover_letter);
+    }
+  }
 }
 
 // Singleton instance

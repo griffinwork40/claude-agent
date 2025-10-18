@@ -16,7 +16,7 @@ export interface JobOpportunity {
   description: string;
   salary?: string;
   application_url: string;
-  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google' | 'manual' | 'remotive';
+  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google' | 'manual' | 'remotive' | 'greenhouse';
   skills: string[];
   experience_level: string;
   job_type: string; // full-time, part-time, contract
@@ -26,6 +26,8 @@ export interface JobOpportunity {
   applied_at?: string;
   status: 'discovered' | 'interested' | 'applied' | 'rejected' | 'error' | 'fallback';
   raw_data?: Record<string, unknown>; // Original scraped data
+  greenhouse_job_id?: string; // Greenhouse-specific job ID
+  greenhouse_board_token?: string; // Greenhouse board token for applications
   created_at: string;
   error?: string; // Error message for error status jobs
 }
@@ -78,4 +80,41 @@ export interface BrowserToolResult {
   data?: unknown;
   error?: string;
   message?: string;
+}
+
+// Greenhouse API specific types
+export interface GreenhouseJob {
+  id: number;
+  title: string;
+  location: {
+    name: string;
+  };
+  departments: Array<{
+    id: number;
+    name: string;
+  }>;
+  content: string;
+  absolute_url: string;
+  created_at: string;
+  updated_at: string;
+  internal_job_id?: string;
+  requisition_id?: string;
+  questions?: GreenhouseQuestion[];
+}
+
+export interface GreenhouseQuestion {
+  id: number;
+  label: string;
+  required: boolean;
+  type: 'text' | 'textarea' | 'select' | 'multi_select' | 'file';
+  options?: Array<{
+    id: number;
+    label: string;
+  }>;
+}
+
+export interface GreenhouseApplication {
+  success: boolean;
+  application_id?: string;
+  error?: string;
 }

@@ -452,6 +452,71 @@ app.post('/api/find-careers-page', authenticate, async (req: Request, res: Respo
   }
 });
 
+// Search jobs on Greenhouse
+app.post('/api/search-greenhouse', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { keywords, location, experience_level, remote } = req.body;
+    
+    // Validate required parameters
+    if (!keywords || !location) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameters: keywords and location are required',
+        details: { keywords: !!keywords, location: !!location }
+      });
+    }
+    
+    console.log('🔍 Greenhouse search request:', { keywords, location, experience_level, remote });
+    
+    const browserService = getBrowserJobService();
+    const results = await browserService.searchJobsGreenhouse({
+      keywords, 
+      location, 
+      experience_level, 
+      remote
+    });
+    
+    console.log(`✓ Found ${results.length} jobs on Greenhouse`);
+    res.json({ success: true, data: results });
+  } catch (error: any) {
+    console.error('❌ Error searching Greenhouse:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Apply to a Greenhouse job
+app.post('/api/apply-greenhouse', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { boardToken, jobId, userProfile } = req.body;
+    
+    if (!boardToken || !jobId || !userProfile) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'boardToken, jobId, and userProfile are required' 
+      });
+    }
+    
+    console.log('📝 Apply to Greenhouse job request:', { boardToken, jobId });
+    
+    const browserService = getBrowserJobService();
+    const result = await browserService.applyToGreenhouseJob(boardToken, jobId, userProfile);
+    
+    console.log(`${result.success ? '✓' : '❌'} Greenhouse application result:`, result.message);
+    res.json({ success: result.success, data: result });
+  } catch (error: any) {
+    console.error('❌ Error applying to Greenhouse job:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Get detailed job information
 app.post('/api/job-details', authenticate, async (req: Request, res: Response) => {
   try {

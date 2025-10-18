@@ -1256,6 +1256,57 @@ async function executeTools(
               };
             }
             break;
+
+          case 'search_jobs_greenhouse':
+            console.log('🔍 Executing search_jobs_greenhouse:', input);
+            try {
+              const greenhouseJobsResult = await browserService.searchJobsGreenhouse({
+                keywords: input.keywords,
+                location: input.location,
+                experience_level: input.experience_level,
+                remote: input.remote
+              });
+              console.log(`✓ Greenhouse search completed: ${greenhouseJobsResult.length} jobs found`);
+              result = {
+                success: true,
+                data: greenhouseJobsResult,
+                message: `Found ${greenhouseJobsResult.length} jobs on Greenhouse`
+              };
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Greenhouse search tool failed:', errMessage);
+              result = {
+                success: false,
+                error: `Greenhouse search failed: ${errMessage}`,
+                message: `Failed to search Greenhouse: ${errMessage}`
+              };
+            }
+            break;
+
+          case 'apply_to_greenhouse_job':
+            console.log('📝 Executing apply_to_greenhouse_job:', input);
+            try {
+              const applyResult = await browserService.applyToGreenhouseJob({
+                boardToken: input.boardToken,
+                jobId: input.jobId,
+                userProfile: input.userProfile
+              });
+              console.log(`✓ Greenhouse application completed: ${applyResult.success ? 'SUCCESS' : 'FAILED'}`);
+              result = {
+                success: applyResult.success,
+                data: applyResult,
+                message: applyResult.message
+              };
+            } catch (error: unknown) {
+              const errMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Greenhouse application tool failed:', errMessage);
+              result = {
+                success: false,
+                error: `Greenhouse application failed: ${errMessage}`,
+                message: `Failed to apply to Greenhouse job: ${errMessage}`
+              };
+            }
+            break;
             
           default:
             result = {
