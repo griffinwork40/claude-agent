@@ -118,7 +118,7 @@ export function ResizablePane({
   return (
     <div
       ref={paneRef}
-      className="flex-shrink-0 relative"
+      className="flex-shrink-0 relative h-full overflow-hidden"
       style={{ width: `${width}px` }}
     >
       {children}

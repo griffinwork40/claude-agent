@@ -97,10 +97,43 @@ export function ChatTimeline({
   onSendPrompt,
 }: ChatTimelineProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const lastItemCountRef = useRef(0);
 
-  // Auto-scroll to bottom when new messages arrive or streaming updates
+  // Track scroll position to determine if auto-scroll should happen
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const scrollContainer = endRef.current?.parentElement;
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const threshold = 100; // pixels from bottom
+      const isNearBottom = 
+        scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight < threshold;
+      shouldAutoScrollRef.current = isNearBottom;
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-scroll only when:
+  // 1. User is near the bottom (within threshold)
+  // 2. New items were added (not just updates to existing items)
+  // 3. OR when it's the user who sent a message (always scroll for user messages)
+  useEffect(() => {
+    const hasNewItems = timelineItems.length > lastItemCountRef.current;
+    const lastItem = timelineItems[timelineItems.length - 1];
+    const isUserMessage = lastItem?.itemType === 'message' && (lastItem as any).role === 'user';
+    
+    if ((shouldAutoScrollRef.current && hasNewItems) || isUserMessage) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+      // After user message, keep auto-scroll enabled for the response
+      if (isUserMessage) {
+        shouldAutoScrollRef.current = true;
+      }
+    }
+    
+    lastItemCountRef.current = timelineItems.length;
   }, [timelineItems]);
 
   if (timelineItems.length === 0) {

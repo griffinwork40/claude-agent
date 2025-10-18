@@ -79,8 +79,23 @@ export function ChatPane({
       items.push({ ...message, itemType: 'message' as const });
     });
     
-    // Add activities
+    // Add activities (filtered by agent ID to prevent bleeding between agents)
+    // Extra defensive validation to catch any remaining issues
     chatStream.activities.forEach((activity) => {
+      // Validate activity has required fields
+      if (!activity.id || !activity.type || !activity.timestamp) {
+        console.warn('⚠️ Invalid activity structure, skipping:', activity);
+        return;
+      }
+      
+      // Strict agentId matching - only exact matches
+      if (activity.agentId !== agent.id) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`⚠️ Activity agentId mismatch in ChatPane: got "${activity.agentId}", expected "${agent.id}"`);
+        }
+        return;
+      }
+      
       items.push({ ...activity, itemType: 'activity' as const });
     });
     
@@ -142,7 +157,7 @@ export function ChatPane({
   };
 
   return (
-    <section className={`h-full flex flex-col ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
+    <section className={`flex flex-col h-full overflow-hidden ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
       {/* Desktop header - hidden on mobile to save space */}
       {!isMobile && (
         <header className="px-4 py-3 border-b border-[var(--border)] flex-shrink-0">

@@ -240,17 +240,64 @@ function validateMarkThreadReadInput(raw: Record<string, unknown>): GmailMarkThr
   return { threadId };
 }
 
-// Session management for agent conversations
-const agentSessions = new Map<string, AgentSession>();
+// Session management for agent conversations with TTL cleanup
+interface SessionData {
+  session: AgentSession;
+  lastAccessed: number;
+}
+
+const agentSessions = new Map<string, SessionData>();
+const SESSION_TTL = 30 * 60 * 1000; // 30 minutes
+const MAX_SESSIONS = 100;
+
+// Cleanup old sessions to prevent memory leaks
+function cleanupSessions() {
+  const now = Date.now();
+  let cleaned = 0;
+  
+  // Remove expired sessions
+  for (const [key, data] of agentSessions.entries()) {
+    if (now - data.lastAccessed > SESSION_TTL) {
+      agentSessions.delete(key);
+      cleaned++;
+    }
+  }
+  
+  // If still over max, remove oldest
+  if (agentSessions.size > MAX_SESSIONS) {
+    const sorted = Array.from(agentSessions.entries())
+      .sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+    
+    const toRemove = sorted.length - MAX_SESSIONS;
+    for (let i = 0; i < toRemove; i++) {
+      agentSessions.delete(sorted[i][0]);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    console.log(`🧹 Cleaned up ${cleaned} old sessions. Current count: ${agentSessions.size}`);
+  }
+}
 
 export async function createAgentSession(userId: string): Promise<string> {
+  cleanupSessions(); // Clean before adding new
+  
   const sessionId = `session_${Date.now()}_${userId}`;
-  agentSessions.set(sessionId, { userId, messages: [] });
+  agentSessions.set(sessionId, {
+    session: { userId, messages: [] },
+    lastAccessed: Date.now()
+  });
   return sessionId;
 }
 
 export async function getAgentSession(sessionId: string) {
-  return agentSessions.get(sessionId);
+  const data = agentSessions.get(sessionId);
+  if (data) {
+    data.lastAccessed = Date.now(); // Update access time
+    return data.session;
+  }
+  return undefined;
 }
 
 export async function runClaudeAgentStream(
@@ -272,15 +319,22 @@ export async function runClaudeAgentStream(
     console.log('✓ Agent initialized for streaming with tools');
     
     // Get or create session
+    cleanupSessions(); // Clean on each stream start
+    
     let session: AgentSession;
     if (sessionId && agentSessions.has(sessionId)) {
       console.log('Using existing session:', sessionId);
-      session = agentSessions.get(sessionId)!;
+      const sessionData = agentSessions.get(sessionId)!;
+      sessionData.lastAccessed = Date.now(); // Update access time
+      session = sessionData.session;
     } else {
       console.log('Creating new session...');
       session = { userId, messages: [] };
       sessionId = `session_${Date.now()}_${userId}`;
-      agentSessions.set(sessionId, session);
+      agentSessions.set(sessionId, {
+        session,
+        lastAccessed: Date.now()
+      });
       console.log('✓ New session created:', sessionId);
     }
 
@@ -304,9 +358,9 @@ export async function runClaudeAgentStream(
         try {
           console.log('Starting Anthropic streaming with tool calling...');
           
-          // Helper to send activity events
+          // Helper to send activity events - always include agentId for proper isolation
           const sendActivity = (type: string, data: any) => {
-            const event = JSON.stringify({ type, ...data });
+            const event = JSON.stringify({ type, agentId, ...data });
             const marker = `__ACTIVITY__${event}__END__`;
             controller.enqueue(new TextEncoder().encode(marker));
           };
@@ -477,7 +531,7 @@ export async function runClaudeAgentStream(
                 sendActivity('thinking', {
                   content: `Executing ${toolUses.length} tool${toolUses.length > 1 ? 's' : ''}...`
                 });
-                const toolResults = await executeTools(toolUses, userId, sendActivity);
+                const toolResults = await executeTools(toolUses, userId, sendActivity, agentId);
                 
                 // Build conversation history with tool use and results
                 let continuationMessages: MessageParam[] = [
@@ -674,7 +728,7 @@ export async function runClaudeAgentStream(
                         sendActivity('thinking', {
                           content: `Executing ${continuationToolUses.length} more tool${continuationToolUses.length > 1 ? 's' : ''}...`
                         });
-                        const continuationToolResults = await executeTools(continuationToolUses, userId, sendActivity);
+                        const continuationToolResults = await executeTools(continuationToolUses, userId, sendActivity, agentId);
                         
                         // Update continuation messages for next iteration
                         continuationMessages = [
@@ -784,7 +838,8 @@ export async function runClaudeAgentStream(
 async function executeTools(
   toolUses: ToolUse[],
   userId: string,
-  sendActivity?: (type: string, data: any) => void
+  sendActivity?: (type: string, data: any) => void,
+  agentId?: string
 ): Promise<ToolResult[]> {
   const results: ToolResult[] = [];
   const browserService = getBrowserService();

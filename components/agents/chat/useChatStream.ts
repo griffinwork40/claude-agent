@@ -57,6 +57,9 @@ export function useChatStream(
   // Track accumulated text chunks for proper interleaving
   const accumulatedTextRef = useRef<string>('');
   
+  // AbortController for stream cancellation when switching agents
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
   // Use Map for automatic activity deduplication by ID
   const [activitiesMap, setActivitiesMap] = useState<Map<string, Activity>>(new Map());
 
@@ -66,6 +69,14 @@ export function useChatStream(
   // Reset session when agent changes
   useEffect(() => {
     console.log('Agent changed, resetting session', { agentId });
+    
+    // Abort any in-progress streams
+    if (abortControllerRef.current) {
+      console.log('Aborting previous stream for agent change');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
     setSessionId(null);
     setIsStreaming(false);
     setStreamingMessage('');
@@ -95,6 +106,12 @@ export function useChatStream(
   }, []);
 
   const resetSession = useCallback(() => {
+    // Abort any in-progress streams
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
     setIsStreaming(false);
     setStreamingMessage('');
     setStreamingStartedAt(null);
@@ -131,7 +148,16 @@ export function useChatStream(
         }
       });
 
-      activities.forEach(activity => {
+      // Only add activities that match the target agent (prevent bleeding)
+      const filteredActivities = activities.filter(
+        activity => !activity.agentId || activity.agentId === targetAgentId
+      );
+      
+      if (filteredActivities.length !== activities.length) {
+        console.warn(`⚠️ Filtered out ${activities.length - filteredActivities.length} activities with wrong agentId`);
+      }
+
+      filteredActivities.forEach(activity => {
         next.set(activity.id, { ...activity, ephemeral: false });
       });
 
@@ -155,9 +181,16 @@ export function useChatStream(
     // Reset accumulated text ref to prevent carrying over old content
     accumulatedTextRef.current = '';
     
+    // Abort any existing stream
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    
     try {
       console.log('Sending request to /api/chat...');
       const response = await fetch('/api/chat', {
+        signal: abortControllerRef.current.signal,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -305,6 +338,12 @@ export function useChatStream(
                   continue;
                 }
                 
+                // Validate agentId matches the target agent (prevent activity bleeding)
+                if (data.agentId && data.agentId !== targetAgentId) {
+                  console.warn(`⚠️ Activity agentId mismatch: got ${data.agentId}, expected ${targetAgentId}. Skipping.`);
+                  continue;
+                }
+                
                 // Store activity locally for inline display
                 const activity: Activity = {
                   id: `activity-${Date.now()}-${Math.random()}`,
@@ -338,6 +377,15 @@ export function useChatStream(
         }
       }
     } catch (error: unknown) {
+      // Handle AbortError (stream was cancelled by user switching agents)
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('Stream aborted (user switched agents)');
+        setIsStreaming(false);
+        setStreamingMessage('');
+        setStreamingStartedAt(null);
+        return; // Don't clear activities map - keep them for the agent
+      }
+      
       console.error('❌ Error in streaming:', error);
       if (error instanceof Error) {
         console.error('Streaming error details:', {

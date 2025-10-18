@@ -18,7 +18,7 @@ export class BrowserJobService {
   private resultCache = new Map<string, { data: JobOpportunity[]; timestamp: number }>();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-  // Enhanced retry logic with exponential backoff
+  // Enhanced retry logic with exponential backoff and anti-bot evasion
   private async withRetryAndFallback<T>(
     operation: () => Promise<T>,
     fallbackUrls: string[] = [],
@@ -29,6 +29,13 @@ export class BrowserJobService {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
+        // Add random delay between attempts to look more human
+        if (attempt > 0) {
+          const randomDelay = 3000 + Math.random() * 5000; // 3-8 seconds
+          console.log(`⏳ Waiting ${Math.round(randomDelay)}ms before retry to avoid detection...`);
+          await new Promise(resolve => setTimeout(resolve, randomDelay));
+        }
+        
         return await operation();
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -224,12 +231,23 @@ export class BrowserJobService {
         }
         return originalQuery.call(window.navigator.permissions, parameters);
       };
+      
+      // Override automation indicators
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+      
+      // Mock realistic screen properties
+      Object.defineProperty(screen, 'width', { get: () => 1366 });
+      Object.defineProperty(screen, 'height', { get: () => 768 });
+      Object.defineProperty(screen, 'availWidth', { get: () => 1366 });
+      Object.defineProperty(screen, 'availHeight', { get: () => 728 });
     });
     
     // Set realistic viewport
     await page.setViewportSize({ width: 1366, height: 768 });
     
-    // Set extra headers
+    // Set extra headers with more realistic values
     await page.setExtraHTTPHeaders({
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
@@ -237,6 +255,11 @@ export class BrowserJobService {
       'DNT': '1',
       'Connection': 'keep-alive',
       'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Cache-Control': 'max-age=0'
     });
     
     return page;
@@ -284,6 +307,55 @@ export class BrowserJobService {
       }
     } catch (error: unknown) {
       console.warn('⚠️ Failed to evaluate captcha state:', error instanceof Error ? error.message : String(error));
+    }
+    return false;
+  }
+
+  // Detect Cloudflare "Just a moment" style blocks
+  private async detectCloudflareBlock(page: Page): Promise<boolean> {
+    try {
+      const currentUrl = page.url();
+      if (
+        currentUrl.includes('/cdn-cgi/challenge-platform/') ||
+        currentUrl.includes('/cdn-cgi/l/chk_jschl') ||
+        currentUrl.includes('/cdn-cgi/challenge/') ||
+        currentUrl.includes('/cpanel_auth/')
+      ) {
+        return true;
+      }
+
+      const title = await page.title();
+      if (title && title.toLowerCase().includes('just a moment')) {
+        return true;
+      }
+
+      const challengeHandle = await page.$(
+        '#cf-bubbles, #challenge-form, form#challenge-form, [data-cf-settings], #cf-challenge-running, input[name="cf-turnstile-response"]'
+      );
+      if (challengeHandle) {
+        return true;
+      }
+
+      const bodyText = await page.evaluate(() => document.body?.innerText?.toLowerCase().slice(0, 4000) || '');
+      if (!bodyText) {
+        return false;
+      }
+
+      const indicators = [
+        'please stand by',
+        'checking your browser',
+        'enable javascript and cookies',
+        'cloudflare ray id',
+        'your browser will redirect',
+        'before accessing'
+      ];
+
+      return indicators.some(indicator => bodyText.includes(indicator));
+    } catch (error: unknown) {
+      console.warn(
+        '⚠️ Failed to evaluate Cloudflare challenge state:',
+        error instanceof Error ? error.message : String(error)
+      );
     }
     return false;
   }
@@ -515,6 +587,96 @@ export class BrowserJobService {
     return Array.from(normalized.values()).slice(0, 10);
   }
 
+  private async fetchJobsViaSerpApi(params: {
+    keywords: string;
+    location: string;
+    experience_level?: string;
+    remote?: boolean;
+  }): Promise<JobOpportunity[] | null> {
+    const apiKey = process.env.SERPAPI_API_KEY || process.env.GOOGLE_JOBS_SERPAPI_KEY;
+    if (!apiKey) {
+      return null;
+    }
+
+    try {
+      const queryParts = [params.keywords, 'jobs'];
+      if (params.remote) queryParts.push('remote');
+      if (params.location && params.location.toLowerCase() !== 'remote') {
+        queryParts.push(params.location);
+      }
+      if (params.experience_level) {
+        queryParts.push(params.experience_level);
+      }
+
+      const apiUrl = new URL('https://serpapi.com/search.json');
+      apiUrl.searchParams.set('engine', 'indeed');
+      apiUrl.searchParams.set('api_key', apiKey);
+      apiUrl.searchParams.set('q', queryParts.join(' ').trim());
+      if (params.location) {
+        apiUrl.searchParams.set('location', params.location);
+      }
+
+      console.log('🌐 Fetching Indeed jobs via SerpApi:', apiUrl.toString());
+
+      const response = await fetch(apiUrl.toString(), {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'application/json'
+        },
+        signal: AbortSignal.timeout(15000)
+      });
+
+      if (!response.ok) {
+        console.warn('⚠️ SerpApi Indeed request failed:', response.status, await response.text());
+        return null;
+      }
+
+      const data = await response.json();
+      const jobs = Array.isArray(data?.jobs_results) ? data.jobs_results : [];
+
+      if (!jobs.length) {
+        return null;
+      }
+
+      const normalizedJobs: JobOpportunity[] = jobs.slice(0, 10).map((job: Record<string, unknown>, index: number) => {
+        const salary = typeof job.salary === 'string' ? job.salary : undefined;
+        const url = typeof job.url === 'string' ? job.url : '';
+
+        return {
+          id: `indeed_serpapi_${Date.now()}_${index}`,
+          title: typeof job.title === 'string' ? job.title : 'Unknown Title',
+          company: typeof job.company_name === 'string' ? job.company_name : 'Unknown Company',
+          location: typeof job.location === 'string' ? job.location : (params.location || 'Unknown Location'),
+          salary,
+          url,
+          description: typeof job.description === 'string' ? job.description : '',
+          application_url: url,
+          source: 'indeed',
+          skills: [],
+          experience_level: params.experience_level || 'unknown',
+          job_type: 'full-time',
+          remote_type: params.remote ? 'remote' : 'unknown',
+          applied: false,
+          status: 'discovered',
+          created_at: new Date().toISOString()
+        };
+      });
+
+      const filteredJobs = normalizedJobs.filter((job: JobOpportunity) => Boolean(job.url && job.url.length > 0));
+
+      if (!filteredJobs.length) {
+        return null;
+      }
+
+      console.log(`✅ Retrieved ${filteredJobs.length} jobs from SerpApi Indeed`);
+      return filteredJobs;
+    } catch (error: unknown) {
+      console.error('❌ SerpApi Indeed request failed:', error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
   private async fetchGoogleJobsViaSerpApi(params: {
     keywords: string;
     location: string;
@@ -654,9 +816,11 @@ export class BrowserJobService {
         method: 'GET',
         headers: {
           'User-Agent': 'claude-agent-job-search/1.0 (+https://remotive.com/)',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache'
         },
-        signal: AbortSignal.timeout(10000)
+        signal: AbortSignal.timeout(15000) // Increased timeout to 15 seconds
       });
 
       if (!response.ok) {
@@ -731,7 +895,14 @@ export class BrowserJobService {
       console.log(`✅ Retrieved ${normalizedJobs.length} jobs from Remotive fallback`);
       return normalizedJobs;
     } catch (error: unknown) {
-      console.warn('⚠️ Remotive fallback failed:', error instanceof Error ? error.message : String(error));
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.warn('⚠️ Remotive fallback failed:', errMessage);
+      
+      // If it's a timeout error, provide more helpful feedback
+      if (errMessage.includes('timeout') || errMessage.includes('aborted')) {
+        console.log('🔄 Remotive API timeout - this is common with remote job APIs');
+      }
+      
       return null;
     }
   }
@@ -752,6 +923,13 @@ export class BrowserJobService {
 
     const fallbackUrls = this.generateFallbackUrls(params);
 
+    // Try SerpAPI first if available (avoids anti-bot protection)
+    const serpApiResults = await this.fetchJobsViaSerpApi(params);
+    if (serpApiResults && serpApiResults.length > 0) {
+      this.setCachedResults(cacheKey, serpApiResults);
+      return serpApiResults;
+    }
+
     const searchUrl = this.buildIndeedSearchUrl(params);
     const remotePreference = params.remote ?? params.location.trim().toLowerCase() === 'remote';
 
@@ -767,6 +945,34 @@ export class BrowserJobService {
           
           // Add random delay to look more human
           await page.waitForTimeout(1000 + Math.random() * 2000);
+
+          if (await this.detectCloudflareBlock(page)) {
+            console.warn('⚠️ Indeed responded with a Cloudflare anti-bot challenge');
+            const errorMessage = `Indeed presented a Cloudflare anti-bot challenge while searching for "${params.keywords}" in ${params.location}.`;
+            const errorJob: JobOpportunity = {
+              id: `indeed_antibot_${Date.now()}`,
+              title: 'Automated search blocked by Indeed',
+              company: 'Indeed',
+              location: params.location,
+              description:
+                'Indeed is running Cloudflare bot protection for this query. Please open the manual search link below in your own browser to continue.',
+              url: searchUrl,
+              application_url: searchUrl,
+              source: 'indeed',
+              skills: [],
+              experience_level: params.experience_level || 'unknown',
+              job_type: 'full-time',
+              remote_type: params.remote ? 'remote' : 'unknown',
+              applied: false,
+              status: 'error',
+              created_at: new Date().toISOString(),
+              error: errorMessage
+            };
+            const manualFallback = this.createFallbackResponse(fallbackUrls, errorMessage);
+            const payload = [errorJob, ...manualFallback];
+            this.setCachedResults(cacheKey, payload);
+            return payload;
+          }
       
       // Wait for job listings with multiple possible selectors
       console.log('⏳ Waiting for job listings...');
@@ -1773,8 +1979,19 @@ export class BrowserJobService {
       const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
       
       console.log('🔍 Searching Google for careers page:', searchQuery);
+      await this.prepareGoogleSession(page);
       await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(2000);
+
+      if (await this.detectGoogleCaptcha(page)) {
+        console.warn('⚠️ Google presented a CAPTCHA challenge while finding careers page, attempting DuckDuckGo fallback');
+        await page.close();
+        const fallbackResult = await this.findCareersPageViaDuckDuckGo(companyName, jobTitle);
+        if (fallbackResult) {
+          return fallbackResult;
+        }
+        throw new Error(`DuckDuckGo fallback returned no results for ${companyName}`);
+      }
       
       // Extract search results
       const results = await page.locator('div.g a[href]').evaluateAll((elements) => {
@@ -1824,7 +2041,12 @@ export class BrowserJobService {
       await page.close();
       
       if (!careersUrl) {
-        throw new Error(`No careers page found for ${companyName}`);
+        console.log('ℹ️ Google results did not include a careers page, trying DuckDuckGo fallback');
+        const fallbackResult = await this.findCareersPageViaDuckDuckGo(companyName, jobTitle);
+        if (fallbackResult) {
+          return fallbackResult;
+        }
+        throw new Error(`DuckDuckGo fallback returned no results for ${companyName}`);
       }
       
       console.log('✓ Found careers page:', careersUrl);
@@ -1837,7 +2059,95 @@ export class BrowserJobService {
       await page.close();
       const errMessage = error instanceof Error ? error.message : String(error);
       console.error('❌ Error finding careers page:', errMessage);
+      if (!errMessage.includes('DuckDuckGo fallback returned no results')) {
+        const fallbackResult = await this.findCareersPageViaDuckDuckGo(companyName, jobTitle);
+        if (fallbackResult) {
+          return fallbackResult;
+        }
+      }
       throw new Error(`Failed to find careers page: ${errMessage}`);
+    }
+  }
+
+  private async findCareersPageViaDuckDuckGo(
+    companyName: string,
+    jobTitle?: string
+  ): Promise<{ careersUrl: string; companyWebsite: string } | null> {
+    const page = await this.createStealthPage();
+
+    try {
+      const searchQuery = `"${companyName}" careers ${jobTitle || ''}`.trim();
+      const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&t=h_&ia=web`;
+      console.log('🔍 (Fallback) Searching DuckDuckGo for careers page:', searchQuery);
+
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(1500);
+
+      const results = await page.locator('a.result__a[href]').evaluateAll((elements) =>
+        elements
+          .map((el) => (el as HTMLAnchorElement).href)
+          .filter(
+            (href) =>
+              href &&
+              !href.includes('duckduckgo.com') &&
+              !href.includes('indeed.com') &&
+              !href.includes('linkedin.com')
+          )
+      );
+
+      const careersKeywords = ['career', 'careers', 'jobs', 'apply', 'join', 'opportunities', 'hiring'];
+
+      let careersUrl = '';
+      let companyWebsite = '';
+
+      for (const url of results) {
+        const lowerUrl = url.toLowerCase();
+        if (careersKeywords.some((keyword) => lowerUrl.includes(keyword))) {
+          careersUrl = url;
+          break;
+        }
+      }
+
+      for (const url of results) {
+        const lowerUrl = url.toLowerCase();
+        if (!careersKeywords.some((keyword) => lowerUrl.includes(keyword))) {
+          companyWebsite = url;
+          break;
+        }
+      }
+
+      if (!companyWebsite && careersUrl) {
+        try {
+          const urlObj = new URL(careersUrl);
+          companyWebsite = `${urlObj.protocol}//${urlObj.host}`;
+        } catch {
+          companyWebsite = careersUrl;
+        }
+      }
+
+      if (!careersUrl && results.length > 0) {
+        careersUrl = results[0];
+        companyWebsite = results[0];
+      }
+
+      if (!careersUrl) {
+        console.log('ℹ️ DuckDuckGo fallback did not yield a careers page');
+        return null;
+      }
+
+      console.log('✓ DuckDuckGo fallback found careers page:', careersUrl);
+      return {
+        careersUrl,
+        companyWebsite: companyWebsite || careersUrl
+      };
+    } catch (error: unknown) {
+      console.warn(
+        '⚠️ DuckDuckGo fallback search failed:',
+        error instanceof Error ? error.message : String(error)
+      );
+      return null;
+    } finally {
+      await page.close();
     }
   }
 }
