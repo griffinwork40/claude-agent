@@ -142,7 +142,7 @@ export function ChatPane({
   };
 
   return (
-    <section className={`h-full flex flex-col ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
+    <section className={`flex flex-col h-full overflow-hidden ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>
       {/* Desktop header - hidden on mobile to save space */}
       {!isMobile && (
         <header className="px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
