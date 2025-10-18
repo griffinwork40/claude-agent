@@ -53,6 +53,27 @@ websocketServer.onUserCommand(async (sessionId, command) => {
       return;
     }
 
+    const sessionInfo = sharedSessionManager.getSessionInfo(sessionId);
+    if (!sessionInfo) {
+      websocketServer.broadcast({
+        sessionId,
+        type: 'automation_error',
+        payload: { message: 'Session not found. Please create or resume a session before sending commands.' },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (sessionInfo.controlLockedBy !== 'user') {
+      websocketServer.broadcast({
+        sessionId,
+        type: 'automation_error',
+        payload: { message: 'User must request control before issuing manual commands.' },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
     if (action === 'navigate' && typeof command.url === 'string') {
       await browserController.navigate(sessionId, command.url);
       websocketServer.broadcast({
@@ -779,10 +800,6 @@ app.post('/api/apply-to-job', authenticate, async (req: Request, res: Response) 
     });
   }
 });
-
-const httpServer = createServer(app);
-const websocketServer = getAutomationWebSocketServer();
-websocketServer.attach(httpServer);
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
