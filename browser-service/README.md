@@ -1,10 +1,13 @@
 # Browser Automation Service
 
-Separate HTTP service for Playwright-based browser automation. Handles job scraping from Indeed and LinkedIn without the constraints of serverless environments.
+Separate HTTP service for API-based job search and Playwright-based browser automation for job applications. Uses SerpAPI and Remotive APIs for job discovery, with browser automation only for applying to jobs on company websites.
 
 ## Architecture
 
-This service exposes browser automation functionality via REST API, allowing the main Next.js app (deployed on Vercel) to offload Playwright execution to a dedicated service with proper browser support.
+This service provides:
+- **API-based job search** using SerpAPI (Google Jobs) and Remotive API
+- **Browser automation** for applying to jobs on company websites (not for job search)
+- REST API allowing the main Next.js app to offload browser automation to a dedicated service
 
 ## Local Development
 
@@ -27,7 +30,7 @@ npx playwright install chromium
 3. Create `.env.local`:
 ```bash
 cp .env.local.example .env.local
-# Edit .env.local and set your API_KEY
+# Edit .env.local and set your API_KEY and SERP_API_KEY
 ```
 
 4. Run the service:
@@ -65,6 +68,39 @@ Health check endpoint.
   "status": "ok",
   "service": "browser-automation",
   "timestamp": "2025-01-01T00:00:00.000Z"
+}
+```
+
+### POST /api/search-serp
+Search for jobs using the Google SERP API integration. Returns structured job opportunities sourced from Google Jobs along with
+manual fallback results when the API is unavailable.
+
+**Request:**
+```json
+{
+  "keywords": "frontend developer",
+  "location": "Remote",
+  "experience_level": "mid",
+  "remote": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "serp_1700000000000_0",
+      "title": "Frontend Developer",
+      "company": "Tech Corp",
+      "location": "Remote",
+      "application_url": "https://www.example.com/job/apply",
+      "source": "google",
+      "status": "discovered",
+      "created_at": "2025-01-01T00:00:00.000Z"
+    }
+  ]
 }
 ```
 
@@ -203,7 +239,9 @@ git push -u origin main
    - "New Project" → "Deploy from GitHub repo"
    - Select this repo
    - Railway auto-detects Dockerfile
-   - Add environment variable: `API_KEY=<secure-random-key>`
+   - Add environment variables:
+     - `API_KEY=<secure-random-key>`
+     - `SERP_API_KEY=<serp-api-key>`
    - Deploy!
 
 3. Configure persistent storage (for LinkedIn sessions):
@@ -216,6 +254,7 @@ git push -u origin main
 ### Environment Variables
 
 - `API_KEY`: Authentication key for API requests (required)
+- `SERP_API_KEY`: Google SERP API key used for Google Jobs integration (required for `/api/search-serp`)
 - `PORT`: Port to run the service on (default: 3001)
 - `NODE_ENV`: Environment mode (development/production)
 

@@ -47,6 +47,13 @@ Activity Feed Integration (2025-10-11):
 - [x] Test expand/collapse functionality and build
 - [x] Update progress.md with completion status
 
+Streaming Bug Fix (2025-10-17):
+
+- [x] Fixed text duplication during streaming (changed from functional state update to ref-based approach)
+- [ ] Test fix comprehensively with various message types and speeds
+- [ ] Remove debug logging before production deploy
+- [ ] Add unit test to prevent regression
+
 Future Enhancements:
 
 - [ ] Add activity filtering/search in chat
@@ -54,4 +61,7 @@ Future Enhancements:
 - [ ] Implement activity grouping for related tool calls
 - [ ] Add visual progress indicators for long-running tools
 - [ ] Populate BrowserPane with job listings and application tracking
+- [ ] Performance optimization for large conversations
+- [ ] Add file upload and analysis support
+- [ ] Implement context visualization and management
 

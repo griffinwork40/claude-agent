@@ -15,6 +15,8 @@ export interface Agent {
   description?: string;
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
+  archived?: boolean;
+  archivedAt?: string; // ISO timestamp
 }
 
 /**
@@ -36,6 +38,9 @@ export interface AgentListProps {
   selectedAgentId: string | null;
   onSelect: (agentId: string) => void;
   onCreate: () => void;
+  onArchive?: (agentId: string, archived: boolean) => void;
+  showArchived?: boolean;
+  onToggleArchived?: () => void;
 }
 
 export interface Activity {
@@ -44,6 +49,7 @@ export interface Activity {
 
   // Phase 2 extended event types
   type:
+    | 'text_chunk'        // NEW: Streaming text content chunks
     | 'thinking_preview'  // NEW: Thought before tool execution
     | 'thinking'
     | 'status'
@@ -53,7 +59,8 @@ export interface Activity {
     | 'tool_result'
     | 'batch_start'       // NEW: Batch execution starts
     | 'batch_progress'    // NEW: Batch progress update
-    | 'batch_complete';   // NEW: Batch execution completes
+    | 'batch_complete'    // NEW: Batch execution completes
+    | 'context_usage';    // NEW: Token/context usage tracking
 
   tool?: string;
   toolId?: string;
@@ -71,6 +78,13 @@ export interface Activity {
   content?: string;
   error?: string;
   fallback_url?: string;
+  
+  // Token/context usage fields
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  contextPercentage?: number;
+  iteration?: number;
 
   // Timing (Phase 2)
   startedAt?: string;
@@ -80,6 +94,11 @@ export interface Activity {
   // Metadata
   timestamp: string;
   isRedacted?: boolean;
+  /**
+   * Ephemeral activities are only needed for in-flight UX (streaming text, thinking previews, etc.)
+   * and should not be persisted in the parent activity store to avoid duplicate rendering.
+   */
+  ephemeral?: boolean;
 }
 
 export interface BrowserPaneProps {
@@ -164,5 +183,4 @@ export interface ActivitiesResponse {
 export interface CreateActivityRequest {
   activity: Omit<Activity, 'id' | 'timestamp'>;
 }
-
 

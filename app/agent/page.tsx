@@ -58,6 +58,7 @@ export default function AgentPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const selectedAgent: Agent | null = useMemo(() => {
     return agents.find((a) => a.id === selectedAgentId) ?? null;
@@ -71,95 +72,130 @@ export default function AgentPage() {
     return activitiesByAgent[selectedAgentId] ?? [];
   }, [activitiesByAgent, selectedAgentId]);
 
-  // Load messages from database on mount
+  // Load conversations and messages from database on mount
   useEffect(() => {
-    async function loadMessages() {
-      console.log('Loading messages from database...');
+    async function loadConversations() {
+      console.log('Loading conversations from database...');
       setIsLoadingMessages(true);
       
       try {
-        // Load all messages to create agents for existing conversations
-        const loadedMessages = await loadMessagesFromAPI();
-        console.log(`Loaded ${loadedMessages.length} messages from database`);
+        // Load conversations from the new conversations table
+        const response = await fetch('/api/conversations');
+        if (!response.ok) {
+          throw new Error('Failed to load conversations');
+        }
+        const { conversations } = await response.json();
         
-        if (loadedMessages.length > 0) {
-          // Group messages by agentId to create agents for each conversation
-          const messagesByAgent = loadedMessages.reduce((acc, message) => {
-            const agentId = message.agentId;
-            if (!acc[agentId]) {
-              acc[agentId] = [];
-            }
-            acc[agentId].push(message);
-            return acc;
-          }, {} as Record<string, typeof loadedMessages>);
+        if (conversations && conversations.length > 0) {
+          // Convert database conversations to Agent format
+          const newAgents: Agent[] = conversations.map((conv: any) => ({
+            id: conv.session_id,
+            name: conv.name || `Conversation ${conv.session_id.slice(-6)}`,
+            description: conv.description || 'Previous conversation',
+            createdAt: conv.created_at,
+            updatedAt: conv.updated_at,
+            archived: conv.archived || false,
+            archivedAt: conv.archived_at
+          }));
           
-          // Create agents for each conversation
-          const newAgents: Agent[] = Object.entries(messagesByAgent).map(([agentId, agentMessages]) => {
-            const sortedMessages = [...agentMessages].sort(
-              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-            );
-            return {
-              id: agentId,
-              name: buildConversationTitle(agentId, sortedMessages),
-              description:
-                agentId === 'default-agent'
-                  ? 'Your AI assistant for job searching and applications'
-                  : 'Previous conversation',
-              createdAt: sortedMessages[0].createdAt,
-              updatedAt: sortedMessages[sortedMessages.length - 1].createdAt,
-            };
-          });
-          
-          setAgents(prev => {
-            // Merge with existing agents, avoiding duplicates
-            const existingIds = new Set(prev.map(a => a.id));
-            const newUniqueAgents = newAgents.filter(a => !existingIds.has(a.id));
-            return [...newUniqueAgents, ...prev];
-          });
+          setAgents(newAgents);
           
           if (!selectedAgentId) {
-            // Select the most recently updated agent
-            const mostRecentAgent = newAgents.sort((a, b) => 
-              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-            )[0];
-            
-            setSelectedAgentId(mostRecentAgent.id);
-            
-            // Update URL to include the selected agent
-            const params = new URLSearchParams(Array.from(search.entries()));
-            params.set('agentId', mostRecentAgent.id);
-            router.replace(`?${params.toString()}`);
-          }
-          
-          setMessages(loadedMessages);
-
-          // Load activities for the most recent agent if we have an initial agent
-          if (newAgents.length > 0) {
-            const mostRecentAgent = newAgents[0];
-            try {
-              setIsLoadingActivities(true);
-              const loadedActivities = await loadActivitiesFromAPI(mostRecentAgent.id);
-              console.log(`Loaded ${loadedActivities.activities.length} activities for initial agent ${mostRecentAgent.id}`);
-              setActivitiesByAgent(prev => ({
-                ...prev,
-                [mostRecentAgent.id]: loadedActivities.activities
-              }));
-            } catch (error) {
-              console.error('Error loading activities for initial agent:', error);
-            } finally {
-              setIsLoadingActivities(false);
+            // Select the most recently updated non-archived agent
+            const activeAgents = newAgents.filter(a => !a.archived);
+            if (activeAgents.length > 0) {
+              const mostRecentAgent = activeAgents.sort((a, b) => 
+                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+              )[0];
+              
+              setSelectedAgentId(mostRecentAgent.id);
+              
+              // Update URL to include the selected agent
+              const params = new URLSearchParams(Array.from(search.entries()));
+              params.set('agentId', mostRecentAgent.id);
+              router.replace(`?${params.toString()}`);
             }
+          }
+        } else {
+          // Fallback: load from messages if no conversations exist
+          console.log('No conversations found, loading from messages...');
+          const loadedMessages = await loadMessagesFromAPI();
+          console.log(`Loaded ${loadedMessages.length} messages from database`);
+          
+          if (loadedMessages.length > 0) {
+            // Group messages by agentId to create agents for each conversation
+            const messagesByAgent = loadedMessages.reduce((acc, message) => {
+              const agentId = message.agentId;
+              if (!acc[agentId]) {
+                acc[agentId] = [];
+              }
+              acc[agentId].push(message);
+              return acc;
+            }, {} as Record<string, typeof loadedMessages>);
+            
+            // Create agents for each conversation
+            const newAgents: Agent[] = Object.entries(messagesByAgent).map(([agentId, agentMessages]) => {
+              const sortedMessages = [...agentMessages].sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+              return {
+                id: agentId,
+                name: buildConversationTitle(agentId, sortedMessages),
+                description:
+                  agentId === 'default-agent'
+                    ? 'Your AI assistant for job searching and applications'
+                    : 'Previous conversation',
+                createdAt: sortedMessages[0].createdAt,
+                updatedAt: sortedMessages[sortedMessages.length - 1].createdAt,
+                archived: false
+              };
+            });
+            
+            setAgents(newAgents);
+            
+            if (!selectedAgentId) {
+              // Select the most recently updated agent
+              const mostRecentAgent = newAgents.sort((a, b) => 
+                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+              )[0];
+              
+              setSelectedAgentId(mostRecentAgent.id);
+              
+              // Update URL to include the selected agent
+              const params = new URLSearchParams(Array.from(search.entries()));
+              params.set('agentId', mostRecentAgent.id);
+              router.replace(`?${params.toString()}`);
+            }
+            
+            setMessages(loadedMessages);
+          }
+        }
+
+        // Load activities for the most recent agent if we have an initial agent
+        if (selectedAgentId) {
+          try {
+            setIsLoadingActivities(true);
+            const loadedActivities = await loadActivitiesFromAPI(selectedAgentId);
+            console.log(`Loaded ${loadedActivities.activities.length} activities for initial agent ${selectedAgentId}`);
+            setActivitiesByAgent(prev => ({
+              ...prev,
+              [selectedAgentId]: loadedActivities.activities
+            }));
+          } catch (error) {
+            console.error('Error loading activities for initial agent:', error);
+          } finally {
+            setIsLoadingActivities(false);
           }
         }
       } catch (error) {
-        console.error('Error loading messages:', error);
+        console.error('Error loading conversations:', error);
       } finally {
         setIsLoadingMessages(false);
       }
     }
 
-    // Only load messages on initial mount, not when search params change
-    loadMessages();
+    // Only load conversations on initial mount, not when search params change
+    loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Intentionally only run on mount
   
@@ -305,6 +341,10 @@ export default function AgentPage() {
       console.warn('Received activity without agentId, skipping', activity);
       return;
     }
+    if (activity.ephemeral) {
+      // Ephemeral activities (e.g. streaming text chunks) should remain local to the chat pane
+      return;
+    }
     // Update local state with the new activity
     setActivitiesByAgent(prev => {
       const existing = prev[activity.agentId] ?? [];
@@ -337,6 +377,48 @@ export default function AgentPage() {
     });
   }, [selectedAgentId]);
 
+  // Archive/unarchive conversation
+  const handleArchive = useCallback(async (agentId: string, archived: boolean) => {
+    try {
+      const response = await fetch('/api/conversations/archive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: agentId,
+          archived
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to archive conversation');
+      }
+
+      // Update local state
+      setAgents(prev => prev.map(agent => 
+        agent.id === agentId 
+          ? { ...agent, archived, archivedAt: archived ? new Date().toISOString() : undefined }
+          : agent
+      ));
+
+      // If archiving the currently selected agent, deselect it
+      if (archived && selectedAgentId === agentId) {
+        setSelectedAgentId(null);
+        setMessages([]);
+      }
+
+    } catch (error) {
+      console.error('Error archiving conversation:', error);
+      // You could add a toast notification here
+    }
+  }, [selectedAgentId]);
+
+  // Toggle archived view
+  const handleToggleArchived = useCallback(() => {
+    setShowArchived(prev => !prev);
+  }, []);
+
   // Show loading state while messages or activities are being loaded
   if (isLoadingMessages || (selectedAgentId && isLoadingActivities)) {
     return (
@@ -360,6 +442,9 @@ export default function AgentPage() {
           selectedAgentId={selectedAgentId} 
           onSelect={handleSelect}
           onCreate={handleCreateAgent}
+          onArchive={handleArchive}
+          showArchived={showArchived}
+          onToggleArchived={handleToggleArchived}
         />
         
         <BottomSheet 
@@ -423,6 +508,9 @@ export default function AgentPage() {
             selectedAgentId={selectedAgentId} 
             onSelect={handleSelect}
             onCreate={handleCreateAgent}
+            onArchive={handleArchive}
+            showArchived={showArchived}
+            onToggleArchived={handleToggleArchived}
           />
         </div>
 
@@ -505,6 +593,9 @@ export default function AgentPage() {
             selectedAgentId={selectedAgentId} 
             onSelect={handleSelect}
             onCreate={handleCreateAgent}
+            onArchive={handleArchive}
+            showArchived={showArchived}
+            onToggleArchived={handleToggleArchived}
           />
         </ResizablePane>
         
@@ -536,5 +627,4 @@ export default function AgentPage() {
     </>
   );
 }
-
 

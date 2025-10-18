@@ -1,5 +1,8 @@
 .next/
 node_modules/
 .env*
+!.env.local.example
+!/browser-service/.env.local.example
 .cursor/
 tsconfig.tsbuildinfo
+user-data/

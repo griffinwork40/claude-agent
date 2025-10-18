@@ -24,3 +24,11 @@ export interface JobOpportunity {
   raw_data?: Record<string, unknown>;
   created_at: string;
 }
+
+export interface JobSearchParams {
+  keywords: string;
+  location: string;
+  experience_level?: string;
+  remote?: boolean;
+}
+
