@@ -5,6 +5,8 @@ import { getBrowserJobService } from './browser-tools';
 import { getBrowserController } from './browser-controller';
 import { getBrowserSessionManager } from './browser-session';
 import { getSerpClient } from './serp-client';
+import { getWebSocketManager } from './websocket-server';
+import { getVNCServer } from './vnc-server';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -12,6 +14,10 @@ dotenv.config({ path: '.env.local' });
 
 const app = express();
 app.use(express.json({ limit: '50mb' })); // Increase limit for screenshots
+
+// Initialize WebSocket and VNC servers
+const wsManager = getWebSocketManager();
+const vncServer = getVNCServer();
 
 // Prefer the shared browser service API key env var, but support legacy API_KEY for backwards compatibility.
 const expectedApiKey =
@@ -41,17 +47,79 @@ app.get('/health', (req: Request, res: Response) => {
 // LLM-Controlled Browser Endpoints (Playwright MCP Style)
 // ============================================================================
 
+// Create a new browser session with optional VNC access
+app.post('/api/browser/session/create', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { sessionId, userId, headful = false } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+    
+    console.log(`🆕 Creating browser session [${sessionId}] (headful: ${headful})`);
+    const browserController = getBrowserController();
+    const sessionManager = getBrowserSessionManager();
+    
+    // Create session (this will also create VNC if headful)
+    const { session } = await sessionManager.getOrCreateSession(sessionId, userId, headful);
+    
+    const result = {
+      sessionId,
+      userId,
+      isHeadful: session.isHeadful,
+      vncUrl: session.vncUrl,
+      vncPort: session.vncPort,
+      websocketUrl: `ws://localhost:${process.env.WEBSOCKET_PORT || 8080}`
+    };
+    
+    console.log(`✓ Session created: ${sessionId}`);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('❌ Create session error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Create session failed' });
+  }
+});
+
+// Get session info
+app.get('/api/browser/session/:sessionId', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    const sessionManager = getBrowserSessionManager();
+    const session = sessionManager.getSession(sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      data: {
+        sessionId: session.sessionId,
+        userId: session.userId,
+        isHeadful: session.isHeadful,
+        vncUrl: session.vncUrl,
+        vncPort: session.vncPort,
+        controlOwner: session.controlOwner,
+        isRecording: session.isRecording,
+        lastActivity: session.lastActivity
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Get session error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Get session failed' });
+  }
+});
+
 // Navigate to a URL
 app.post('/api/browser/navigate', authenticate, async (req: Request, res: Response) => {
   try {
-    const { sessionId, url } = req.body;
+    const { sessionId, url, headful = false, userId } = req.body;
     if (!sessionId || !url) {
       return res.status(400).json({ success: false, error: 'sessionId and url are required' });
     }
     
     console.log(`🌐 Navigate [${sessionId}]: ${url}`);
     const browserController = getBrowserController();
-    const result = await browserController.navigate(sessionId, url);
+    const result = await browserController.navigate(sessionId, url, headful, userId);
     
     console.log(`✓ Navigated to ${result.url}`);
     res.json({ success: true, data: result });
@@ -238,6 +306,78 @@ app.post('/api/browser/close', authenticate, async (req: Request, res: Response)
   } catch (error: any) {
     console.error('❌ Close session error:', error);
     res.status(500).json({ success: false, error: error.message || 'Close session failed' });
+  }
+});
+
+// Take control of a session
+app.post('/api/browser/session/take-control', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { sessionId, clientId } = req.body;
+    if (!sessionId || !clientId) {
+      return res.status(400).json({ success: false, error: 'sessionId and clientId are required' });
+    }
+    
+    console.log(`🎮 Taking control of session [${sessionId}] by client [${clientId}]`);
+    const sessionManager = getBrowserSessionManager();
+    sessionManager.setControlOwner(sessionId, clientId);
+    
+    // Notify WebSocket clients
+    wsManager.emitBrowserEvent({
+      type: 'user_takeover',
+      sessionId,
+      data: { clientId },
+      timestamp: Date.now()
+    });
+    
+    res.json({ success: true, data: { message: 'Control taken' } });
+  } catch (error: any) {
+    console.error('❌ Take control error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Take control failed' });
+  }
+});
+
+// Release control of a session
+app.post('/api/browser/session/release-control', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { sessionId, clientId } = req.body;
+    if (!sessionId || !clientId) {
+      return res.status(400).json({ success: false, error: 'sessionId and clientId are required' });
+    }
+    
+    console.log(`🤖 Releasing control of session [${sessionId}] by client [${clientId}]`);
+    const sessionManager = getBrowserSessionManager();
+    sessionManager.releaseControl(sessionId);
+    
+    // Notify WebSocket clients
+    wsManager.emitBrowserEvent({
+      type: 'user_release',
+      sessionId,
+      data: { clientId },
+      timestamp: Date.now()
+    });
+    
+    res.json({ success: true, data: { message: 'Control released' } });
+  } catch (error: any) {
+    console.error('❌ Release control error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Release control failed' });
+  }
+});
+
+// Get WebSocket connection info
+app.get('/api/websocket/info', authenticate, (req: Request, res: Response) => {
+  try {
+    const wsPort = process.env.WEBSOCKET_PORT || 8080;
+    res.json({
+      success: true,
+      data: {
+        websocketUrl: `ws://localhost:${wsPort}`,
+        activeClients: wsManager.getClientCount(),
+        activeSessions: wsManager.getActiveSessions()
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ WebSocket info error:', error);
+    res.status(500).json({ success: false, error: error.message || 'WebSocket info failed' });
   }
 });
 
@@ -511,24 +651,34 @@ const server = app.listen(PORT, () => {
   console.log('🚀 LLM-controlled browser service running on http://localhost:' + PORT);
   console.log('📝 API Key:', process.env.API_KEY ? 'Set' : 'Not set (warning!)');
   console.log('🔧 Environment:', process.env.NODE_ENV || 'development');
-  console.log('🌐 New endpoints:');
-  console.log('   POST /api/browser/navigate    - Navigate to URL');
-  console.log('   POST /api/browser/snapshot    - Get page accessibility tree');
-  console.log('   POST /api/browser/screenshot  - Take screenshot');
-  console.log('   POST /api/browser/click       - Click element');
-  console.log('   POST /api/browser/type        - Type into element');
-  console.log('   POST /api/browser/select      - Select dropdown option');
-  console.log('   POST /api/browser/wait        - Wait for element/load');
-  console.log('   POST /api/browser/evaluate    - Execute JavaScript');
-  console.log('   POST /api/browser/content     - Get page HTML/text');
-  console.log('   POST /api/browser/close       - Close session');
+  console.log('🌐 Browser endpoints:');
+  console.log('   POST /api/browser/session/create     - Create new session with VNC');
+  console.log('   GET  /api/browser/session/:id        - Get session info');
+  console.log('   POST /api/browser/session/take-control - Take control of session');
+  console.log('   POST /api/browser/session/release-control - Release control');
+  console.log('   POST /api/browser/navigate           - Navigate to URL');
+  console.log('   POST /api/browser/snapshot           - Get page accessibility tree');
+  console.log('   POST /api/browser/screenshot         - Take screenshot');
+  console.log('   POST /api/browser/click              - Click element');
+  console.log('   POST /api/browser/type               - Type into element');
+  console.log('   POST /api/browser/select             - Select dropdown option');
+  console.log('   POST /api/browser/wait               - Wait for element/load');
+  console.log('   POST /api/browser/evaluate           - Execute JavaScript');
+  console.log('   POST /api/browser/content            - Get page HTML/text');
+  console.log('   POST /api/browser/close              - Close session');
+  console.log('🌐 WebSocket endpoints:');
+  console.log('   GET  /api/websocket/info             - WebSocket connection info');
+  console.log('🔌 WebSocket server running on port:', process.env.WEBSOCKET_PORT || 8080);
+  console.log('🖥️  VNC server ready for headful sessions');
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('🛑 SIGTERM received, closing browser sessions...');
+  console.log('🛑 SIGTERM received, closing services...');
   const sessionManager = getBrowserSessionManager();
   await sessionManager.closeAll();
+  await vncServer.destroyAllSessions();
+  await wsManager.close();
   server.close(() => {
     console.log('👋 Server closed');
     process.exit(0);
@@ -536,9 +686,11 @@ process.on('SIGTERM', async () => {
 });
 
 process.on('SIGINT', async () => {
-  console.log('🛑 SIGINT received, closing browser sessions...');
+  console.log('🛑 SIGINT received, closing services...');
   const sessionManager = getBrowserSessionManager();
   await sessionManager.closeAll();
+  await vncServer.destroyAllSessions();
+  await wsManager.close();
   server.close(() => {
     console.log('👋 Server closed');
     process.exit(0);

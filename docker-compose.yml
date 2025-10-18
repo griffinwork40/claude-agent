@@ -1,0 +1,73 @@
+# docker-compose.yml
+# Local development setup with VNC access for browser automation
+version: '3.8'
+
+services:
+  # Next.js frontend
+  frontend:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - BROWSER_SERVICE_URL=http://browser-service:3001
+      - BROWSER_SERVICE_API_KEY=test-key-12345
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - browser-service
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+    command: npm run dev
+
+  # Browser automation service with VNC
+  browser-service:
+    build: ./browser-service
+    ports:
+      - "3001:3001"  # API port
+      - "6080-6090:6080-6090"  # VNC ports (range for multiple sessions)
+      - "8080:8080"  # WebSocket port
+    environment:
+      - NODE_ENV=development
+      - HEADLESS=false
+      - VNC_PASSWORD=browser123
+      - WEBSOCKET_PORT=8080
+      - BROWSER_SERVICE_API_KEY=test-key-12345
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - ./browser-service:/app
+      - /app/node_modules
+      - ./recordings:/app/recordings  # Session recordings
+    command: npm run dev
+    # Enable privileged mode for X11/VNC
+    privileged: true
+    # Add necessary capabilities
+    cap_add:
+      - SYS_ADMIN
+    # Share X11 socket (for local development)
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    # Security options for X11
+    security_opt:
+      - seccomp:unconfined
+
+  # Redis for session persistence (optional)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  redis_data:
+
+# Network configuration
+networks:
+  default:
+    driver: bridge

@@ -148,6 +148,32 @@ export class BrowserService {
   }): Promise<{ companyApplicationUrl: string | null; requiresJobBoard: boolean }> {
     return this.request('/api/extract-company-url', params);
   }
+
+  // Request user help for complex scenarios
+  async requestUserHelp(params: {
+    sessionId: string;
+    reason: string;
+    context?: string;
+    suggestedAction?: string;
+  }): Promise<{ message: string; helpRequested: boolean }> {
+    return this.request('/api/browser/request-help', params);
+  }
+
+  // Get session preview URL
+  async getSessionPreview(params: {
+    sessionId: string;
+  }): Promise<{ previewUrl: string; vncUrl?: string }> {
+    return this.request('/api/browser/session-preview', params);
+  }
+
+  // Wait for user action
+  async waitForUserAction(params: {
+    sessionId: string;
+    message: string;
+    timeout?: number;
+  }): Promise<{ message: string; userActionTaken: boolean }> {
+    return this.request('/api/browser/wait-user-action', params);
+  }
 }
 
 // Singleton instance
@@ -461,6 +487,68 @@ export const browserTools = [
         }
       },
       required: ['jobBoardUrl']
+    }
+  },
+  {
+    name: 'request_user_help',
+    description: 'Request human intervention when automation encounters complex scenarios like CAPTCHAs, unexpected errors, or situations requiring human judgment.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        reason: {
+          type: 'string',
+          description: 'Reason for requesting help (e.g., "CAPTCHA detected", "Form validation error", "Unexpected page layout")'
+        },
+        context: {
+          type: 'string',
+          description: 'Additional context about the current situation'
+        },
+        suggestedAction: {
+          type: 'string',
+          description: 'Suggested action for the user to take'
+        }
+      },
+      required: ['sessionId', 'reason']
+    }
+  },
+  {
+    name: 'get_session_preview',
+    description: 'Get a preview URL for the current browser session to allow user monitoring and intervention.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        }
+      },
+      required: ['sessionId']
+    }
+  },
+  {
+    name: 'wait_for_user_action',
+    description: 'Pause automation and wait for user to take manual action in the browser. Use when user intervention is needed.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'Browser session ID'
+        },
+        message: {
+          type: 'string',
+          description: 'Message to display to user about what action is needed'
+        },
+        timeout: {
+          type: 'number',
+          description: 'Maximum time to wait for user action in seconds (default: 300)'
+        }
+      },
+      required: ['sessionId', 'message']
     }
   }
 ];

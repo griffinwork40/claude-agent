@@ -128,9 +128,9 @@ class RetryHelper {
 export class BrowserController {
   private sessionManager = getBrowserSessionManager();
 
-  async navigate(sessionId: string, url: string): Promise<{ success: boolean; url: string }> {
+  async navigate(sessionId: string, url: string, headful: boolean = false, userId?: string): Promise<{ success: boolean; url: string; vncUrl?: string }> {
     return RetryHelper.withRetry(async () => {
-      const { page } = await this.sessionManager.getOrCreateSession(sessionId);
+      const { page, session } = await this.sessionManager.getOrCreateSession(sessionId, userId, headful);
       
       // Apply stealth measures
       await StealthHelper.addStealthScripts(page);
@@ -149,6 +149,7 @@ export class BrowserController {
       return {
         success: true,
         url: page.url(),
+        vncUrl: session.vncUrl
       };
     });
   }

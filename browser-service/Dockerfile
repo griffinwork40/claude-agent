@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# Install Playwright system dependencies
+# Install Playwright system dependencies + VNC and X11 support
 RUN apt-get update && apt-get install -y \
     chromium \
     libx11-xcb1 \
@@ -17,7 +17,24 @@ RUN apt-get update && apt-get install -y \
     libnss3 \
     libatk-bridge2.0-0 \
     libgtk-3-0 \
+    # VNC and X11 dependencies
+    xvfb \
+    x11vnc \
+    fluxbox \
+    wget \
+    unzip \
+    python3 \
+    python3-pip \
+    # noVNC dependencies
+    websockify \
     && rm -rf /var/lib/apt/lists/*
+
+# Install noVNC
+RUN cd /opt && \
+    wget -qO- https://github.com/novnc/noVNC/archive/v1.4.0.tar.gz | tar xz --strip 1 && \
+    cd /opt/utils && \
+    wget -qO- https://github.com/novnc/websockify/archive/v0.10.0.tar.gz | tar xz --strip 1 && \
+    chmod +x websockify
 
 WORKDIR /app
 
@@ -44,8 +61,8 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
 # Create directory for LinkedIn sessions
 RUN mkdir -p /app/linkedin-sessions
 
-# Expose port
-EXPOSE 3001
+# Expose ports
+EXPOSE 3001 6080
 
 CMD ["npm", "start"]
 
