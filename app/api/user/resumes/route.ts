@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import * as mammoth from 'mammoth';
+import { loadMammoth, OPTIONAL_DEPENDENCY_MESSAGE } from '@/lib/mammoth-loader';
 import { extractTextFromPDF, validateExtractedText, fallbackPDFExtraction } from '@/lib/pdf-parser';
 
 // Maximum file size: 10MB
@@ -66,9 +66,17 @@ async function extractTextFromFile(file: File): Promise<string> {
     // DOCX files
     if (fileType.includes('wordprocessingml') || fileName.endsWith('.docx')) {
       console.log('📄 Extracting text from DOCX');
-      const arrayBuffer = await file.arrayBuffer();
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      return cleanText(result.value);
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const mammoth = await loadMammoth();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        return cleanText(result.value);
+      } catch (mammothError) {
+        if (mammothError instanceof Error && mammothError.message === OPTIONAL_DEPENDENCY_MESSAGE) {
+          throw new Error('DOCX parsing is currently disabled because the optional mammoth dependency is not installed.');
+        }
+        throw mammothError;
+      }
     }
 
     throw new Error('Unsupported file type');

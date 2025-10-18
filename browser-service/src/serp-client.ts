@@ -1,6 +1,5 @@
 // browser-service/src/serp-client.ts
 // Lightweight SERP API client that follows the existing browser service patterns
-import SerpApi from 'google-search-results-nodejs';
 import { JobOpportunity, JobSearchParams } from './types';
 
 type SerpApiModule = {
@@ -62,6 +61,7 @@ export class SerpClient {
   private readonly cacheTtl: number;
   private readonly maxRetries: number;
   private client: GoogleSearchClient | null = null;
+  private clientInitializationAttempted = false;
   private resultCache = new Map<string, { data: JobOpportunity[]; timestamp: number }>();
 
   constructor(options: SerpClientOptions = {}) {
@@ -73,16 +73,34 @@ export class SerpClient {
       console.warn(
         '⚠️  SERP_API_KEY is not configured. SERP searches will return fallback responses until the key is provided.'
       );
-      return;
+    }
+  }
+
+  private async ensureClient(): Promise<GoogleSearchClient | null> {
+    if (!this.apiKey) {
+      return null;
     }
 
+    if (this.client) {
+      return this.client;
+    }
+
+    if (this.clientInitializationAttempted) {
+      return null;
+    }
+
+    this.clientInitializationAttempted = true;
+
     try {
-      const serpApiModule = SerpApi as unknown as SerpApiModule;
+      const moduleId = 'google-search-results-nodejs';
+      const serpApiModule = (await import(moduleId)) as unknown as SerpApiModule;
       this.client = new serpApiModule.GoogleSearch(this.apiKey);
+      return this.client;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('❌ Failed to initialize SerpApi client:', message);
       this.client = null;
+      return null;
     }
   }
 
@@ -95,10 +113,15 @@ export class SerpClient {
 
     const fallbackUrls = this.generateFallbackUrls(params);
 
-    if (!this.client) {
+    const client = await this.ensureClient();
+    const fallbackReason = this.apiKey
+      ? 'SERP API client is unavailable. Install the optional "google-search-results-nodejs" dependency to enable live SERP results.'
+      : 'SERP API key is not configured. Please add SERP_API_KEY to the environment.';
+
+    if (!client) {
       const fallback = this.createFallbackResponse(
         fallbackUrls,
-        'SERP API key is not configured. Please add SERP_API_KEY to the environment.',
+        fallbackReason,
         params
       );
       this.setCachedResults(cacheKey, fallback);
@@ -224,13 +247,14 @@ export class SerpClient {
   }
 
   private async fetchResults(params: Record<string, unknown>): Promise<GoogleJobsResponse> {
-    if (!this.client) {
+    const client = this.client;
+    if (!client) {
       throw new Error('SERP API client is not configured');
     }
 
     return await new Promise<GoogleJobsResponse>((resolve, reject) => {
       try {
-        this.client!.json(params, (data: GoogleJobsResponse) => {
+        client.json(params, (data: GoogleJobsResponse) => {
           if (!data) {
             return reject(new Error('Empty response from SERP API'));
           }

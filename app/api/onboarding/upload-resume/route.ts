@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import Anthropic from '@anthropic-ai/sdk';
-import * as mammoth from 'mammoth';
+import { loadMammoth, OPTIONAL_DEPENDENCY_MESSAGE } from '@/lib/mammoth-loader';
 import { extractTextFromPDF, fallbackPDFExtraction, validateExtractedText, PDFParsingError } from '@/lib/pdf-parser';
 
 // Helper to extract text from different file formats with enhanced PDF support
@@ -79,10 +79,18 @@ async function extractTextFromFile(file: File): Promise<string> {
 
     // For DOCX files
     if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileName.endsWith('.docx')) {
-      const buffer = await file.arrayBuffer();
-      const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
-      console.log(`✓ Extracted ${result.value.length} characters from DOCX`);
-      return cleanText(result.value);
+      try {
+        const buffer = await file.arrayBuffer();
+        const mammoth = await loadMammoth();
+        const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
+        console.log(`✓ Extracted ${result.value.length} characters from DOCX`);
+        return cleanText(result.value);
+      } catch (mammothError) {
+        if (mammothError instanceof Error && mammothError.message === OPTIONAL_DEPENDENCY_MESSAGE) {
+          throw new Error('DOCX parsing is currently unavailable. Please install the optional mammoth dependency or upload a PDF/TXT file.');
+        }
+        throw mammothError;
+      }
     }
 
     // Fallback for other file types - try to read as text

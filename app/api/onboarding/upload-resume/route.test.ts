@@ -41,9 +41,13 @@ vi.mock('@anthropic-ai/sdk', () => ({
   default: vi.fn(() => mockAnthropic)
 }));
 
-// Mock mammoth for DOCX parsing
-vi.mock('mammoth', () => ({
-  extractRawText: vi.fn()
+// Mock mammoth loader for DOCX parsing
+const mockExtractRawText = vi.fn();
+const mockLoadMammoth = vi.fn(async () => ({ extractRawText: mockExtractRawText }));
+
+vi.mock('@/lib/mammoth-loader', () => ({
+  loadMammoth: mockLoadMammoth,
+  OPTIONAL_DEPENDENCY_MESSAGE: 'DOCX parsing requires the optional dependency "mammoth". Install it to enable DOCX uploads.',
 }));
 
 // Mock PDF parser
@@ -70,6 +74,8 @@ describe('Resume Upload API', () => {
     mockSupabaseClient.auth.getSession.mockResolvedValue({
       data: { session: { user: { id: 'test-user-id' } } }
     });
+    mockLoadMammoth.mockResolvedValue({ extractRawText: mockExtractRawText });
+    mockExtractRawText.mockReset();
   });
 
   it('should reject requests without authentication', async () => {
@@ -206,8 +212,7 @@ describe('Resume Upload API', () => {
   });
 
   it('should handle DOCX files', async () => {
-    const mammoth = await import('mammoth');
-    vi.mocked(mammoth.extractRawText).mockResolvedValue({
+    mockExtractRawText.mockResolvedValue({
       value: 'Jane Smith\nSenior Developer\njane@example.com',
       messages: []
     });
@@ -239,7 +244,7 @@ describe('Resume Upload API', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mammoth.extractRawText).toHaveBeenCalled();
+    expect(mockExtractRawText).toHaveBeenCalled();
   });
 
   it('should handle TXT files', async () => {

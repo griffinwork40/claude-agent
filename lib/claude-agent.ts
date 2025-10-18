@@ -781,7 +781,14 @@ export async function runClaudeAgentStream(
 }
 
 // Execute browser tools
-async function executeTools(
+const THINKING_ACTIVITY_COPY = {
+  nextTemplate: 'Thinking about using {{tool}} next...',
+  nextFallback: 'Thinking about the next step...'
+} as const;
+
+const DEFAULT_TOOL_LABEL = 'this tool';
+
+export async function executeTools(
   toolUses: ToolUse[],
   userId: string,
   sendActivity?: (type: string, data: any) => void
@@ -812,15 +819,30 @@ async function executeTools(
     } : {}
   );
 
+  const toolLabelCache = new Map<string, string>();
+
   const formatToolName = (rawName: string | undefined): string => {
     if (!rawName) {
-      return 'tool';
+      return DEFAULT_TOOL_LABEL;
     }
-    return rawName.replace(/_/g, ' ');
+
+    if (toolLabelCache.has(rawName)) {
+      return toolLabelCache.get(rawName)!;
+    }
+
+    const formatted = rawName.replace(/_/g, ' ');
+    toolLabelCache.set(rawName, formatted);
+    return formatted;
   };
 
   for (let index = 0; index < toolUses.length; index++) {
     const toolUse = toolUses[index];
+
+    if (!toolUse || typeof toolUse.name !== 'string' || typeof toolUse.id !== 'string') {
+      console.warn('⚠️ Skipping malformed tool entry', { index, toolUse });
+      continue;
+    }
+
     // Add batch context to tool activities
     const executingBatchContext = buildBatchContext(completedCount);
 
@@ -840,10 +862,10 @@ async function executeTools(
     const resultBatchContext = buildBatchContext(completedCount);
 
     try {
-        let result: BrowserToolResult;
-        const input = toolUse.input as Record<string, any>;
-        
-        switch (toolUse.name) {
+      let result: BrowserToolResult;
+      const input = toolUse.input as Record<string, any>;
+
+      switch (toolUse.name) {
           case 'gmail_list_threads': {
             const listInput = validateListThreadsInput(input);
             const threads = await listGmailThreads(userId, listInput);
@@ -1179,17 +1201,20 @@ async function executeTools(
     const hasMoreTools = index < toolUses.length - 1;
     if (sendActivity && hasMoreTools) {
       const nextTool = toolUses[index + 1];
-      const formattedNextTool = formatToolName(nextTool?.name);
       const formattedCurrentTool = formatToolName(toolUse.name);
+      const formattedNextTool = formatToolName(nextTool?.name);
+      const thinkingContent = nextTool?.name
+        ? THINKING_ACTIVITY_COPY.nextTemplate.replace('{{tool}}', formattedNextTool)
+        : THINKING_ACTIVITY_COPY.nextFallback;
 
       sendActivity('thinking', {
-        content: `Thinking about using ${formattedNextTool} next...`,
+        content: thinkingContent,
         previousTool: toolUse.name,
         previousToolId: toolUse.id,
         previousToolLabel: formattedCurrentTool,
         nextTool: nextTool?.name,
         nextToolId: nextTool?.id,
-        nextToolLabel: formattedNextTool,
+        nextToolLabel: nextTool?.name ? formattedNextTool : undefined,
         ...resultBatchContext
       });
     }

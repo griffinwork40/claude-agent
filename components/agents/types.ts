@@ -134,6 +134,12 @@ export interface DatabaseActivity {
   type: Activity['type'];
   tool?: string;
   tool_id?: string;
+  previous_tool?: string;
+  previous_tool_id?: string;
+  previous_tool_label?: string;
+  next_tool?: string;
+  next_tool_id?: string;
+  next_tool_label?: string;
   batch_id?: string;
   batch_total?: number;
   batch_completed?: number;
@@ -160,6 +166,12 @@ export function convertDatabaseActivityToActivity(dbActivity: DatabaseActivity):
     type: dbActivity.type,
     tool: dbActivity.tool,
     toolId: dbActivity.tool_id,
+    previousTool: dbActivity.previous_tool,
+    previousToolId: dbActivity.previous_tool_id,
+    previousToolLabel: dbActivity.previous_tool_label,
+    nextTool: dbActivity.next_tool,
+    nextToolId: dbActivity.next_tool_id,
+    nextToolLabel: dbActivity.next_tool_label,
     batchId: dbActivity.batch_id,
     batchTotal: dbActivity.batch_total,
     batchCompleted: dbActivity.batch_completed,
