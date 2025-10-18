@@ -239,7 +239,7 @@ export default function OnboardingPage() {
   if (step === 'chat') {
     return (
       <div className="min-h-screen bg-[var(--bg)] text-[var(--fg)] flex items-center justify-center p-4">
-        <div className="max-w-3xl w-full h-[80vh] flex flex-col">
+        <div className="max-w-3xl w-full h-[80vh] min-h-0 flex flex-col">
           <div className="text-center mb-4">
             <h1 className="text-3xl font-bold mb-2">Complete Your Profile</h1>
             <p className="text-[var(--fg)]/70">
@@ -247,9 +247,9 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          <div className="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-lg flex flex-col">
+          <div className="flex-1 min-h-0 bg-[var(--card)] border border-[var(--border)] rounded-lg flex flex-col">
             {/* Chat messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
