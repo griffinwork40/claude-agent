@@ -1,7 +1,16 @@
 // browser-service/src/serp-client.ts
 // Lightweight SERP API client that follows the existing browser service patterns
-import SerpApi from 'google-search-results-nodejs';
 import { JobOpportunity, JobSearchParams } from './types';
+
+// Conditional import for SERP API - only available in browser-service environment
+let SerpApi: any = null;
+try {
+  // Use dynamic import to avoid build-time issues
+  SerpApi = require('google-search-results-nodejs');
+} catch (error) {
+  // This is expected in Vercel builds - SERP API is only available in browser-service
+  console.warn('⚠️ google-search-results-nodejs not available, SERP API will use fallback mode');
+}
 
 type SerpApiModule = {
   GoogleSearch: new (apiKey: string) => GoogleSearchClient;
@@ -73,6 +82,12 @@ export class SerpClient {
       console.warn(
         '⚠️  SERP_API_KEY is not configured. SERP searches will return fallback responses until the key is provided.'
       );
+      return;
+    }
+
+    if (!SerpApi) {
+      console.warn('⚠️ SerpApi module not available, using fallback mode');
+      this.client = null;
       return;
     }
 

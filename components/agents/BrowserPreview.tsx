@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button } from '../ui/Button';
 
 interface BrowserPreviewProps {
   sessionId: string;
@@ -145,17 +145,15 @@ export default function BrowserPreview({
           {!isControlled ? (
             <Button
               onClick={handleTakeControl}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-1"
             >
               🎮 Take Control
             </Button>
           ) : (
             <Button
               onClick={handleReleaseControl}
-              size="sm"
               variant="outline"
-              className="border-orange-500 text-orange-600 hover:bg-orange-50"
+              className="border-orange-500 text-orange-600 hover:bg-orange-50 text-sm px-3 py-1"
             >
               🤖 Release Control
             </Button>

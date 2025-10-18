@@ -1,0 +1,19 @@
+# Exclude browser-service from Vercel builds
+# Browser service should be deployed separately to Railway
+browser-service/
+browser-service/**
+
+# Exclude tests from Vercel builds
+tests/
+tests/**
+
+# Exclude other non-essential files
+docs/
+*.md
+!README.md
+!WARP.md
+
+# Exclude development files
+docker-compose.yml
+.env.local
+.env.example
