@@ -7,6 +7,7 @@ import { Agent, Activity, Message } from '../types';
 import { renderMarkdown } from './markdown-utils';
 import { ActivityCard } from './ActivityCard';
 import { extractThinkingSteps } from './thinking-detection';
+import { UnifiedProgressCard } from './UnifiedProgressCard';
 
 interface RenderMessage extends Message {
   isStreaming?: boolean;
@@ -100,6 +101,29 @@ export function ChatTimeline({
   const endRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const lastItemCountRef = useRef(0);
+  
+  // Group activities by batchId for unified progress cards
+  const batchGroups = useMemo(() => {
+    const groups = new Map<string, Activity[]>();
+    const noisyTypes = ['tool_params', 'tool_executing', 'thinking_preview'];
+    
+    activities.forEach(activity => {
+      // Skip noisy activities
+      if (noisyTypes.includes(activity.type)) {
+        return;
+      }
+      
+      // Group by batchId if present
+      if (activity.batchId) {
+        if (!groups.has(activity.batchId)) {
+          groups.set(activity.batchId, []);
+        }
+        groups.get(activity.batchId)!.push(activity);
+      }
+    });
+    
+    return groups;
+  }, [activities]);
 
   // Track scroll position to determine if auto-scroll should happen
   useEffect(() => {
@@ -298,6 +322,42 @@ export function ChatTimeline({
           
           // Regular activity (not text_chunk)
           if (item.itemType === 'activity') {
+            // Check if this activity belongs to a batch
+            if (item.batchId && batchGroups.has(item.batchId)) {
+              const batchActivities = batchGroups.get(item.batchId)!;
+              
+              // Find if this is the first occurrence of this batch in the timeline
+              let isFirstInBatch = true;
+              for (let j = 0; j < i; j++) {
+                const prevItem = timelineItems[j];
+                if (prevItem.itemType === 'activity' && (prevItem as Activity).batchId === item.batchId) {
+                  isFirstInBatch = false;
+                  break;
+                }
+              }
+              
+              // Only render the UnifiedProgressCard once per batch (on first occurrence)
+              if (isFirstInBatch) {
+                renderedItems.push(
+                  <UnifiedProgressCard 
+                    key={`batch-${item.batchId}`} 
+                    activities={batchActivities}
+                    batchId={item.batchId}
+                  />
+                );
+              }
+              
+              i++;
+              continue;
+            }
+            
+            // Non-batch activity - render normally (but filter noisy types)
+            const noisyTypes = ['tool_params', 'tool_executing', 'thinking_preview'];
+            if (noisyTypes.includes(item.type)) {
+              i++;
+              continue;
+            }
+            
             const hasDisplayableContent = Boolean(
               item.tool ||
                 item.content ||
