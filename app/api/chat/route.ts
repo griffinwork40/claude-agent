@@ -125,10 +125,7 @@ export async function POST(request: NextRequest) {
         // They provide real-time progress feedback but are not stored in database
 
         try {
-          // Immediately send a preamble SSE event so the client receives bytes even if downstream fails
-          const preamble = `data: ${JSON.stringify({ type: 'status', content: 'starting' })}\n\n`;
-          controller.enqueue(encoder.encode(preamble));
-          console.log('✓ SSE preamble event sent');
+          // SSE stream processing starts - no preamble needed
 
           const reader = stream.getReader();
           // chunkCount declared above
