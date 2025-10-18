@@ -271,7 +271,11 @@ export function UnifiedProgressCard({
       }}
     >
       {/* Main progress card */}
-      <div className="rounded-lg border border-[var(--border)]/50 bg-[var(--card)]/30 overflow-hidden">
+      <div className={`rounded-lg border border-[var(--border)]/50 bg-[var(--card)]/30 overflow-hidden ${
+        batchState.phase === 'planning' || batchState.phase === 'executing' 
+          ? 'animate-cardShimmer' 
+          : ''
+      }`}>
         {/* Header - always visible */}
         <button
           type="button"
@@ -286,7 +290,7 @@ export function UnifiedProgressCard({
           </div>
           
           {/* Phase icon */}
-          <div className="text-base" role="img" aria-label={phaseConfig.text}>
+          <div className={`text-base ${batchState.phase === 'planning' ? 'animate-iconPulse' : batchState.phase === 'executing' ? 'animate-iconGlow' : ''}`} role="img" aria-label={phaseConfig.text}>
             {phaseConfig.icon}
           </div>
           
@@ -314,7 +318,7 @@ export function UnifiedProgressCard({
         
         {/* Progress bar */}
         <div className="px-4 pb-3">
-          <div className="relative h-1 bg-gray-400/20 rounded-full overflow-hidden">
+          <div className={`relative h-1 bg-gray-400/20 rounded-full overflow-hidden ${batchState.phase === 'executing' ? 'animate-breathe' : ''}`}>
             {/* Progress fill */}
             <div
               className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out ${

@@ -129,8 +129,17 @@ export class BrowserJobService {
   }
 
   // Generate cache key from search parameters
-  private getCacheKey(params: { keywords: string; location: string; experience_level?: string; remote?: boolean }): string {
-    return `${params.keywords}_${params.location}_${params.experience_level || 'any'}_${params.remote || false}`;
+  private getCacheKey(
+    params: { keywords: string; location: string; experience_level?: string; remote?: boolean },
+    namespace: string = 'default'
+  ): string {
+    return [
+      namespace,
+      params.keywords,
+      params.location,
+      params.experience_level || 'any',
+      params.remote || false
+    ].join('|');
   }
 
   async initialize() {
@@ -736,7 +745,7 @@ export class BrowserJobService {
     }
   }
 
-  // Search jobs on Indeed (no authentication required)
+  // Search jobs on Indeed using APIs (SerpAPI → Remotive → manual link)
   async searchJobsIndeed(params: {
     keywords: string;
     location: string;
@@ -744,182 +753,52 @@ export class BrowserJobService {
     remote?: boolean;
   }): Promise<JobOpportunity[]> {
     // Check cache first
-    const cacheKey = this.getCacheKey(params);
+    const cacheKey = this.getCacheKey(params, 'indeed');
     const cachedResults = this.getCachedResults(cacheKey);
     if (cachedResults) {
       return cachedResults;
     }
 
-    const fallbackUrls = this.generateFallbackUrls(params);
-
-    const searchUrl = this.buildIndeedSearchUrl(params);
     const remotePreference = params.remote ?? params.location.trim().toLowerCase() === 'remote';
 
-    const results = await this.withRetryAndFallback<JobOpportunity[]>(
-      async () => {
-        const page = await this.createStealthPage();
-        
-        try {
-          console.log('🔍 Searching Indeed:', searchUrl);
-          console.log('📋 Search params:', params);
-          
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          
-          // Add random delay to look more human
-          await page.waitForTimeout(1000 + Math.random() * 2000);
+    try {
+      console.log('🔍 Searching Indeed via SerpAPI:', params);
       
-      // Wait for job listings with multiple possible selectors
-      console.log('⏳ Waiting for job listings...');
-      await page.waitForSelector('.job_seen_beacon, .jobsearch-ResultsList li, [data-testid="job-card"]', { timeout: 15000 }).catch((selectorError) => {
-        console.log('⚠️ Primary selector not found, trying alternative approach:', selectorError.message);
-      });
-      
-      // Wait a bit for dynamic content
-      await page.waitForTimeout(2000 + Math.random() * 1000);
-      
-      // Check if we're on the right page
-      const currentUrl = page.url();
-      const pageTitle = await page.title();
-      console.log('📍 Current page:', { url: currentUrl, title: pageTitle });
-      
-      // Extract job listings with multiple selector strategies
-      const jobs = await page.evaluate(() => {
-        const jobCards = Array.from(document.querySelectorAll('.job_seen_beacon, .jobsearch-ResultsList li, [data-testid="job-card"]'));
-        console.log(`Found ${jobCards.length} job cards on page`);
-        
-        return jobCards.slice(0, 10).map((el, index) => {
-          const titleEl = el.querySelector('.jobTitle a, .jobTitle span, h2 a, [data-testid="job-title"]');
-          const companyEl = el.querySelector('.companyName, [data-testid="company-name"], .company');
-          const locationEl = el.querySelector('.companyLocation, [data-testid="job-location"], .location');
-          const salaryEl = el.querySelector('.salary-snippet, [data-testid="salary"], .salary');
-          const descEl = el.querySelector('.job-snippet, [data-testid="job-snippet"], .description');
-          const linkEl = el.querySelector('a[href*="/rc/clk"], a[href*="/viewjob"], h2 a') as HTMLAnchorElement | null;
-          
-          return {
-            id: `indeed_${Date.now()}_${index}`,
-            title: titleEl?.textContent?.trim() || 'Unknown Title',
-            company: companyEl?.textContent?.trim() || 'Unknown Company',
-            location: locationEl?.textContent?.trim() || 'Unknown Location',
-            salary: salaryEl?.textContent?.trim() || undefined,
-            url: linkEl?.href || '',
-            description: descEl?.textContent?.trim() || '',
-            application_url: linkEl?.href || '',
-            source: 'indeed' as const,
-            skills: [],
-            experience_level: 'unknown',
-            job_type: 'full-time',
-            remote_type: 'unknown',
-            applied: false,
-            status: 'discovered' as const,
-            created_at: new Date().toISOString()
-          };
-        });
-      });
+      // 1. Try SerpAPI first (Google Jobs aggregated)
+      const serpJobs = await this.fetchGoogleJobsViaSerpApi(params);
+      if (serpJobs && serpJobs.length) {
+        console.log(`✅ Found ${serpJobs.length} jobs via SerpAPI`);
+        this.setCachedResults(cacheKey, serpJobs);
+        return serpJobs;
+      }
 
-          console.log(`✅ Found ${jobs.length} jobs on Indeed`);
-          
-          // If no jobs found, return a structured error response instead of empty array
-          if (jobs.length === 0) {
-            console.log('⚠️ No jobs found - returning error response');
-            const errorJobs = [{
-              id: `indeed_no_results_${Date.now()}`,
-              title: 'No Jobs Found',
-              company: 'Indeed',
-              location: params.location,
-              description: `No job listings found for "${params.keywords}" in ${params.location}. This could be due to: 1) No jobs matching criteria, 2) Indeed's anti-bot protection, 3) Selector changes.`,
-              url: searchUrl,
-              application_url: '',
-              source: 'indeed' as const,
-              skills: [],
-              experience_level: 'unknown',
-              job_type: 'full-time',
-              remote_type: 'unknown',
-              applied: false,
-              status: 'error' as const,
-              created_at: new Date().toISOString(),
-              error: 'No jobs found - possible selector issues or anti-bot protection'
-            }];
-            
-            // Cache error results for shorter time
-            this.setCachedResults(cacheKey, errorJobs);
-            return errorJobs;
-          }
-          
-          // Cache successful results
-          this.setCachedResults(cacheKey, jobs);
-          return jobs;
+      console.log('⚠️ SerpAPI returned no results, trying Remotive...');
       
-        } catch (error: unknown) {
-          const errMessage = error instanceof Error ? error.message : String(error);
-          console.error('❌ Indeed search failed:', {
-            error: errMessage,
-            url: searchUrl,
-            params
-          });
-          
-          // Capture page state for debugging
-          let pageState = 'unknown';
-          let pageTitle = 'unknown';
-          try {
-            pageState = page.url();
-            pageTitle = await page.title();
-          } catch {}
-          
-          // Return structured error instead of throwing
-          const errorJobs = [{
-            id: `indeed_error_${Date.now()}`,
-            title: 'Search Failed',
-            company: 'Error',
-            location: 'N/A',
-            description: `Indeed search failed: ${errMessage}. Page: ${pageState} (${pageTitle})`,
-            url: searchUrl,
-            application_url: '',
-            source: 'indeed' as const,
-            skills: [],
-            experience_level: 'unknown',
-            job_type: 'full-time',
-            remote_type: 'unknown',
-            applied: false,
-            status: 'error' as const,
-            created_at: new Date().toISOString(),
-            error: errMessage
-          }];
-          
-          // Cache error results
-          this.setCachedResults(cacheKey, errorJobs);
-          return errorJobs;
-        } finally {
-          await page.close();
-        }
-      },
-      fallbackUrls,
-      3,
-      async (_error: Error) => {
+      // 2. Try Remotive as fallback
         const remotiveJobs = await this.fetchJobsViaRemotive({ ...params, remote: remotePreference });
         if (remotiveJobs && remotiveJobs.length) {
+        console.log(`✅ Found ${remotiveJobs.length} jobs via Remotive`);
           this.setCachedResults(cacheKey, remotiveJobs);
           return remotiveJobs;
         }
-        return null;
-      }
-    );
 
-    const hasUsableJobs = results.some((job) => {
-      const status = job.status as JobOpportunity['status'];
-      return status !== 'error' && status !== 'fallback';
-    });
-    if (!hasUsableJobs) {
-      const remotiveJobs = await this.fetchJobsViaRemotive({ ...params, remote: remotePreference });
-      if (remotiveJobs && remotiveJobs.length) {
-        this.setCachedResults(cacheKey, remotiveJobs);
-        return remotiveJobs;
-      }
+      console.log('⚠️ Both APIs failed, returning manual search link');
+      
+      // 3. Return error with manual search link
+      const searchUrl = this.buildIndeedSearchUrl(params);
+      throw new Error(`Automated job search failed. Please use this manual search link: ${searchUrl}`);
+      
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Indeed API search failed:', errMessage);
+      
+      // Return error with manual search link
+      const searchUrl = this.buildIndeedSearchUrl(params);
+      throw new Error(`Indeed automated search is currently unavailable. Please use this manual search link: ${searchUrl}`);
     }
-
-    return results;
   }
 
-  // Search jobs on Google Jobs (no authentication required)
+  // Search jobs on Google Jobs using APIs (SerpAPI → Remotive → manual link)
   async searchJobsGoogle(params: {
     keywords: string;
     location: string;
@@ -927,190 +806,49 @@ export class BrowserJobService {
     remote?: boolean;
   }): Promise<JobOpportunity[]> {
     // Check cache first
-    const cacheKey = this.getCacheKey(params);
+    const cacheKey = this.getCacheKey(params, 'google');
     const cachedResults = this.getCachedResults(cacheKey);
     if (cachedResults) {
       return cachedResults;
     }
 
-    const fallbackUrls = this.generateFallbackUrls(params);
-    const searchUrl = this.buildGoogleJobsSearchUrl(params);
     const remotePreference = params.remote ?? params.location.trim().toLowerCase() === 'remote';
 
-    // Try SerpApi first if configured (avoids Playwright + captcha risk)
-    const serpApiResults = await this.fetchGoogleJobsViaSerpApi(params);
-    if (serpApiResults && serpApiResults.length > 0) {
-      this.setCachedResults(cacheKey, serpApiResults);
-      return serpApiResults;
-    }
-
-    const results = await this.withRetryAndFallback<JobOpportunity[]>(
-      async () => {
-        const page = await this.createStealthPage();
-
-        try {
-          console.log('🔍 Searching Google Jobs:', searchUrl);
-          console.log('📋 Search params:', params);
-
-          await this.prepareGoogleSession(page);
-
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
-
-          // Add random delay to look more human
-          await page.waitForTimeout(1200 + Math.random() * 2000);
-
-          if (await this.detectGoogleCaptcha(page)) {
-            console.warn('⚠️ Google presented a CAPTCHA challenge');
-            const captchaJobs: JobOpportunity[] = [{
-              id: `google_captcha_${Date.now()}`,
-              title: 'Google blocked automated search',
-              company: 'Google Jobs',
-              location: params.location,
-              description: `Google is requesting a CAPTCHA before showing job results for "${params.keywords}" in ${params.location}. This usually happens when their anti-bot systems flag the request. Please open the fallback links manually or retry later.`,
-              url: searchUrl,
-              application_url: searchUrl,
-              source: 'google',
-              skills: [],
-              experience_level: params.experience_level || 'unknown',
-              job_type: 'full-time',
-              remote_type: params.remote ? 'remote' : 'unknown',
-              applied: false,
-              status: 'error',
-              created_at: new Date().toISOString(),
-              error: 'Google presented a CAPTCHA challenge (anti-bot protection)'
-            }];
-            this.setCachedResults(cacheKey, captchaJobs);
-            return captchaJobs;
-          }
-
-          console.log('⏳ Waiting for Google Jobs results...');
-          await page
-            .waitForSelector('iframe, [data-testid="job-card"], .iFjolb.gws-plugins-horizon-jobs__li-ed', { timeout: 15000 })
-            .catch((selectorError) => {
-              console.log('⚠️ Initial job selectors not found yet:', selectorError instanceof Error ? selectorError.message : selectorError);
-            });
-
-          await page.waitForTimeout(2000 + Math.random() * 1000);
-
-          let rawJobs: Array<Record<string, unknown>> = [];
-          const frames = Array.from(new Set(page.frames()));
-
-          for (const frame of frames) {
-            const jobsFromFrame = await this.extractGoogleJobsFromFrame(frame);
-            if (jobsFromFrame.length) {
-              console.log(`📥 Extracted ${jobsFromFrame.length} jobs from frame: ${frame.url()}`);
-              rawJobs = rawJobs.concat(jobsFromFrame);
-            }
-          }
-
-          if (rawJobs.length === 0) {
-            console.log('🔄 No jobs found on initial attempt, scrolling & retrying extraction');
-            await page.mouse.wheel(0, 1000);
-            await page.waitForTimeout(1500);
-
-            for (const frame of frames) {
-              const jobsFromFrame = await this.extractGoogleJobsFromFrame(frame);
-              if (jobsFromFrame.length) {
-                console.log(`📥 Extracted ${jobsFromFrame.length} jobs after scroll from frame: ${frame.url()}`);
-                rawJobs = rawJobs.concat(jobsFromFrame);
-              }
-            }
-          }
-
-          const jobs = this.normalizeGoogleJobs(rawJobs, params, searchUrl);
-          console.log(`✅ Found ${jobs.length} jobs on Google Jobs after normalization`);
-
-          if (jobs.length === 0) {
-            console.log('⚠️ No jobs extracted - returning structured error');
-            const errorJobs: JobOpportunity[] = [{
-              id: `google_no_results_${Date.now()}`,
-              title: 'No Jobs Found',
-              company: 'Google Jobs',
-              location: params.location,
-              description: `No job listings were found for "${params.keywords}" in ${params.location}. Possible reasons: 1) No roles match the filters, 2) Google returned an empty widget, 3) HTML structure changed, or 4) Anti-bot throttling blocked detailed results. Try adjusting the query or using the fallback links.`,
-              url: searchUrl,
-              application_url: searchUrl,
-              source: 'google',
-              skills: [],
-              experience_level: params.experience_level || 'unknown',
-              job_type: 'full-time',
-              remote_type: params.remote ? 'remote' : 'unknown',
-              applied: false,
-              status: 'error',
-              created_at: new Date().toISOString(),
-              error: 'No jobs extracted - possible selector changes or anti-bot throttling'
-            }];
-            this.setCachedResults(cacheKey, errorJobs);
-            return errorJobs;
-          }
-
-          this.setCachedResults(cacheKey, jobs);
-          return jobs;
-        } catch (error: unknown) {
-          const errMessage = error instanceof Error ? error.message : String(error);
-          console.error('❌ Google Jobs search failed:', {
-            error: errMessage,
-            url: searchUrl,
-            params
-          });
-
-          // Capture page state for debugging
-          let pageState = 'unknown';
-          let pageTitle = 'unknown';
-          try {
-            pageState = page.url();
-            pageTitle = await page.title();
-          } catch {
-            // ignore
-          }
-
-          const errorJobs: JobOpportunity[] = [{
-            id: `google_error_${Date.now()}`,
-            title: 'Search Failed',
-            company: 'Google Jobs',
-            location: params.location,
-            description: `Google Jobs search failed: ${errMessage}. Page: ${pageState} (${pageTitle}). Try again later or open the fallback links manually.`,
-            url: searchUrl,
-            application_url: searchUrl,
-            source: 'google',
-            skills: [],
-            experience_level: params.experience_level || 'unknown',
-            job_type: 'full-time',
-            remote_type: params.remote ? 'remote' : 'unknown',
-            applied: false,
-            status: 'error',
-            created_at: new Date().toISOString(),
-            error: errMessage
-          }];
-
-          this.setCachedResults(cacheKey, errorJobs);
-          return errorJobs;
-        } finally {
-          await page.close();
-        }
-      },
-      fallbackUrls,
-      3,
-      async (_error: Error) => {
-        const remotiveJobs = await this.fetchJobsViaRemotive({ ...params, remote: remotePreference });
-        if (remotiveJobs && remotiveJobs.length) {
-          this.setCachedResults(cacheKey, remotiveJobs);
-          return remotiveJobs;
-        }
-        return null;
+    try {
+      console.log('🔍 Searching Google Jobs via SerpAPI:', params);
+      
+      // 1. Try SerpAPI first (Google Jobs API)
+      const serpJobs = await this.fetchGoogleJobsViaSerpApi(params);
+      if (serpJobs && serpJobs.length) {
+        console.log(`✅ Found ${serpJobs.length} jobs via SerpAPI`);
+        this.setCachedResults(cacheKey, serpJobs);
+        return serpJobs;
       }
-    );
 
-    const hasUsableJobs = results.some((job) => job.status !== 'error' && job.status !== 'fallback');
-    if (!hasUsableJobs) {
+      console.log('⚠️ SerpAPI returned no results, trying Remotive...');
+      
+      // 2. Try Remotive as fallback
       const remotiveJobs = await this.fetchJobsViaRemotive({ ...params, remote: remotePreference });
       if (remotiveJobs && remotiveJobs.length) {
+        console.log(`✅ Found ${remotiveJobs.length} jobs via Remotive`);
         this.setCachedResults(cacheKey, remotiveJobs);
         return remotiveJobs;
       }
-    }
 
-    return results;
+      console.log('⚠️ Both APIs failed, returning manual search link');
+      
+      // 3. Return error with manual search link
+      const searchUrl = this.buildGoogleJobsSearchUrl(params);
+      throw new Error(`Automated job search failed. Please use this manual search link: ${searchUrl}`);
+      
+        } catch (error: unknown) {
+          const errMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Google Jobs API search failed:', errMessage);
+      
+      // Return error with manual search link
+      const searchUrl = this.buildGoogleJobsSearchUrl(params);
+      throw new Error(`Google Jobs automated search is currently unavailable. Please use this manual search link: ${searchUrl}`);
+    }
   }
 
   async searchJobsSerp(params: JobSearchParams): Promise<JobOpportunity[]> {
@@ -1118,7 +856,7 @@ export class BrowserJobService {
     return serpClient.searchJobs(params);
   }
 
-  // Search jobs on LinkedIn (requires authentication)
+  // Search jobs on LinkedIn (returns manual search link - no good API available)
   async searchJobsLinkedIn(params: {
     keywords: string;
     location: string;
@@ -1126,142 +864,12 @@ export class BrowserJobService {
     remote?: boolean;
     userId: string;
   }): Promise<JobOpportunity[]> {
-    if (!this.browser) {
-      await this.initialize();
-    }
-
-    const page = await this.initializeLinkedInSession(params.userId);
+    console.log('🔍 LinkedIn search requested - returning manual search link');
     
     const searchUrl = this.buildLinkedInSearchUrl(params);
     
-    try {
-      console.log('🔍 Searching LinkedIn:', searchUrl);
-      console.log('📋 Search params:', params);
-      
-      await page.goto(searchUrl, { waitUntil: 'networkidle' });
-      
-      // Check if we're logged in
-      const isLoggedIn = await page.locator('[data-test="authentication-wall"]').count() === 0;
-      if (!isLoggedIn) {
-        console.log('⚠️ LinkedIn authentication required');
-        return [{
-          id: `linkedin_auth_required_${Date.now()}`,
-          title: 'Authentication Required',
-          company: 'LinkedIn',
-          location: params.location,
-          description: `LinkedIn search requires authentication. Please log in to LinkedIn to search for jobs.`,
-          url: searchUrl,
-          application_url: '',
-          source: 'linkedin' as const,
-          skills: [],
-          experience_level: 'unknown',
-          job_type: 'full-time',
-          remote_type: 'unknown',
-          applied: false,
-          status: 'error' as const,
-          created_at: new Date().toISOString(),
-          error: 'LinkedIn authentication required'
-        }];
-      }
-      
-      console.log('⏳ Waiting for LinkedIn job results...');
-      await page.waitForSelector('.jobs-search__results-list', { timeout: 10000 }).catch((selectorError) => {
-        console.log('⚠️ LinkedIn results selector not found:', selectorError.message);
-      });
-      
-      // Check if we're on the right page
-      const currentUrl = page.url();
-      const pageTitle = await page.title();
-      console.log('📍 Current page:', { url: currentUrl, title: pageTitle });
-      
-      // Extract job listings
-      const jobs = await page.$$eval('.job-card-container', (elements) => {
-        console.log(`Found ${elements.length} job cards on LinkedIn page`);
-        return elements.slice(0, 10).map((el, index) => ({
-          id: `linkedin_${Date.now()}_${index}`,
-          title: el.querySelector('.job-card-list__title')?.textContent?.trim() || 'Unknown Title',
-          company: el.querySelector('.job-card-container__company-name')?.textContent?.trim() || 'Unknown Company',
-          location: el.querySelector('.job-card-container__metadata-item')?.textContent?.trim() || 'Unknown Location',
-          salary: undefined, // LinkedIn doesn't show salary in search results
-          url: (el.querySelector('a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
-          description: el.querySelector('.job-card-list__description')?.textContent?.trim() || '',
-          application_url: (el.querySelector('a') as HTMLAnchorElement | null)?.getAttribute('href') || '',
-          source: 'linkedin' as const,
-          skills: [],
-          experience_level: 'unknown',
-          job_type: 'full-time',
-          remote_type: 'unknown',
-          applied: false,
-          status: 'discovered' as const,
-          created_at: new Date().toISOString()
-        }));
-      });
-
-      console.log(`✅ Found ${jobs.length} jobs on LinkedIn`);
-      
-      // If no jobs found, return a structured error response instead of empty array
-      if (jobs.length === 0) {
-        console.log('⚠️ No jobs found - returning error response');
-        return [{
-          id: `linkedin_no_results_${Date.now()}`,
-          title: 'No Jobs Found',
-          company: 'LinkedIn',
-          location: params.location,
-          description: `No job listings found for "${params.keywords}" in ${params.location}. This could be due to: 1) No jobs matching criteria, 2) LinkedIn's anti-bot protection, 3) Selector changes, 4) Search query format issues.`,
-          url: searchUrl,
-          application_url: '',
-          source: 'linkedin' as const,
-          skills: [],
-          experience_level: 'unknown',
-          job_type: 'full-time',
-          remote_type: 'unknown',
-          applied: false,
-          status: 'error' as const,
-          created_at: new Date().toISOString(),
-          error: 'No jobs found - possible selector issues or anti-bot protection'
-        }];
-      }
-      
-      return jobs;
-      
-    } catch (error: unknown) {
-      const errMessage = error instanceof Error ? error.message : String(error);
-      console.error('❌ LinkedIn search failed:', {
-        error: errMessage,
-        url: searchUrl,
-        params
-      });
-      
-      // Capture page state for debugging
-      let pageState = 'unknown';
-      let pageTitle = 'unknown';
-      try {
-        pageState = page.url();
-        pageTitle = await page.title();
-      } catch {}
-      
-      // Return structured error instead of throwing
-      return [{
-        id: `linkedin_error_${Date.now()}`,
-        title: 'Search Failed',
-        company: 'Error',
-        location: 'N/A',
-        description: `LinkedIn search failed: ${errMessage}. Page: ${pageState} (${pageTitle})`,
-        url: searchUrl,
-        application_url: '',
-        source: 'linkedin' as const,
-        skills: [],
-        experience_level: 'unknown',
-        job_type: 'full-time',
-        remote_type: 'unknown',
-        applied: false,
-        status: 'error' as const,
-        created_at: new Date().toISOString(),
-        error: errMessage
-      }];
-    } finally {
-      await page.close();
-    }
+    // LinkedIn has no good public API, return manual search link immediately
+    throw new Error(`LinkedIn automated search is not available. Please use this manual search link: ${searchUrl}`);
   }
 
   // Get detailed information about a specific job

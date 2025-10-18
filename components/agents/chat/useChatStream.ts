@@ -230,15 +230,29 @@ export function useChatStream(
               } else if (data.type === 'complete') {
                 console.log('✓ Stream completed, sessionId:', data.sessionId);
 
+                // Flush any remaining accumulated text as a text_chunk activity
+                if (accumulatedTextRef.current && targetAgentId) {
+                  const textChunkActivity: Activity = {
+                    id: `chunk-${Date.now()}-${Math.random()}`,
+                    agentId: targetAgentId,
+                    type: 'text_chunk',
+                    content: accumulatedTextRef.current,
+                    timestamp: new Date().toISOString()
+                  };
+                  
+                  addActivity(textChunkActivity);
+                  
+                  // Reset for next segment - both ref AND state must be cleared
+                  accumulatedTextRef.current = '';
+                  setStreamingMessage(''); // Reset state to match the ref
+                }
+
                 // Set completion flag
                 setSessionId(data.sessionId);
                 setIsStreaming(false);
                 setStreamingStartedAt(null);
                 setContextUsage(null); // Clear context usage when stream completes
                 
-                // Reset accumulated text refs
-                accumulatedTextRef.current = '';
-
                 // Reload messages from database to show the complete assistant response
                 // This prevents duplicates since we're using the DB as source of truth
                 if (typeof window !== 'undefined') {

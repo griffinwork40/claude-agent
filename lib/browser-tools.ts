@@ -348,7 +348,7 @@ export const browserTools = [
   },
   {
     name: 'search_jobs_indeed',
-    description: 'Search Indeed for job listings. Returns real job postings from Indeed.com.',
+    description: 'Search for jobs using SerpAPI (Google Jobs aggregated) with Remotive fallback. Returns real job postings from multiple sources via API.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -375,7 +375,7 @@ export const browserTools = [
   },
   {
     name: 'search_jobs_google',
-    description: 'Search Google Jobs for aggregated job listings from multiple sources (Indeed, LinkedIn, company sites, etc.)',
+    description: 'Search Google Jobs using SerpAPI with Remotive fallback. Returns aggregated job listings from multiple sources via API.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -402,7 +402,7 @@ export const browserTools = [
   },
   {
     name: 'search_jobs_linkedin',
-    description: 'Search LinkedIn for job listings. Requires authenticated LinkedIn session.',
+    description: 'Returns manual LinkedIn search link (no API available). LinkedIn requires manual search due to authentication restrictions.',
     input_schema: {
       type: 'object' as const,
       properties: {

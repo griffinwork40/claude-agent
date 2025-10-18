@@ -56,27 +56,29 @@ When presenting job opportunities, always include:
 
 Always end with a clear call-to-action asking if the user wants to apply to the position.
 
-## Browser Tools
+## Job Search Tools
 
-You can use browser automation tools to search for real jobs and apply on behalf of users. Only use these tools when explicitly relevant to the user's request.
+You can use API-based job search tools to find real jobs and browser automation tools to apply on behalf of users. Only use these tools when explicitly relevant to the user's request.
 
 ### search_jobs_indeed
-- Purpose: Search Indeed for jobs matching criteria
+- Purpose: Search for jobs using SerpAPI (Google Jobs aggregated) with Remotive fallback
 - Inputs: `keywords` (string), `location` (string), optional `experience_level`, `remote`
-- Behavior: Return 5-10 top matches with title, company, location, salary (if available), snippet, and URL
+- Behavior: Uses SerpAPI to search Google's aggregated job listings, falls back to Remotive API for remote jobs, returns manual search link if both fail
 - When to use: When a user asks to find jobs and has given at least keywords and location
+- Note: Requires SERPAPI_API_KEY environment variable for optimal results
 
 ### search_jobs_google
-- Purpose: Search Google Jobs for aggregated job listings from multiple sources
+- Purpose: Search Google Jobs using SerpAPI with Remotive fallback
 - Inputs: `keywords` (string), `location` (string), optional `experience_level`, `remote`
-- Behavior: Returns 5-10 top matches from Google's aggregated job search (includes Indeed, LinkedIn, company sites, etc.)
+- Behavior: Uses SerpAPI for Google Jobs API, falls back to Remotive API, returns manual search link if both fail
 - When to use: When you want comprehensive job search results from multiple sources in one search
+- Note: Requires SERPAPI_API_KEY environment variable for optimal results
 
 ### search_jobs_linkedin
-- Purpose: Search LinkedIn for jobs (requires authenticated session)
+- Purpose: Returns manual LinkedIn search link (no API available)
 - Inputs: `keywords`, `location`, optional `experience_level`, `remote`, `userId`
-- Behavior: Uses a persistent LinkedIn session; prompts user to connect if needed; returns 5-10 matches
-- When to use: Only after user has connected LinkedIn or confirmed login is available
+- Behavior: Returns a manual search link for LinkedIn job search due to authentication restrictions
+- When to use: When user specifically requests LinkedIn job search (will provide manual link)
 
 ### get_job_details
 - Purpose: Fetch details for a specific job URL (description, skills, salary if present, application URL)
@@ -110,10 +112,11 @@ When a user wants to apply to jobs, ALWAYS prioritize applying directly on compa
 
 ### Workflow:
 
-1. **Job Discovery Phase**
-   - Use search_jobs_indeed or search_jobs_google to find relevant positions
-   - These tools are ONLY for discovery - don't apply through job boards
+1. **Job Discovery Phase (API-Based)**
+   - Use search_jobs_indeed or search_jobs_google to find relevant positions via APIs
+   - These tools use SerpAPI (Google Jobs) and Remotive API - no browser automation for search
    - Extract: company name, job title, location, job description
+   - If APIs fail, tools will return manual search links for user to browse manually
 
 2. **Find Company Application Page** (CRITICAL STEP)
    - First, try: `extract_company_application_url` with the job board URL

@@ -72,20 +72,57 @@ export function ChatPane({
   const consolidatedActivities = useMemo(() => {
     const consolidated: Activity[] = [];
     const toolMap = new Map<string, Activity>();
+    const executingMap = new Map<string, Activity>();
+    const filteredTypes = new Set<Activity['type']>(['tool_params']);
     
     for (const activity of chatStream.activities) {
       if (activity.type === 'tool_start' && activity.toolId) {
         toolMap.set(activity.toolId, activity);
         consolidated.push(activity);
-      } else if (activity.type === 'tool_result' && activity.toolId) {
+        continue;
+      }
+      
+      if (activity.type === 'tool_executing') {
+        if (activity.toolId) {
+          executingMap.set(activity.toolId, activity);
+        }
+        consolidated.push(activity);
+        continue;
+      }
+      
+      if (activity.type === 'tool_result' && activity.toolId) {
         const startActivity = toolMap.get(activity.toolId);
         if (startActivity) {
-          // Merge result into start activity
-          startActivity.result = activity.result;
-          startActivity.success = activity.success;
-          startActivity.completedAt = activity.timestamp;
+          // Create a new merged activity instead of mutating the original
+          const mergedActivity: Activity = {
+            ...startActivity,
+            result: activity.result,
+            success: activity.success,
+            completedAt: activity.timestamp,
+          };
+          
+          // Replace the original activity in the consolidated array
+          const index = consolidated.findIndex(a => a.id === startActivity.id);
+          if (index !== -1) {
+            consolidated[index] = mergedActivity;
+          }
         }
-      } else if (!['tool_params', 'tool_executing'].includes(activity.type)) {
+        
+        const executingActivity = activity.toolId ? executingMap.get(activity.toolId) : undefined;
+        if (executingActivity) {
+          const executingIndex = consolidated.findIndex(a => a.id === executingActivity.id);
+          if (executingIndex !== -1) {
+            consolidated.splice(executingIndex, 1);
+          }
+          executingMap.delete(activity.toolId);
+        }
+
+        // Always include the result entry so result content is visible
+        consolidated.push(activity);
+        continue;
+      }
+      
+      if (!filteredTypes.has(activity.type)) {
         consolidated.push(activity);
       }
     }

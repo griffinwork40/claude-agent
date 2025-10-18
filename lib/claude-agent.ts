@@ -7,7 +7,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { browserTools, getBrowserService } from './browser-tools';
 import { listGmailThreads, sendGmailMessage, markGmailThreadRead } from '@/lib/gmail/client';
 import { getOrCreateUserProfile } from './user-profile';
-import { ToolUse, ToolResult, BrowserToolResult } from '@/types';
+import { ToolUse, ToolResult, BrowserToolResult, JobOpportunity } from '@/types';
 import { getUserContextForPrompt } from './user-data-compiler';
 
 // Debug: Log SDK import
@@ -238,6 +238,133 @@ function validateSendEmailInput(raw: Record<string, unknown>): GmailSendEmailToo
 function validateMarkThreadReadInput(raw: Record<string, unknown>): GmailMarkThreadReadToolInput {
   const threadId = sanitizeString(String(raw.threadId ?? ''), 256, 'gmail_mark_thread_read.threadId');
   return { threadId };
+}
+
+function buildJobSummaryFromResults(results: ToolResult[]): string | null {
+  const jobHighlights: string[] = [];
+  const seenJobKeys = new Set<string>();
+  const sources = new Set<string>();
+  let totalJobs = 0;
+  const errorMessages: string[] = [];
+
+  for (const result of results) {
+    let parsed: BrowserToolResult | null = null;
+
+    if (typeof result.content === 'string') {
+      try {
+        parsed = JSON.parse(result.content) as BrowserToolResult;
+      } catch (error) {
+        if (result.is_error) {
+          errorMessages.push(result.content);
+        }
+        continue;
+      }
+    } else if (result.is_error) {
+      errorMessages.push(String(result.content));
+      continue;
+    }
+
+    if (!parsed) {
+      continue;
+    }
+
+    if (result.is_error || parsed.success === false) {
+      const errorMessage =
+        typeof parsed.message === 'string'
+          ? parsed.message
+          : typeof parsed.error === 'string'
+            ? parsed.error
+            : null;
+      if (errorMessage) {
+        errorMessages.push(errorMessage);
+      }
+      continue;
+    }
+
+    const dataCandidate = parsed.data;
+    let jobs: JobOpportunity[] = [];
+
+    if (Array.isArray(dataCandidate)) {
+      jobs = dataCandidate as JobOpportunity[];
+    } else if (
+      dataCandidate &&
+      typeof dataCandidate === 'object' &&
+      Array.isArray((dataCandidate as Record<string, unknown>).jobs)
+    ) {
+      const nested = (dataCandidate as { jobs: unknown }).jobs;
+      jobs = Array.isArray(nested) ? (nested as JobOpportunity[]) : [];
+    }
+
+    if (!jobs.length) {
+      continue;
+    }
+
+    for (const job of jobs) {
+      if (!job || typeof job !== 'object') {
+        continue;
+      }
+
+      const title = typeof job.title === 'string' ? job.title : null;
+      const company = typeof job.company === 'string' ? job.company : null;
+      if (!title || !company) {
+        continue;
+      }
+
+      const location = typeof job.location === 'string' ? job.location : null;
+      const key =
+        typeof job.id === 'string' && job.id.trim().length
+          ? job.id.trim()
+          : `${title}|${company}|${location || ''}`;
+
+      if (!seenJobKeys.has(key)) {
+        seenJobKeys.add(key);
+        totalJobs++;
+
+        const highlightParts = [`• ${title}`, `at ${company}`];
+        if (location) {
+          highlightParts.push(`(${location})`);
+        }
+        jobHighlights.push(highlightParts.join(' '));
+      }
+
+      if (typeof job.source === 'string' && job.source.trim().length) {
+        sources.add(job.source.trim());
+      }
+    }
+  }
+
+  if (totalJobs === 0 && errorMessages.length === 0) {
+    return null;
+  }
+
+  const summaryParts: string[] = [];
+
+  if (totalJobs > 0) {
+    const sourceSuffix =
+      sources.size > 0
+        ? ` across ${Array.from(sources)
+            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+            .join(', ')}`
+        : '';
+    summaryParts.push(`I found ${totalJobs} role${totalJobs === 1 ? '' : 's'}${sourceSuffix}.`);
+
+    const highlightText = jobHighlights.slice(0, 3).join('\n');
+    if (highlightText) {
+      summaryParts.push(`Highlights:\n${highlightText}`);
+    }
+  }
+
+  if (errorMessages.length > 0) {
+    const errorText = errorMessages.slice(0, 2).join('; ');
+    summaryParts.push(`A few searches failed: ${errorText}.`);
+  }
+
+  if (summaryParts.length === 0) {
+    return null;
+  }
+
+  summaryParts.push('Let me know if you want to refine the search or apply to any of these.');
+  return summaryParts.join('\n\n');
 }
 
 // Session management for agent conversations
@@ -477,6 +604,9 @@ export async function runClaudeAgentStream(
                 iteration: 0
               });
               
+              const textBeforeTools = currentTextChunk;
+              const aggregatedToolResults: ToolResult[] = [];
+
               // Execute tools if any were requested - use iterative approach instead of recursion
               if (toolUses.length > 0) {
                 console.log(`🔧 Executing ${toolUses.length} tools...`);
@@ -484,6 +614,7 @@ export async function runClaudeAgentStream(
                   content: `Executing ${toolUses.length} tool${toolUses.length > 1 ? 's' : ''}...`
                 });
                 const toolResults = await executeTools(toolUses, userId, sendActivity);
+                aggregatedToolResults.push(...toolResults);
                 
                 // Build conversation history with tool use and results
                 let continuationMessages: MessageParam[] = [
@@ -678,6 +809,7 @@ export async function runClaudeAgentStream(
                           content: `Executing ${continuationToolUses.length} more tool${continuationToolUses.length > 1 ? 's' : ''}...`
                         });
                         const continuationToolResults = await executeTools(continuationToolUses, userId, sendActivity);
+                        aggregatedToolResults.push(...continuationToolResults);
                         
                         // Update continuation messages for next iteration
                         continuationMessages = [
@@ -711,6 +843,29 @@ export async function runClaudeAgentStream(
                 } // End of while loop
                 
                 console.log(`✓ Tool execution loop completed after ${iteration} iterations`);
+              }
+
+              const postToolText = currentTextChunk.slice(textBeforeTools.length).trim();
+              if (aggregatedToolResults.length > 0 && postToolText.length === 0) {
+                const fallbackSummary = buildJobSummaryFromResults(aggregatedToolResults);
+                if (fallbackSummary) {
+                  console.log('ℹ️ No assistant summary generated, injecting fallback overview');
+                  const prefix = currentTextChunk.trim().length ? '\n\n' : '';
+                  const fallbackText = `${prefix}${fallbackSummary}`;
+                  const encodedFallback = new TextEncoder().encode(fallbackText);
+                  controller.enqueue(encodedFallback);
+                  currentTextChunk += fallbackText;
+
+                  const lastBlock = assistantMessageContent[assistantMessageContent.length - 1];
+                  if (lastBlock && lastBlock.type === 'text') {
+                    lastBlock.text += fallbackText;
+                  } else {
+                    assistantMessageContent.push({
+                      type: 'text' as const,
+                      text: fallbackSummary
+                    });
+                  }
+                }
               }
               
               // Save the complete accumulated assistant response as a single message

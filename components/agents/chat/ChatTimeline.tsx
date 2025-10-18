@@ -105,7 +105,7 @@ export function ChatTimeline({
   // Group activities by batchId for unified progress cards
   const batchGroups = useMemo(() => {
     const groups = new Map<string, Activity[]>();
-    const noisyTypes = ['tool_params', 'tool_executing', 'thinking_preview'];
+    const noisyTypes = ['tool_params', 'thinking_preview'];
     
     activities.forEach(activity => {
       // Skip noisy activities
@@ -323,6 +323,7 @@ export function ChatTimeline({
           // Regular activity (not text_chunk)
           if (item.itemType === 'activity') {
             // Check if this activity belongs to a batch
+            let suppressActivityRender = false;
             if (item.batchId && batchGroups.has(item.batchId)) {
               const batchActivities = batchGroups.get(item.batchId)!;
               
@@ -347,13 +348,24 @@ export function ChatTimeline({
                 );
               }
               
-              i++;
-              continue;
+              // Suppress noisy batch events but allow tool results to show their rich content
+              const batchHiddenTypes = new Set<Activity['type']>([
+                'tool_start',
+                'tool_executing',
+                'thinking',
+                'status',
+                'batch_start',
+                'batch_progress',
+                'batch_complete'
+              ]);
+              if (batchHiddenTypes.has(item.type)) {
+                suppressActivityRender = true;
+              }
             }
             
-            // Non-batch activity - render normally (but filter noisy types)
-            const noisyTypes = ['tool_params', 'tool_executing', 'thinking_preview'];
-            if (noisyTypes.includes(item.type)) {
+            // Filter activity types that should never render (regardless of batch)
+            const noisyTypes = ['tool_params', 'thinking_preview'];
+            if (noisyTypes.includes(item.type) || suppressActivityRender) {
               i++;
               continue;
             }

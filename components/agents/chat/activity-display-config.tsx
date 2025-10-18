@@ -3,6 +3,7 @@
  * Purpose: Display mapping configuration to transform raw tool activities into user-friendly displays
  */
 
+import React from 'react';
 import { Activity } from '../types';
 import { Search, FileText, Send, Settings } from 'lucide-react';
 
@@ -60,7 +61,37 @@ export const activityDisplayMap: Record<string, ActivityDisplayConfig> = {
 
 export function getActivityDisplay(activity: Activity): ActivityDisplayConfig {
   if (activity.tool && activityDisplayMap[activity.tool]) {
-    return activityDisplayMap[activity.tool];
+    const config = activityDisplayMap[activity.tool];
+    
+    // Special handling for job search tools to show specific search parameters
+    if (activity.tool === 'search_jobs_google' && activity.params) {
+      const keywords = activity.params.keywords || 'jobs';
+      const location = activity.params.location || 'anywhere';
+      return {
+        ...config,
+        title: `Searching Google Jobs for "${keywords}" in ${location}`
+      };
+    }
+    
+    if (activity.tool === 'search_jobs_indeed' && activity.params) {
+      const keywords = activity.params.keywords || 'jobs';
+      const location = activity.params.location || 'anywhere';
+      return {
+        ...config,
+        title: `Searching Indeed for "${keywords}" in ${location}`
+      };
+    }
+    
+    if (activity.tool === 'search_jobs_linkedin' && activity.params) {
+      const keywords = activity.params.keywords || 'jobs';
+      const location = activity.params.location || 'anywhere';
+      return {
+        ...config,
+        title: `Searching LinkedIn for "${keywords}" in ${location}`
+      };
+    }
+    
+    return config;
   }
   return activityDisplayMap.default;
 }

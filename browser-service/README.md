@@ -1,10 +1,13 @@
 # Browser Automation Service
 
-Separate HTTP service for Playwright-based browser automation. Handles job scraping from Indeed and LinkedIn without the constraints of serverless environments.
+Separate HTTP service for API-based job search and Playwright-based browser automation for job applications. Uses SerpAPI and Remotive APIs for job discovery, with browser automation only for applying to jobs on company websites.
 
 ## Architecture
 
-This service exposes browser automation functionality via REST API, allowing the main Next.js app (deployed on Vercel) to offload Playwright execution to a dedicated service with proper browser support.
+This service provides:
+- **API-based job search** using SerpAPI (Google Jobs) and Remotive API
+- **Browser automation** for applying to jobs on company websites (not for job search)
+- REST API allowing the main Next.js app to offload browser automation to a dedicated service
 
 ## Local Development
 

@@ -20,15 +20,52 @@ const ABSOLUTE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
 /**
  * Check if activity result contains job data
  */
-function isJobResult(activity: Activity): boolean {
-  if (activity.type !== 'tool_result' || !activity.result) return false;
-  
-  // Check if result contains job data
-  const result = activity.result;
-  return (
-    Array.isArray(result) && result.length > 0 && 
-    result[0].title && result[0].company && result[0].application_url
-  );
+function extractJobResults(activity: Activity): JobOpportunity[] | null {
+  if (activity.type !== 'tool_result' || !activity.result) return null;
+
+  const candidate = activity.result as unknown;
+  const arraysToCheck: unknown[] = [];
+
+  if (Array.isArray(candidate)) {
+    arraysToCheck.push(candidate);
+  } else if (candidate && typeof candidate === 'object') {
+    const resultObj = candidate as Record<string, unknown>;
+    const nestedCandidates = [
+      resultObj.data,
+      resultObj.result,
+      resultObj.jobs,
+    ];
+
+    for (const nested of nestedCandidates) {
+      if (Array.isArray(nested)) {
+        arraysToCheck.push(nested);
+      } else if (nested && typeof nested === 'object') {
+        const nestedObj = nested as Record<string, unknown>;
+        if (Array.isArray(nestedObj.jobs)) {
+          arraysToCheck.push(nestedObj.jobs);
+        }
+      }
+    }
+  }
+
+  for (const maybeJobs of arraysToCheck) {
+    if (!Array.isArray(maybeJobs) || maybeJobs.length === 0) continue;
+
+    const firstJob = maybeJobs[0] as Partial<JobOpportunity> & Record<string, unknown>;
+    const firstJobRecord = firstJob as Record<string, unknown>;
+    const hasValidStructure =
+      typeof firstJob?.title === 'string' &&
+      typeof firstJob?.company === 'string' &&
+      (typeof firstJob?.application_url === 'string' ||
+        typeof firstJobRecord['apply_url'] === 'string' ||
+        typeof firstJob?.url === 'string');
+
+    if (hasValidStructure) {
+      return maybeJobs as JobOpportunity[];
+    }
+  }
+
+  return null;
 }
 
 
@@ -61,8 +98,10 @@ export function ActivityCard({ activity }: { activity: Activity }) {
   }
   
   // Special handling for job results: render as job cards
-  if (isJobResult(activity)) {
-    const jobs = activity.result as JobOpportunity[];
+  const jobResults = extractJobResults(activity);
+
+  if (jobResults) {
+    const jobs = jobResults;
     return (
       <div className="space-y-2">
         <div className="text-sm font-medium text-[var(--fg)]/80 mb-2">
@@ -84,17 +123,25 @@ export function ActivityCard({ activity }: { activity: Activity }) {
   // For thinking/status types, use even more minimal styling (no icon, smaller font)
   const isSubtle = activity.type === 'thinking' || activity.type === 'status';
   
+  // Determine if this activity is in progress
+  const hasCompletionState =
+    Boolean(activity.completedAt) || typeof activity.success === 'boolean';
+  const isInProgress =
+    (activity.type === 'tool_start' || activity.type === 'tool_executing') && !hasCompletionState;
+  const isThinking = activity.type === 'tool_start' && !hasCompletionState;
+  const isExecuting = activity.type === 'tool_executing' && !hasCompletionState;
+  
   return (
     <div 
-      className="my-1 py-0.5 animate-fadeIn w-full group"
+      className={`my-1 py-0.5 animate-fadeIn w-full group ${isInProgress ? 'animate-cardShimmer' : ''}`}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
       {/* Single line: icon + text + timestamp */}
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center gap-2 ${isInProgress ? 'border-l-2 border-blue-400/60 pl-2 animate-breathe' : ''}`}>
         {/* Icon - use emoji from config, hidden for subtle types */}
         {!isSubtle && (
-          <div className="flex-shrink-0 text-sm">
+          <div className={`flex-shrink-0 text-sm ${isThinking ? 'animate-iconPulse' : isExecuting ? 'animate-iconGlow' : ''}`}>
             {config.icon}
           </div>
         )}
