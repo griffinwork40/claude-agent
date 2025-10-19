@@ -25,6 +25,7 @@ export function ChatPane({
   activities: externalActivities,
   onSend,
   onActivity,
+  onSessionResolved,
   isMobile = false,
 }: ChatPaneProps) {
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(agent?.id ?? null);
@@ -202,6 +203,18 @@ export function ChatPane({
   const handleSendPrompt = (prompt: string) => {
     handleSend(prompt);
   };
+
+  useEffect(() => {
+    if (!agent?.id || !chatStream.sessionId) {
+      return;
+    }
+
+    if (chatStream.sessionId === agent.id) {
+      return;
+    }
+
+    onSessionResolved?.(agent.id, chatStream.sessionId);
+  }, [agent?.id, chatStream.sessionId, onSessionResolved]);
 
   return (
     <section className={`flex flex-col h-full overflow-hidden ${!isMobile ? 'border-l' : ''} border-[var(--border)] bg-[var(--bg)]`}>

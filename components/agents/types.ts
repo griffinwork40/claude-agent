@@ -114,6 +114,7 @@ export interface ChatPaneProps {
   activities: Activity[];
   onSend: (content: string, agentId: string, message: Message) => void;
   onActivity?: (activity: Activity) => void;
+  onSessionResolved?: (temporaryId: string, sessionId: string) => void | Promise<void>;
   isMobile?: boolean;
 }
 

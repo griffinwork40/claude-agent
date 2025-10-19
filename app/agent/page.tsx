@@ -203,9 +203,22 @@ export default function AgentPage() {
   useEffect(() => {
     const handleReloadMessages = async () => {
       console.log('Reload messages event received');
+
+      if (!selectedAgentId) {
+        console.log('No agent selected, skipping reload');
+        window.dispatchEvent(new CustomEvent('messages-reloaded'));
+        return;
+      }
+
+      if (selectedAgentId.startsWith('agent-')) {
+        console.log('Selected agent has temporary ID, deferring reload until session ID is resolved');
+        window.dispatchEvent(new CustomEvent('messages-reloaded'));
+        return;
+      }
+
       try {
         // Load messages for the currently selected agent
-        const loadedMessages = await loadMessagesFromAPI(selectedAgentId || undefined);
+        const loadedMessages = await loadMessagesFromAPI(selectedAgentId);
         console.log(`Reloaded ${loadedMessages.length} messages from database for agent ${selectedAgentId}`);
         setMessages(loadedMessages);
 
@@ -331,6 +344,70 @@ export default function AgentPage() {
       })
     );
   }
+
+  const handleSessionResolved = useCallback((temporaryId: string, sessionId: string) => {
+    console.log('Resolving temporary session ID', { temporaryId, sessionId });
+
+    setAgents((prevAgents) => {
+      const temporaryIndex = prevAgents.findIndex(agent => agent.id === temporaryId);
+      if (temporaryIndex === -1) {
+        return prevAgents;
+      }
+
+      const duplicateIndex = prevAgents.findIndex(agent => agent.id === sessionId);
+
+      const updatedAgents = prevAgents.map((agent, index) =>
+        index === temporaryIndex ? { ...agent, id: sessionId } : agent
+      );
+
+      if (duplicateIndex !== -1 && duplicateIndex !== temporaryIndex) {
+        return updatedAgents.filter((_, index) => index !== duplicateIndex);
+      }
+
+      return updatedAgents;
+    });
+
+    setMessages((prevMessages) =>
+      prevMessages.map(message =>
+        message.agentId === temporaryId ? { ...message, agentId: sessionId } : message
+      )
+    );
+
+    setActivitiesByAgent(prev => {
+      const activities = prev[temporaryId];
+      if (!activities) {
+        return prev;
+      }
+
+      const { [temporaryId]: _removed, ...rest } = prev;
+      return {
+        ...rest,
+        [sessionId]: activities,
+      };
+    });
+
+    setSelectedAgentId((prevSelected) =>
+      prevSelected === temporaryId ? sessionId : prevSelected
+    );
+
+    const params = new URLSearchParams(Array.from(search.entries()));
+    if (selectedAgentId === temporaryId) {
+      params.set('agentId', sessionId);
+      router.replace(`?${params.toString()}`);
+    }
+
+    (async () => {
+      try {
+        const updatedMessages = await loadMessagesFromAPI(sessionId);
+        console.log(`Loaded ${updatedMessages.length} messages after resolving session ${sessionId}`);
+        setMessages(updatedMessages);
+      } catch (error) {
+        console.error('Error loading messages after resolving session:', error);
+      } finally {
+        window.dispatchEvent(new CustomEvent('messages-reloaded'));
+      }
+    })();
+  }, [router, search, selectedAgentId]);
 
   function handleCloseBottomSheet() {
     setIsBottomSheetOpen(false);
@@ -492,6 +569,7 @@ export default function AgentPage() {
                 activities={selectedAgentActivities}
                 onSend={handleAddMessage}
                 onActivity={handleActivity}
+                onSessionResolved={handleSessionResolved}
                 isMobile
               />
             )}
@@ -573,6 +651,7 @@ export default function AgentPage() {
                 activities={selectedAgentActivities}
                 onSend={handleAddMessage}
                 onActivity={handleActivity}
+                onSessionResolved={handleSessionResolved}
               />
             )}
           </div>
@@ -621,6 +700,7 @@ export default function AgentPage() {
             activities={selectedAgentActivities}
             onSend={handleAddMessage}
             onActivity={handleActivity}
+            onSessionResolved={handleSessionResolved}
           />
         </ResizablePane>
       </div>
