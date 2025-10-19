@@ -27,8 +27,8 @@ export default function GmailIntegrationCard({
   connectUrl,
   disconnectUrl,
   onNavigateToConnect,
-  onDisconnected
-  error,
+  onDisconnected,
+  error: propError,
 }: GmailIntegrationCardProps) {
   const router = useRouter();
   const [connected, setConnected] = useState(isConnected);
@@ -59,13 +59,6 @@ export default function GmailIntegrationCard({
       window.location.href = destination;
     });
     navigate(connectUrl);
-  };
-
-  const handleDisconnect = () => {
-    setError(null);
-    setSuccessMessage(null);
-    setActionError(null);
-    window.location.href = connectUrl;
   };
 
   const handleDisconnect = () => {
@@ -104,9 +97,9 @@ export default function GmailIntegrationCard({
         </span>
       </div>
 
-      {(actionError ?? error) && (
+      {(actionError ?? propError) && (
         <p className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-          {actionError ?? error}
+          {actionError ?? propError}
         </p>
       )}
 
