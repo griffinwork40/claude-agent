@@ -27,7 +27,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
   useEffect(() => {
     const supabase = getBrowserSupabase();
-    
+
     // Get initial session if not provided
     if (!initialSession) {
       const getInitialSession = async () => {
@@ -52,6 +52,24 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         console.log('Auth state changed:', event, session?.user?.email);
         setSession(session);
         setLoading(false);
+
+        if (
+          event === 'SIGNED_IN' ||
+          event === 'SIGNED_OUT' ||
+          event === 'TOKEN_REFRESHED' ||
+          event === 'USER_UPDATED'
+        ) {
+          try {
+            await fetch('/auth/callback', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ event, session }),
+            });
+          } catch (error) {
+            console.error('Failed to sync auth session with server:', error);
+          }
+        }
       }
     );
 
