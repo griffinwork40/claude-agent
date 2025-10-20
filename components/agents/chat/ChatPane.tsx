@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * File: components/agents/chat/ChatPane.tsx
  * Purpose: Main orchestrator component for chat functionality

@@ -36,6 +36,10 @@ export function useVoiceRecording(): VoiceRecordingReturn {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const transcriptionPromiseRef = useRef<{
+    promise: Promise<string | null>;
+    resolve: (value: string | null) => void;
+  } | null>(null);
 
   // Check for audio capture support on mount
   useEffect(() => {
@@ -137,6 +141,16 @@ export function useVoiceRecording(): VoiceRecordingReturn {
       recordedChunksRef.current = [];
 
       const recorder = new MediaRecorder(stream);
+
+      let resolveTranscription: (value: string | null) => void = () => {};
+      const transcriptionPromise = new Promise<string | null>((resolve) => {
+        resolveTranscription = resolve;
+      });
+      transcriptionPromiseRef.current = {
+        promise: transcriptionPromise,
+        resolve: resolveTranscription,
+      };
+
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           recordedChunksRef.current.push(event.data);
@@ -144,17 +158,26 @@ export function useVoiceRecording(): VoiceRecordingReturn {
       };
 
       recorder.onstop = async () => {
-        stopStream();
-        setIsRecording(false);
-        const chunks = recordedChunksRef.current;
-        recordedChunksRef.current = [];
+        try {
+          stopStream();
+          setIsRecording(false);
+          const chunks = recordedChunksRef.current;
+          recordedChunksRef.current = [];
 
-        if (chunks.length === 0) {
-          return null;
+          if (chunks.length === 0) {
+            transcriptionPromiseRef.current?.resolve(null);
+            return;
+          }
+
+          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+          const transcription = await handleTranscription(blob);
+          transcriptionPromiseRef.current?.resolve(transcription);
+        } catch (error) {
+          console.error('Failed to finalize recording', error);
+          transcriptionPromiseRef.current?.resolve(null);
+        } finally {
+          transcriptionPromiseRef.current = null;
         }
-
-        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-        return await handleTranscription(blob);
       };
 
       mediaRecorderRef.current = recorder;
@@ -166,6 +189,10 @@ export function useVoiceRecording(): VoiceRecordingReturn {
       setRecordingError('Microphone permission denied or unavailable.');
       stopStream();
       mediaRecorderRef.current = null;
+      if (transcriptionPromiseRef.current) {
+        transcriptionPromiseRef.current.resolve(null);
+        transcriptionPromiseRef.current = null;
+      }
       return null;
     }
   }, [handleTranscription, isAudioCaptureSupported, isTranscribing, stopStream]);
@@ -187,7 +214,8 @@ export function useVoiceRecording(): VoiceRecordingReturn {
     }
 
     stopRecording();
-    return null;
+    const transcriptionPromise = transcriptionPromiseRef.current?.promise;
+    return transcriptionPromise ? await transcriptionPromise : null;
   }, [startRecording, stopRecording, isRecording, isTranscribing]);
 
   // Computed values for UI
