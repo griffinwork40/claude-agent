@@ -68,7 +68,11 @@ export default function GmailIntegrationCard({
       </div>
 
       {(actionError ?? error) && (
-        <p className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+         <p
+          role="alert"
+          aria-live="assertive"
+          className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600"
+         >
           {actionError ?? error}
         </p>
       )}

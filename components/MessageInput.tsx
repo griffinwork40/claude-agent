@@ -32,6 +32,7 @@ export const MessageInput = ({ onSendMessage, disabled }: MessageInputProps) => 
         className="flex-1 border-0 focus:ring-0 resize-none max-h-32"
         rows={1}
         disabled={disabled}
+        aria-label="Message"
       />
       <button
         onClick={handleSubmit}

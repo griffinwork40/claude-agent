@@ -13,11 +13,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const isFullWidth = pathname?.startsWith('/agent');
   
   if (isFullWidth) {
-    return <main>{children}</main>;
+    return <main id="main">{children}</main>;
   }
-  
+
   return (
-    <main className="max-w-6xl mx-auto px-4 py-6">
+    <main id="main" className="max-w-6xl mx-auto px-4 py-6">
       {children}
     </main>
   );
