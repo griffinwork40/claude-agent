@@ -10,7 +10,16 @@ export interface JobOpportunity {
   salary?: string;
   url?: string;
   application_url: string;
-  source: 'linkedin' | 'indeed' | 'glassdoor' | 'angellist' | 'company' | 'google' | 'manual' | 'remotive';
+  source:
+    | 'linkedin'
+    | 'indeed'
+    | 'glassdoor'
+    | 'angellist'
+    | 'company'
+    | 'google'
+    | 'manual'
+    | 'remotive'
+    | 'greenhouse';
   skills: string[];
   experience_level: string;
   job_type: string;
@@ -22,6 +31,8 @@ export interface JobOpportunity {
   error?: string;
   fallback_url?: string;
   raw_data?: Record<string, unknown>;
+  greenhouse_job_id?: string;
+  greenhouse_board_token?: string;
   created_at: string;
 }
 

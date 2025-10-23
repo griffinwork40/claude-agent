@@ -1,42 +1,22 @@
-// lib/claude-agent.ts
+/**
+ * Claude agent orchestration entry point.
+ *
+ * Provides helpers for initializing the Anthropic client, managing chat sessions,
+ * and exposing streaming as well as legacy non-streaming agent executions.
+ */
 import Anthropic from '@anthropic-ai/sdk';
-import type { MessageParam, TextBlockParam, ToolUseBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { browserTools } from './browser-tools';
-import { getOrCreateUserProfile } from './user-profile';
-import { ToolUse, ToolResult, BrowserToolResult, JobOpportunity } from '@/types';
-import { getUserContextForPrompt } from './user-data-compiler';
+import type { JobOpportunity } from '@/types';
 
 // Import modular components
 import { gmailToolDefinitions } from './claude/gmail-tools';
 import { handleClaudeStream } from './claude/stream-handler';
-import { executeTools } from './claude/tool-executor';
-import { buildJobSummaryFromResults } from './claude/utils';
 
 // Debug: Log SDK import
 console.log('Anthropic SDK imported successfully');
 console.log('Anthropic class:', Anthropic);
-
-// Helper to get Supabase admin client
-let supabaseAdmin: SupabaseClient | null = null;
-
-function getSupabaseAdmin(): SupabaseClient {
-  if (supabaseAdmin) {
-    return supabaseAdmin;
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase environment variables are not set');
-  }
-
-  supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-  return supabaseAdmin;
-}
 
 // Initialize the Anthropic client
 let anthropic: Anthropic | null = null;
@@ -45,6 +25,12 @@ let agentInstructions: string | null = null;
 
 const agentTools = [...browserTools, ...gmailToolDefinitions];
 
+/**
+ * Initialize the Anthropic client and load agent instructions.
+ *
+ * @returns A promise resolving to the Anthropic client instance and agent instructions.
+ * @throws If required configuration or API keys are missing.
+ */
 export async function initializeAgent(): Promise<{ client: Anthropic; instructions: string }> {
   if (anthropic && agentInstructions) {
     console.log('Using cached Anthropic client and instructions');
@@ -103,16 +89,37 @@ interface AgentSession {
 // Session management for agent conversations
 const agentSessions = new Map<string, AgentSession>();
 
+/**
+ * Create a new agent session for a user.
+ *
+ * @param userId - Identifier for the user starting a session.
+ * @returns A promise resolving to the generated session identifier.
+ */
 export async function createAgentSession(userId: string): Promise<string> {
   const sessionId = `session_${Date.now()}_${userId}`;
   agentSessions.set(sessionId, { userId, messages: [] });
   return sessionId;
 }
 
+/**
+ * Retrieve an existing agent session by identifier.
+ *
+ * @param sessionId - Identifier of the session to fetch.
+ * @returns A promise resolving to the stored agent session or undefined if not found.
+ */
 export async function getAgentSession(sessionId: string) {
   return agentSessions.get(sessionId);
 }
 
+/**
+ * Execute the Claude agent with streaming support for tool use.
+ *
+ * @param userMessage - The latest user message to add to the conversation.
+ * @param userId - Identifier for the requesting user.
+ * @param sessionId - Optional existing session identifier to continue.
+ * @param agentId - Optional agent identifier for analytics.
+ * @returns A promise resolving to the session identifier and a readable stream of model output.
+ */
 export async function runClaudeAgentStream(
   userMessage: string, 
   userId: string, 
@@ -161,9 +168,6 @@ export async function runClaudeAgentStream(
 
     console.log('Starting Claude streaming with tools...');
     
-    // Get Supabase admin client for saving message chunks
-    const supabase = getSupabaseAdmin();
-    
     // Create a readable stream from the Anthropic streaming API
     const stream = new ReadableStream({
       async start(controller) {
@@ -199,9 +203,14 @@ export async function runClaudeAgentStream(
   }
 }
 
-
 // Legacy function for backward compatibility (non-streaming)
-export async function runClaudeAgent(userMessage: string) {
+/**
+ * Execute the Claude agent without streaming for backward compatibility.
+ *
+ * @param userMessage - The user message to process.
+ * @returns A promise resolving to the generated response content and optional job opportunity summary.
+ */
+export async function runClaudeAgent(userMessage: string): Promise<{ content: string; jobOpportunity: JobOpportunity | null }> {
   try {
     const { client, instructions } = await initializeAgent();
     

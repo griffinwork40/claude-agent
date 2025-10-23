@@ -37,6 +37,9 @@ Environment
 - Optional branding/site
   - NEXT_PUBLIC_SITE_NAME (default: Enlist)
   - NEXT_PUBLIC_SITE_URL (default: http://localhost:3000)
+- Optional Greenhouse integration
+  - GREENHOUSE_API_KEY: Greenhouse API key for submitting applications (optional, only needed for applications)
+  - GREENHOUSE_DEFAULT_BOARDS: Comma-separated list of company board tokens (optional, uses curated list if not set)
 - Test runner loads .env.local if present (see vitest.setup.ts)
 
 Fast endpoints and smoke checks
@@ -84,16 +87,26 @@ Architecture overview
 
 - Job search (API-based)
   - lib/browser-tools.ts
-    - Provides BrowserJobService with API-based job search (SerpAPI + Remotive)
+    - Provides BrowserJobService with API-based job search (SerpAPI + Remotive + Greenhouse)
     - searchJobsIndeed/searchJobsGoogle use SerpAPI (Google Jobs) with Remotive fallback
     - searchJobsLinkedIn returns manual search links (no API available)
+    - searchJobsGreenhouse uses Greenhouse API across multiple company boards
     - Tool schemas exported as browserTools for Claude tool-calling
     - Requires SERPAPI_API_KEY environment variable for optimal results
+  - lib/greenhouse-client.ts
+    - GreenhouseClient for searching jobs across company boards
+    - Supports job search, job details, and application submission
+    - Uses curated list of company board tokens (airbnb, stripe, shopify, etc.)
+    - API-first approach with browser automation fallback for applications
+  - lib/greenhouse-boards.ts
+    - Registry of popular company board tokens
+    - Helper functions for board token discovery and validation
 
 - Browser automation (Playwright) - for applications only
   - lib/browser-tools.ts
     - Provides browser automation tools for company website applications
     - findCompanyCareersPage, extractCompanyApplicationUrl, getJobDetails, applyToJob
+    - applyToGreenhouseJob: API-first with browser automation fallback
     - Maintains LinkedIn session state under ./linkedin-sessions/{userId}-linkedin.json
     - Important: Browser automation is now only used for applying to jobs, not searching
 
@@ -110,6 +123,8 @@ Important notes for WARP
 - SSE event protocol is JSON lines with "data: {type, ...}"; ChatPane.tsx handles parsing and assembling full assistant output
 - Claude instructions are read from ./.claude/agents/job-assistant-agent.md at runtime; keep changes there if you need to alter system behavior
 - Playwright jobs may need manual LinkedIn login on first run to create a session file; after that the session is reused
+- Greenhouse integration: No authentication required for job search, GREENHOUSE_API_KEY only needed for submitting applications
+- Greenhouse board tokens are company names in lowercase (e.g., 'airbnb', 'stripe', 'shopify') as used in their Greenhouse URLs
 
 Suggested improvements to existing WARP.md
 - Replace the current WARP.md (which mirrors CLAUDE.md) with this file to:
