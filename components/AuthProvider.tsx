@@ -50,25 +50,42 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
+        setLoading(true);
         setSession(session);
-        setLoading(false);
 
-        if (
+        const requiresServerSync =
           event === 'SIGNED_IN' ||
           event === 'SIGNED_OUT' ||
           event === 'TOKEN_REFRESHED' ||
-          event === 'USER_UPDATED'
-        ) {
-          try {
-            await fetch('/auth/callback', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'same-origin',
-              body: JSON.stringify({ event, session }),
-            });
-          } catch (error) {
-            console.error('Failed to sync auth session with server:', error);
+          event === 'USER_UPDATED';
+
+        if (!requiresServerSync) {
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const response = await fetch('/auth/callback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ event, session }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Auth callback failed with status ${response.status}`);
           }
+
+          if (session) {
+            const {
+              data: { session: refreshedSession },
+            } = await supabase.auth.getSession();
+            setSession(refreshedSession ?? null);
+          }
+        } catch (error) {
+          console.error('Failed to sync auth session with server:', error);
+        } finally {
+          setLoading(false);
         }
       }
     );
