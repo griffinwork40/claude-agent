@@ -99,8 +99,10 @@ export default function GmailIntegrationCard({
 
       {(actionError ?? propError) && (
         role="alert"
+        <p
           aria-live="assertive"
           className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600"
+        >
           {actionError ?? propError}
         </p>
       )}
