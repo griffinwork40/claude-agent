@@ -1,6 +1,7 @@
 // app/layout.tsx
 import './globals.css';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Inter } from 'next/font/google';
 import { getSiteName, getSiteUrl } from '@/lib/site';
 import LayoutWrapper from '@/components/LayoutWrapper';
@@ -57,9 +58,18 @@ export default async function RootLayout({
     <html lang="en">
       <body className={`${inter.className} min-h-screen bg-[var(--bg)] text-[var(--fg)]`}>
         <AuthProvider initialSession={session}>
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:rounded focus:bg-[var(--card)] focus:text-[var(--fg)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--accent)]"
+          >
+            Skip to main content
+          </a>
           <header className="sticky top-0 z-40 bg-[var(--card)] border-b border-[var(--border)] h-16">
             <div className="max-w-6xl mx-auto px-4 h-full flex items-center justify-between">
-              <Link href="/" className="text-heading font-semibold text-[var(--fg)]">Enlist</Link>
+              <Link href="/" className="flex items-center gap-2 text-heading font-semibold text-[var(--fg)]">
+                <Image src="/logo.svg" alt="Enlist" width={32} height={32} className="h-8 w-8" />
+                <span>Enlist</span>
+              </Link>
               <HeaderNavigation isAuthenticated={Boolean(session)} />
             </div>
           </header>

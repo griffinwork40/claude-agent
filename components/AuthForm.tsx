@@ -4,6 +4,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import type { Session } from '@supabase/supabase-js';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -70,6 +71,23 @@ export default function AuthForm({ mode }: AuthFormProps) {
     },
   ];
 
+  async function syncSessionWithServer(event: 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED' | 'USER_UPDATED', session: Session | null) {
+    try {
+      const response = await fetch('/auth/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ event, session }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Auth callback failed with status ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Failed to sync auth session before redirect:', error);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -101,11 +119,17 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
         if (error) throw error;
+        if (data.session) {
+          await syncSessionWithServer('SIGNED_IN', data.session);
+        }
       } else {
-        const { error } = await supabase.auth.signUp({ email: normalizedEmail, password });
+        const { data, error } = await supabase.auth.signUp({ email: normalizedEmail, password });
         if (error) throw error;
+        if (data.session) {
+          await syncSessionWithServer('SIGNED_IN', data.session);
+        }
       }
       // Refresh the router to update auth state
       router.refresh();
@@ -167,6 +191,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
             aria-invalid={Boolean(fieldErrors.email)}
             aria-describedby="email-helper"
@@ -191,6 +216,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             required
             aria-invalid={Boolean(fieldErrors.password)}
             aria-describedby="password-helper"

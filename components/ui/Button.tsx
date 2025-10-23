@@ -24,8 +24,39 @@ export function Button({ variant = 'primary', className = '', asChild = false, c
 
   if (asChild && isValidElement(children)) {
     const child = children as ReactElement;
-    const childClassName = (child.props?.className ?? '') as string;
+    const childProps = child.props ?? {};
+    const childClassName = (childProps?.className ?? '') as string;
+
+    const composedProps: Record<string, unknown> = {};
+
+    Object.entries(props).forEach(([key, value]) => {
+      if (key.startsWith('on') && typeof value === 'function') {
+        const existingHandler = childProps[key];
+        if (typeof existingHandler === 'function') {
+          composedProps[key] = (...args: unknown[]) => {
+            (existingHandler as (...args: unknown[]) => void)(...args);
+
+            const [event] = args;
+            const maybeEvent = event as {
+              defaultPrevented?: boolean;
+              isPropagationStopped?: () => boolean;
+            } | undefined;
+
+            if (maybeEvent?.defaultPrevented || maybeEvent?.isPropagationStopped?.()) {
+              return;
+            }
+
+            (value as (...args: unknown[]) => void)(...args);
+          };
+          return;
+        }
+      }
+      composedProps[key] = value;
+    });
+
     return cloneElement(child, {
+      ...childProps,
+      ...composedProps,
       className: `${mergedClassName} ${childClassName}`.trim(),
     });
   }

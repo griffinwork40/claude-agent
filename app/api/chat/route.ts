@@ -30,30 +30,80 @@ export async function POST(request: NextRequest) {
     }
     console.log('✓ User authenticated:', session.user.id);
     
-    const { message, sessionId, agentId } = await request.json();
-    console.log('Request data:', { 
-      messageLength: message?.length, 
-      sessionId,
+    const { message, sessionId: requestSessionId, agentId } = await request.json();
+    console.log('Request data:', {
+      messageLength: message?.length,
+      sessionId: requestSessionId,
       agentId,
       hasMessage: !!message,
       requestHeaders: Object.fromEntries(request.headers.entries())
     });
-    
+
     if (!message) {
       console.error('❌ No message provided');
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Store user message in database
-    console.log('Saving user message to database...');
+    // Run Claude Agent with streaming
+    console.log('Starting Claude agent stream...');
+    let agentSessionId: string;
+    let stream: ReadableStream;
+
+    const normalizedSessionId = typeof requestSessionId === 'string' && requestSessionId.trim().length > 0
+      ? requestSessionId.trim()
+      : undefined;
+
+    try {
+      const result = await runClaudeAgentStream(
+        message,
+        session.user.id,
+        normalizedSessionId,
+        agentId  // Pass agentId for proper message association
+      );
+      agentSessionId = result.sessionId;
+      stream = result.stream;
+      console.log('✓ Agent stream started, sessionId:', agentSessionId);
+    } catch (error: unknown) {
+      console.error('❌ Failed to start agent stream:', error);
+      const errMessage = error instanceof Error ? error.message : String(error);
+      return NextResponse.json({
+        error: 'Failed to start agent stream',
+        details: process.env.NODE_ENV === 'development' ? errMessage : undefined
+      }, { status: 500 });
+    }
+
     const supabase = getSupabaseAdmin();
+
+    // Create or update conversation using the agent session id
+    console.log('Creating/updating conversation...');
+    const { error: conversationError } = await supabase
+      .from('conversations')
+      .upsert({
+        user_id: session.user.id,
+        session_id: agentSessionId,
+        agent_id: agentId ?? agentSessionId,
+        name: message.length > 60 ? `${message.slice(0, 60)}...` : message,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,session_id'
+      });
+
+    if (conversationError) {
+      console.error('❌ Error creating/updating conversation:', conversationError);
+      // Continue anyway - this is not critical
+    } else {
+      console.log('✓ Conversation created/updated');
+    }
+
+    // Store user message in database scoped to the agent session id
+    console.log('Saving user message to database...');
     const { data: userMessage, error: userMessageError } = await supabase
       .from('messages')
-      .insert([{ 
-        content: message, 
+      .insert([{
+        content: message,
         sender: 'user',
         user_id: session.user.id,
-        session_id: agentId || 'default-agent',
+        session_id: agentSessionId,
         created_at: new Date().toISOString()
       }])
       .select()
@@ -65,30 +115,6 @@ export async function POST(request: NextRequest) {
     }
     console.log('✓ User message saved:', userMessage.id);
 
-    // Run Claude Agent with streaming
-    console.log('Starting Claude agent stream...');
-    let agentSessionId: string;
-    let stream: ReadableStream;
-    
-    try {
-      const result = await runClaudeAgentStream(
-        message, 
-        session.user.id, 
-        sessionId,
-        agentId  // Pass agentId for proper message association
-      );
-      agentSessionId = result.sessionId;
-      stream = result.stream;
-      console.log('✓ Agent stream started, sessionId:', agentSessionId);
-    } catch (error: unknown) {
-      console.error('❌ Failed to start agent stream:', error);
-      const errMessage = error instanceof Error ? error.message : String(error);
-      return NextResponse.json({ 
-        error: 'Failed to start agent stream',
-        details: process.env.NODE_ENV === 'development' ? errMessage : undefined
-      }, { status: 500 });
-    }
-
     // Create a readable stream for Server-Sent Events
     const encoder = new TextEncoder();
     let fullResponse = '';
@@ -98,63 +124,12 @@ export async function POST(request: NextRequest) {
         console.log('Starting stream processing...');
         // Ensure counters/state visible to catch scope
         let chunkCount = 0;
-        const pendingActivities: Array<Promise<void>> = [];
-
-        // Helper function to persist activities asynchronously
-        const persistActivity = async (activityData: any) => {
-          try {
-            // Add required fields for persistence
-            const activity = {
-              ...activityData,
-              agentId: agentId || 'default-agent',
-            };
-
-            // Add timing for executable activities while ensuring valid_timing constraint
-            // The constraint requires: (started_at IS NULL) = (completed_at IS NULL)
-            const executableTypes = ['tool_start', 'tool_executing', 'tool_result', 'batch_start', 'batch_progress', 'batch_complete'];
-            if (executableTypes.includes(activityData.type)) {
-              // For start and executing activities, set both timestamps initially
-              // They will be updated when the activity completes
-              if (activityData.type === 'tool_start' || activityData.type === 'tool_executing' ||
-                  activityData.type === 'batch_start' || activityData.type === 'batch_progress') {
-                const now = new Date().toISOString();
-                activity.startedAt = now;
-                activity.completedAt = now; // Same timestamp initially, will be updated on completion
-              }
-
-              // For completed activities, set both timestamps
-              if (activityData.type === 'tool_result' || activityData.type === 'batch_complete') {
-                const now = new Date().toISOString();
-                activity.startedAt = now;
-                activity.completedAt = now;
-              }
-            }
-
-            const activityUrl = new URL('/api/activities', request.nextUrl.origin);
-            const response = await fetch(activityUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Cookie': request.headers.get('cookie') || '',
-              },
-              body: JSON.stringify({ activity }),
-            });
-
-            if (!response.ok) {
-              console.error('Failed to persist activity:', response.status);
-            } else {
-              console.log('✓ Activity persisted:', activity.type, activity.tool || '');
-            }
-          } catch (error) {
-            console.error('Error persisting activity:', error);
-          }
-        };
+        
+        // REMOVED: Activity persistence - activities are now ephemeral SSE events only
+        // They provide real-time progress feedback but are not stored in database
 
         try {
-          // Immediately send a preamble SSE event so the client receives bytes even if downstream fails
-          const preamble = `data: ${JSON.stringify({ type: 'status', content: 'starting' })}\n\n`;
-          controller.enqueue(encoder.encode(preamble));
-          console.log('✓ SSE preamble event sent');
+          // SSE stream processing starts - no preamble needed
 
           const reader = stream.getReader();
           // chunkCount declared above
@@ -166,14 +141,8 @@ export async function POST(request: NextRequest) {
             if (done) {
               console.log('✓ Stream completed, total chunks:', chunkCount);
               
-              // Note: Message chunks are now saved incrementally in claude-agent.ts
-              // No need to save fullResponse here as it would create duplicates
-
-              // Persist any remaining pending activities
-              if (pendingActivities.length > 0) {
-                console.log(`Waiting for ${pendingActivities.length} pending activity writes...`);
-                await Promise.allSettled(pendingActivities);
-              }
+              // Note: Complete assistant message is now saved in claude-agent.ts at stream end
+              // No need to save here - avoids duplicates
 
               // Send final event with session ID
               const finalEvent = `data: ${JSON.stringify({
@@ -228,15 +197,9 @@ export async function POST(request: NextRequest) {
                     activityData.startedAt = new Date().toISOString();
                   }
 
-                  // Forward activity event as SSE
+                  // Forward activity event as SSE (ephemeral - not persisted)
                   const activityEvent = `data: ${JSON.stringify(activityData)}\n\n`;
                   controller.enqueue(encoder.encode(activityEvent));
-
-                  // Persist activity asynchronously (non-blocking)
-                  if (activityData.type !== 'thinking_preview') {
-                    // Don't persist thinking_preview events (too ephemeral)
-                    pendingActivities.push(persistActivity(activityData));
-                  }
                 } catch (parseError) {
                   console.error('Failed to parse activity JSON:', activityJson, parseError);
                 }
@@ -278,12 +241,6 @@ export async function POST(request: NextRequest) {
             fullResponseLength: fullResponse.length,
             chunkCount
           });
-
-          // Persist any pending activities even on error
-          if (pendingActivities.length > 0) {
-            console.log(`Waiting for ${pendingActivities.length} pending activity writes due to error...`);
-            await Promise.allSettled(pendingActivities);
-          }
 
           // Ensure client receives an error SSE event before closing
           try {

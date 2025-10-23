@@ -1,6 +1,7 @@
 // app/page.tsx
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { getSiteName } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,7 +13,10 @@ export default function EnlistLanding() {
     <div className="space-y-8">
       {/* Hero matching light theme */}
       <Card className="p-8">
-        <p className="uppercase tracking-wide text-sm text-[var(--fg)]/70">{siteName} — Job Search Agent</p>
+        <div className="flex items-center gap-3 mb-4">
+          <Image src="/logo.svg" alt="Enlist" width={64} height={64} className="h-16 w-16" />
+          <p className="uppercase tracking-wide text-sm text-[var(--fg)]/70">{siteName} — Job Search Agent</p>
+        </div>
         <h1 className="mt-2 text-display md:text-5xl text-[var(--fg)]">
           <span className="block">The new way to</span>
           <span className="block text-[var(--accent)]">search for jobs.</span>
@@ -23,10 +27,10 @@ export default function EnlistLanding() {
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>
-            <a href="/agent">Open agents</a>
+            <Link href="/agent">Open agents</Link>
           </Button>
           <Button variant="outline" asChild>
-            <a href="#how-it-works">See how it works</a>
+            <Link href="#how-it-works">See how it works</Link>
           </Button>
         </div>
       </Card>

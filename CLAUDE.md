@@ -33,6 +33,7 @@ Environment
   - NEXT_PUBLIC_SUPABASE_URL: Supabase project URL
   - NEXT_PUBLIC_SUPABASE_ANON_KEY: Supabase anon key for browser/server helpers
   - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key (server-side admin ops in API routes)
+  - SERPAPI_API_KEY: SerpAPI key for job search (get from serpapi.com)
 - Optional branding/site
   - NEXT_PUBLIC_SITE_NAME (default: Enlist)
   - NEXT_PUBLIC_SITE_URL (default: http://localhost:3000)
@@ -81,12 +82,20 @@ Architecture overview
   - .claude/agents/*.md: role instructions for subagents (Job Search, Curation, Application, User Interaction)
   - Architecture decision: Uses @anthropic-ai/sdk directly (not Claude Agent SDK) for better control over browser automation and streaming
 
-- Browser automation (Playwright)
+- Job search (API-based)
   - lib/browser-tools.ts
-    - Provides BrowserJobService with searchJobsIndeed, searchJobsLinkedIn, getJobDetails, applyToJob
-    - Maintains LinkedIn session state under ./linkedin-sessions/{userId}-linkedin.json
+    - Provides BrowserJobService with API-based job search (SerpAPI + Remotive)
+    - searchJobsIndeed/searchJobsGoogle use SerpAPI (Google Jobs) with Remotive fallback
+    - searchJobsLinkedIn returns manual search links (no API available)
     - Tool schemas exported as browserTools for Claude tool-calling
-    - Important: searchJobsLinkedIn requires a logged-in session; code will pause for manual login on first run and then persist storage state
+    - Requires SERPAPI_API_KEY environment variable for optimal results
+
+- Browser automation (Playwright) - for applications only
+  - lib/browser-tools.ts
+    - Provides browser automation tools for company website applications
+    - findCompanyCareersPage, extractCompanyApplicationUrl, getJobDetails, applyToJob
+    - Maintains LinkedIn session state under ./linkedin-sessions/{userId}-linkedin.json
+    - Important: Browser automation is now only used for applying to jobs, not searching
 
 - Data model touchpoints
   - messages (Supabase): chat transcripts persisted by app/api/chat/route.ts

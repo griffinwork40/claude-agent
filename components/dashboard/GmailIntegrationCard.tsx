@@ -98,11 +98,12 @@ export default function GmailIntegrationCard({
       </div>
 
       {(actionError ?? propError) && (
-        <p className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+        role="alert"
+          aria-live="assertive"
+          className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600"
           {actionError ?? propError}
         </p>
       )}
-
       {successMessage && (
         <p
           data-testid="gmail-success-alert"

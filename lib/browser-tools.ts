@@ -133,6 +133,21 @@ export class BrowserService {
   }): Promise<JobOpportunity[]> {
     return this.request('/api/search-linkedin', params);
   }
+
+  // Find company careers page
+  async findCompanyCareersPage(params: {
+    companyName: string;
+    jobTitle?: string;
+  }): Promise<{ careersUrl: string; companyWebsite: string }> {
+    return this.request('/api/find-careers-page', params);
+  }
+
+  // Extract company application URL from job board listing
+  async extractCompanyApplicationUrl(params: {
+    jobBoardUrl: string;
+  }): Promise<{ companyApplicationUrl: string | null; requiresJobBoard: boolean }> {
+    return this.request('/api/extract-company-url', params);
+  }
 }
 
 // Singleton instance
@@ -333,7 +348,7 @@ export const browserTools = [
   },
   {
     name: 'search_jobs_indeed',
-    description: 'Search Indeed for job listings. Returns real job postings from Indeed.com.',
+    description: 'Search for jobs using SerpAPI (Google Jobs aggregated) with Remotive fallback. Returns real job postings from multiple sources via API.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -360,7 +375,7 @@ export const browserTools = [
   },
   {
     name: 'search_jobs_google',
-    description: 'Search Google Jobs for aggregated job listings from multiple sources (Indeed, LinkedIn, company sites, etc.)',
+    description: 'Search Google Jobs using SerpAPI with Remotive fallback. Returns aggregated job listings from multiple sources via API.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -387,7 +402,7 @@ export const browserTools = [
   },
   {
     name: 'search_jobs_linkedin',
-    description: 'Search LinkedIn for job listings. Requires authenticated LinkedIn session.',
+    description: 'Returns manual LinkedIn search link (no API available). LinkedIn requires manual search due to authentication restrictions.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -414,6 +429,38 @@ export const browserTools = [
         }
       },
       required: ['keywords', 'location', 'userId']
+    }
+  },
+  {
+    name: 'find_company_careers_page',
+    description: 'Find the direct company careers/jobs page URL for a given company. Useful for applying directly on company websites instead of job boards.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        companyName: {
+          type: 'string',
+          description: 'Name of the company (e.g., "Acme Corp", "Google", "Local Restaurant Group")'
+        },
+        jobTitle: {
+          type: 'string',
+          description: 'Optional: Specific job title to help find the right posting on company site'
+        }
+      },
+      required: ['companyName']
+    }
+  },
+  {
+    name: 'extract_company_application_url',
+    description: 'Extract the direct company application URL from a job board listing (Indeed, LinkedIn, etc). Many jobs have an "Apply on company website" button - this tool clicks through to get that URL.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        jobBoardUrl: {
+          type: 'string',
+          description: 'URL of the job listing on Indeed, LinkedIn, or other job board'
+        }
+      },
+      required: ['jobBoardUrl']
     }
   }
 ];

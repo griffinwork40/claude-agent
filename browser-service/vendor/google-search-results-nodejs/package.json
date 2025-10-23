@@ -1,0 +1,7 @@
+{
+  "name": "google-search-results-nodejs",
+  "version": "2.1.0",
+  "description": "Lightweight local implementation of SerpApi GoogleSearch client",
+  "main": "index.js",
+  "types": "index.d.ts"
+}
