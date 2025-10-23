@@ -265,7 +265,7 @@ export class GreenhouseClient {
       return {
         id: `greenhouse-${boardToken}-${job.id}`,
         title: job.title,
-        company: job.departments[0]?.name || 'Unknown',
+        company: this.formatCompanyName(boardToken),
         location: job.location.name,
         description: job.content,
         application_url: `https://boards.greenhouse.io/${boardToken}/jobs/${job.id}`,
@@ -285,6 +285,19 @@ export class GreenhouseClient {
       console.error(`❌ Error transforming job ${job.id}:`, error);
       return null;
     }
+  }
+
+  private formatCompanyName(boardToken: string): string {
+    const normalized = boardToken.replace(/[-_]/g, ' ').trim();
+    if (!normalized) {
+      return boardToken;
+    }
+
+    return normalized
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
   }
 
   /**
