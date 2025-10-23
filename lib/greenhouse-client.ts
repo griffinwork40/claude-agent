@@ -14,6 +14,7 @@ export interface GreenhouseSearchFilters {
 export class GreenhouseClient {
   private apiKey?: string;
   private baseUrl = 'https://boards-api.greenhouse.io/v1';
+  private applicationBaseUrl = 'https://boards.greenhouse.io/v1';
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.GREENHOUSE_API_KEY;
@@ -121,7 +122,7 @@ export class GreenhouseClient {
     }
 
     try {
-      const url = `${this.baseUrl}/boards/${boardToken}/jobs/${jobId}`;
+      const url = `${this.applicationBaseUrl}/boards/${boardToken}/jobs/${jobId}`;
       console.log(`📝 Submitting application to: ${boardToken}/${jobId}`);
       
       // Convert form data to multipart/form-data
