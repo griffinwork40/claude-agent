@@ -4,6 +4,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { getBrowserJobService } from './browser-tools';
 import { getBrowserController } from './browser-controller';
 import { getBrowserSessionManager } from './browser-session';
+import { getSerpClient } from './serp-client';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -244,6 +245,41 @@ app.post('/api/browser/close', authenticate, async (req: Request, res: Response)
 // Legacy Job Scraping Endpoints (deprecated, kept for backwards compatibility)
 // ============================================================================
 
+// SERP API job search endpoint
+app.post('/api/search-serp', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { keywords, location, experience_level, remote } = req.body;
+
+    if (!keywords || !location) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: keywords and location are required',
+        details: { keywords: !!keywords, location: !!location }
+      });
+    }
+
+    console.log('🔍 SERP API search request:', { keywords, location, experience_level, remote });
+
+    const serpClient = getSerpClient();
+    const results = await serpClient.searchJobs({
+      keywords,
+      location,
+      experience_level,
+      remote
+    });
+
+    console.log(`✓ SERP API returned ${results.length} opportunities`);
+    res.json({ success: true, data: results });
+  } catch (error: any) {
+    console.error('❌ Error searching via SERP API:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Search jobs on Indeed
 app.post('/api/search-indeed', authenticate, async (req: Request, res: Response) => {
   try {
@@ -345,6 +381,69 @@ app.post('/api/search-linkedin', authenticate, async (req: Request, res: Respons
     res.json({ success: true, data: results });
   } catch (error: any) {
     console.error('❌ Error searching LinkedIn:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Extract company application URL from job board listing
+app.post('/api/extract-company-url', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { jobBoardUrl } = req.body;
+    
+    if (!jobBoardUrl) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'jobBoardUrl is required' 
+      });
+    }
+    
+    console.log('🔍 Extract company URL request:', { jobBoardUrl });
+    
+    const browserService = getBrowserJobService();
+    const result = await browserService.extractCompanyApplicationUrl(jobBoardUrl);
+    
+    if (result.companyApplicationUrl) {
+      console.log(`✓ Found company application URL: ${result.companyApplicationUrl}`);
+    } else {
+      console.log('ℹ️ Job requires application through job board');
+    }
+    
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('❌ Error extracting company URL:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Find company careers page
+app.post('/api/find-careers-page', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { companyName, jobTitle } = req.body;
+    
+    if (!companyName) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'companyName is required' 
+      });
+    }
+    
+    console.log('🔍 Find careers page request:', { companyName, jobTitle });
+    
+    const browserService = getBrowserJobService();
+    const result = await browserService.findCompanyCareersPage(companyName, jobTitle);
+    
+    console.log(`✓ Found careers page: ${result.careersUrl}`);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('❌ Error finding careers page:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Unknown error occurred',

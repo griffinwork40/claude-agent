@@ -1,0 +1,63 @@
+JOHN DOE
+Software Engineer
+
+Contact Information:
+Email: john.doe@example.com
+Phone: +1-555-123-4567
+Location: San Francisco, CA 94102
+
+PROFESSIONAL SUMMARY
+Senior Software Engineer with 8+ years of experience building scalable web applications. 
+Expertise in full-stack development with React, Node.js, and cloud technologies.
+Proven track record of leading teams and delivering high-quality products.
+
+TECHNICAL SKILLS
+Languages: JavaScript, TypeScript, Python, SQL
+Frontend: React, Next.js, Vue.js, HTML/CSS, Tailwind
+Backend: Node.js, Express, PostgreSQL, MongoDB
+Cloud: AWS, Docker, Kubernetes, CI/CD
+Tools: Git, Jira, Figma, VS Code
+
+WORK EXPERIENCE
+
+Senior Software Engineer | Tech Innovators Inc. | 2020 - Present
+• Lead frontend development for enterprise SaaS platform serving 10K+ users
+• Architected and implemented real-time collaboration features using WebSockets
+• Reduced page load times by 40% through performance optimization
+• Mentored junior developers and conducted code reviews
+• Technologies: React, TypeScript, Node.js, PostgreSQL, AWS
+
+Software Engineer | Digital Solutions LLC | 2017 - 2020
+• Developed full-stack web applications for clients in healthcare and finance
+• Built RESTful APIs and integrated third-party services
+• Implemented automated testing and CI/CD pipelines
+• Collaborated with designers and product managers
+• Technologies: React, Node.js, MongoDB, Express
+
+Junior Developer | StartUp Ventures | 2015 - 2017
+• Contributed to frontend development of mobile-first web applications
+• Fixed bugs and improved UI/UX based on user feedback
+• Participated in agile development process
+• Technologies: JavaScript, HTML/CSS, jQuery, Bootstrap
+
+EDUCATION
+
+Bachelor of Science in Computer Science
+University of California, Berkeley | 2011 - 2015
+GPA: 3.7/4.0
+
+CERTIFICATIONS
+• AWS Certified Solutions Architect - Associate (2022)
+• React Advanced Patterns (2021)
+
+PROJECTS
+• Open Source Contributor to React ecosystem
+• Personal blog with 10K+ monthly visitors
+• Side project: Task management SaaS (Next.js, Supabase)
+
+JOB PREFERENCES
+• Looking for: Senior Engineer, Tech Lead roles
+• Locations: San Francisco, Remote, New York
+• Salary: $140K - $200K
+• Remote work: Yes, preferred
+• Job types: Full-time, Contract

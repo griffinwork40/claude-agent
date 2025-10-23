@@ -1,15 +1,21 @@
-# Claude Jobs Branding
+# Enlist Brand Assets
 
-- `wordmark.svg`: Primary logo wordmark.
-- `monogram.svg`: Compact CJ mark for icons and avatars.
+## Logo Concept
 
-Colors
-- Ink: `#111827`
-- Slate: `#6B7280`
-- Accent: `#7C3AED` (violet)
+Clean **E** with three aligned dots representing multiple specialized agents working in coordination. Simple, balanced, and instantly readable.
 
-Usage
-- Prefer `wordmark.svg` for headers and marketing.
-- Use `monogram.svg` for square contexts (favicons, app icons).
-- Both are pure SVG, editable and scalable.
+The three dots symbolize the agent network (Search, Curate, Apply) while maintaining visual clarity and timeless appeal.
+
+## Color Palette
+
+- **Primary**: `#0F172A` (Slate 900)
+- **Accent**: `#3B82F6` → `#1D4ED8` (Blue gradient)
+- **Light**: `#F8FAFC` (Slate 50)
+
+## Files
+
+- **monogram.svg** - Square icon (256×256)
+- **wordmark.svg** - Horizontal logo (560×120)
+- **logo.svg** - Public web copy
+
 

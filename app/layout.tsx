@@ -1,6 +1,7 @@
 // app/layout.tsx
 import './globals.css';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Inter } from 'next/font/google';
 import { getSiteName, getSiteUrl } from '@/lib/site';
 import LayoutWrapper from '@/components/LayoutWrapper';
@@ -65,7 +66,10 @@ export default async function RootLayout({
           </a>
           <header className="sticky top-0 z-40 bg-[var(--card)] border-b border-[var(--border)] h-16">
             <div className="max-w-6xl mx-auto px-4 h-full flex items-center justify-between">
-              <Link href="/" className="text-heading font-semibold text-[var(--fg)]">Enlist</Link>
+              <Link href="/" className="flex items-center gap-2 text-heading font-semibold text-[var(--fg)]">
+                <Image src="/logo.svg" alt="Enlist" width={32} height={32} className="h-8 w-8" />
+                <span>Enlist</span>
+              </Link>
               <HeaderNavigation isAuthenticated={Boolean(session)} />
             </div>
           </header>
