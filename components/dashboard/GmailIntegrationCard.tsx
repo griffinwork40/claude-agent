@@ -3,13 +3,16 @@
 
 "use client";
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface GmailIntegrationCardProps {
   isConnected: boolean;
   connectUrl: string;
   disconnectUrl: string;
   error?: string | null;
+  onNavigateToConnect?: (destination: string) => void;
+  onDisconnected?: () => void;
 }
 
 /**
@@ -23,15 +26,39 @@ export default function GmailIntegrationCard({
   isConnected,
   connectUrl,
   disconnectUrl,
-  error,
+  onNavigateToConnect,
+  onDisconnected,
+  error: propError,
 }: GmailIntegrationCardProps) {
+  const router = useRouter();
   const [connected, setConnected] = useState(isConnected);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    if (!successMessage) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSuccessMessage(null);
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [successMessage]);
+
   const handleConnect = () => {
-    setActionError(null);
-    window.location.href = connectUrl;
+    setError(null);
+    setIsConnecting(true);
+    const navigate = onNavigateToConnect ?? ((destination: string) => {
+      window.location.href = destination;
+    });
+    navigate(connectUrl);
   };
 
   const handleDisconnect = () => {
@@ -44,6 +71,9 @@ export default function GmailIntegrationCard({
           throw new Error(data.error || 'Failed to disconnect Gmail');
         }
         setConnected(false);
+        setSuccessMessage('Gmail disconnected successfully.');
+        onDisconnected?.();
+        router.refresh();
       } catch (disconnectError) {
         const message = disconnectError instanceof Error ? disconnectError.message : 'Failed to disconnect Gmail';
         setActionError(message);
@@ -67,13 +97,21 @@ export default function GmailIntegrationCard({
         </span>
       </div>
 
-      {(actionError ?? error) && (
-         <p
+      {(actionError ?? propError) && (
+        <p
           role="alert"
           aria-live="assertive"
           className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600"
-         >
-          {actionError ?? error}
+        >
+          {actionError ?? propError}
+        </p>
+      )}
+      {successMessage && (
+        <p
+          data-testid="gmail-success-alert"
+          className="mt-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-600"
+        >
+          {successMessage}
         </p>
       )}
 
@@ -91,9 +129,13 @@ export default function GmailIntegrationCard({
           <button
             type="button"
             onClick={handleConnect}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+            disabled={isConnecting}
+            className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Connect Gmail
+            {isConnecting && (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" aria-hidden="true" />
+            )}
+            <span>{isConnecting ? 'Redirecting…' : 'Connect Gmail'}</span>
           </button>
         )}
       </div>
