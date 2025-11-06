@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { browserTools } from './browser-tools';
+import { apartmentTools } from './apartment-tools';
 import type { JobOpportunity } from '@/types';
 
 // Import modular components
@@ -23,7 +24,7 @@ let anthropic: Anthropic | null = null;
 let agentInstructions: string | null = null;
 
 
-const agentTools = [...browserTools, ...gmailToolDefinitions];
+const agentTools = [...browserTools, ...apartmentTools, ...gmailToolDefinitions];
 
 /**
  * Initialize the Anthropic client and load agent instructions.
