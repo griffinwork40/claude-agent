@@ -2,6 +2,7 @@
 
 ## ✅ Completed: Claude Agent Refactoring
 
+- 2025-10-18: Documented browser-service HTTP contract with comprehensive OpenAPI 3.0 specification covering automation and job-search endpoints. Overall completion: 100%.
 - 2025-10-13: Added Whisper-powered speech-to-text composer with secure API proxying to OpenAI and UI microphone controls. Overall completion: 100%.
 - 2025-10-18: Restored Supabase login redirect by syncing client auth events through the `/auth/callback` route. Overall completion: 100%.
 - 2025-10-17: Ensured Gmail integration error alert announces immediately by adding `role="alert"` with assertive live region. Overall completion: 100%.

@@ -1,0 +1,1109 @@
+{
+  "x-file-description": "OpenAPI 3.0 specification for the browser-service HTTP API.",
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Browser Service API",
+    "description": "REST API for LLM-controlled browser automation and legacy job-search helpers.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001",
+      "description": "Local development server"
+    }
+  ],
+  "tags": [
+    { "name": "System" },
+    { "name": "Browser Automation" },
+    { "name": "Job Search" },
+    { "name": "Applications" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "description": "Returns the service health status and active session count.",
+        "responses": {
+          "200": {
+            "description": "Service is healthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" },
+                    "service": { "type": "string", "example": "llm-browser-automation" },
+                    "activeSessions": { "type": "integer", "minimum": 0 },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  },
+                  "required": ["status", "service", "activeSessions", "timestamp"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/browser/navigate": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Navigate to a URL",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/NavigateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Navigation succeeded.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/NavigateResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/snapshot": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Capture accessibility tree snapshot",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SessionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Snapshot captured.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SnapshotResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/screenshot": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Capture a screenshot",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ScreenshotRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Screenshot captured.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ScreenshotResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/click": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Click an element",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SelectorRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Click succeeded.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/type": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Type into an element",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TypeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Typing succeeded.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/select": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Select an option from a dropdown",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SelectRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Selection succeeded.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/wait": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Wait for an element or page load",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WaitRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wait completed.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/evaluate": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Evaluate JavaScript in the page context",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EvaluateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Script evaluated.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EvaluateResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/content": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Retrieve page content",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SessionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Page content retrieved.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PageContentResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/browser/close": {
+      "post": {
+        "tags": ["Browser Automation"],
+        "summary": "Close a browser session",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SessionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session closed.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/search-serp": {
+      "post": {
+        "tags": ["Job Search"],
+        "summary": "Search jobs via SERP API",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JobSearchRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Job search results returned.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JobSearchResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequestWithDetails" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerErrorWithDetails" }
+        }
+      }
+    },
+    "/api/search-indeed": {
+      "post": {
+        "tags": ["Job Search"],
+        "summary": "Search jobs on Indeed",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JobSearchRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Indeed results returned or failure payload.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JobSearchResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequestWithDetails" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerErrorWithDetails" }
+        }
+      }
+    },
+    "/api/search-google": {
+      "post": {
+        "tags": ["Job Search"],
+        "summary": "Search jobs on Google Jobs",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JobSearchRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google Jobs results returned or failure payload.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JobSearchResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequestWithDetails" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerErrorWithDetails" }
+        }
+      }
+    },
+    "/api/search-linkedin": {
+      "post": {
+        "tags": ["Job Search"],
+        "summary": "Search jobs on LinkedIn",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LinkedInSearchRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "LinkedIn currently returns only failure payloads.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JobSearchResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequestWithDetails" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerErrorWithDetails" }
+        }
+      }
+    },
+    "/api/extract-company-url": {
+      "post": {
+        "tags": ["Job Search"],
+        "summary": "Extract a direct company application URL",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CompanyUrlRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extraction result.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CompanyUrlResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerErrorWithDetails" }
+        }
+      }
+    },
+    "/api/find-careers-page": {
+      "post": {
+        "tags": ["Job Search"],
+        "summary": "Find a company's careers page",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CareersPageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Careers page located.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CareersPageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerErrorWithDetails" }
+        }
+      }
+    },
+    "/api/apply-greenhouse": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Apply to a Greenhouse job",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApplyGreenhouseRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Application attempt result.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApplicationResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerErrorWithDetails" }
+        }
+      }
+    },
+    "/api/job-details": {
+      "post": {
+        "tags": ["Job Search"],
+        "summary": "Retrieve detailed job information",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JobDetailsRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Job details retrieved.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JobDetailsResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/apply-to-job": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Apply to a job via automated browser",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApplyToJobRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Application attempt result.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApplicationResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerErrorWithDetails" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "examples": {
+              "missingParameter": {
+                "value": { "success": false, "error": "sessionId is required" }
+              }
+            }
+          }
+        }
+      },
+      "BadRequestWithDetails": {
+        "description": "Bad request with validation details.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponseWithDetails" },
+            "examples": {
+              "missingParameter": {
+                "value": {
+                  "success": false,
+                  "error": "Missing required parameters: keywords and location are required",
+                  "details": { "keywords": false, "location": false }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": { "type": "string", "example": "Unauthorized" }
+              },
+              "required": ["error"]
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Unexpected server error.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "examples": {
+              "generic": {
+                "value": { "success": false, "error": "Navigate failed" }
+              }
+            }
+          }
+        }
+      },
+      "ServerErrorWithDetails": {
+        "description": "Unexpected server error with additional context.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponseWithDetails" },
+            "examples": {
+              "fallback": {
+                "value": {
+                  "success": false,
+                  "error": "Indeed automated search is currently unavailable. Please use this manual search link: https://www.indeed.com/jobs?q=...",
+                  "details": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "NavigateRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "url": { "type": "string", "format": "uri" }
+        },
+        "required": ["sessionId", "url"]
+      },
+      "NavigateResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "data": { "$ref": "#/components/schemas/BrowserNavigationResult" }
+        },
+        "required": ["success", "data"]
+      },
+      "BrowserNavigationResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "url": { "type": "string", "format": "uri" }
+        },
+        "required": ["success", "url"]
+      },
+      "SessionRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" }
+        },
+        "required": ["sessionId"]
+      },
+      "SnapshotResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "data": { "$ref": "#/components/schemas/SnapshotResult" }
+        },
+        "required": ["success", "data"]
+      },
+      "SnapshotResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "snapshot": { "type": "string", "description": "Accessibility tree snapshot." },
+          "url": { "type": "string", "format": "uri" }
+        },
+        "required": ["success", "snapshot", "url"]
+      },
+      "ScreenshotRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "fullPage": { "type": "boolean", "default": false }
+        },
+        "required": ["sessionId"]
+      },
+      "ScreenshotResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "data": { "$ref": "#/components/schemas/ScreenshotResult" }
+        },
+        "required": ["success", "data"]
+      },
+      "ScreenshotResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "screenshot": {
+            "type": "string",
+            "format": "byte",
+            "description": "Base64 encoded PNG screenshot."
+          }
+        },
+        "required": ["success", "screenshot"]
+      },
+      "SelectorRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "selector": { "type": "string" }
+        },
+        "required": ["sessionId", "selector"]
+      },
+      "TypeRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/SelectorRequest" },
+          {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "submit": { "type": "boolean", "default": false }
+            },
+            "required": ["text"]
+          }
+        ]
+      },
+      "SelectRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/SelectorRequest" },
+          {
+            "type": "object",
+            "properties": {
+              "value": { "type": "string" }
+            },
+            "required": ["value"]
+          }
+        ]
+      },
+      "WaitRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "selector": { "type": "string", "nullable": true },
+          "timeout": { "type": "integer", "minimum": 0, "default": 10000 }
+        },
+        "required": ["sessionId"]
+      },
+      "EvaluateRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "script": { "type": "string", "description": "JavaScript function or expression to evaluate." }
+        },
+        "required": ["sessionId", "script"]
+      },
+      "EvaluateResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "data": { "$ref": "#/components/schemas/EvaluateResult" }
+        },
+        "required": ["success", "data"]
+      },
+      "EvaluateResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "result": {}
+        },
+        "required": ["success", "result"]
+      },
+      "PageContentResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "data": { "$ref": "#/components/schemas/PageContentResult" }
+        },
+        "required": ["success", "data"]
+      },
+      "PageContentResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "html": { "type": "string" },
+          "text": { "type": "string" },
+          "url": { "type": "string", "format": "uri" }
+        },
+        "required": ["success", "html", "text", "url"]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "$ref": "#/components/schemas/MessageResult" }
+        },
+        "required": ["success", "data"]
+      },
+      "MessageResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" }
+        },
+        "required": ["success", "message"]
+      },
+      "JobSearchRequest": {
+        "type": "object",
+        "properties": {
+          "keywords": { "type": "string" },
+          "location": { "type": "string" },
+          "experience_level": { "type": "string", "nullable": true },
+          "remote": { "type": "boolean", "nullable": true }
+        },
+        "required": ["keywords", "location"]
+      },
+      "JobSearchResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/JobOpportunity" },
+            "description": "Array of job opportunities. When an error occurs, this may be omitted and the response will contain an error instead."
+          },
+          "error": { "type": "string", "nullable": true },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        },
+        "required": ["success"],
+        "description": "Successful responses include job data; failures include error messaging consistent with the legacy API behavior."
+      },
+      "LinkedInSearchRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/JobSearchRequest" },
+          {
+            "type": "object",
+            "properties": {
+              "userId": { "type": "string" }
+            },
+            "required": ["userId"]
+          }
+        ]
+      },
+      "CompanyUrlRequest": {
+        "type": "object",
+        "properties": {
+          "jobBoardUrl": { "type": "string", "format": "uri" }
+        },
+        "required": ["jobBoardUrl"]
+      },
+      "CompanyUrlResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "$ref": "#/components/schemas/CompanyUrlResult" }
+        },
+        "required": ["success", "data"]
+      },
+      "CompanyUrlResult": {
+        "type": "object",
+        "properties": {
+          "companyApplicationUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "requiresJobBoard": { "type": "boolean" }
+        },
+        "required": ["companyApplicationUrl", "requiresJobBoard"]
+      },
+      "CareersPageRequest": {
+        "type": "object",
+        "properties": {
+          "companyName": { "type": "string" },
+          "jobTitle": { "type": "string", "nullable": true }
+        },
+        "required": ["companyName"]
+      },
+      "CareersPageResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "$ref": "#/components/schemas/CareersPageResult" }
+        },
+        "required": ["success", "data"]
+      },
+      "CareersPageResult": {
+        "type": "object",
+        "properties": {
+          "careersUrl": { "type": "string", "format": "uri" },
+          "companyWebsite": { "type": "string", "format": "uri" }
+        },
+        "required": ["careersUrl", "companyWebsite"]
+      },
+      "ApplyGreenhouseRequest": {
+        "type": "object",
+        "properties": {
+          "boardToken": { "type": "string" },
+          "jobId": { "type": "string" },
+          "userProfile": {
+            "type": "object",
+            "description": "User profile fields consumed by the Greenhouse automation pipeline.",
+            "additionalProperties": true
+          }
+        },
+        "required": ["boardToken", "jobId", "userProfile"]
+      },
+      "ApplyToJobRequest": {
+        "type": "object",
+        "properties": {
+          "job_url": { "type": "string", "format": "uri" },
+          "user_profile": {
+            "type": "object",
+            "description": "User profile data used to populate application forms.",
+            "additionalProperties": true
+          }
+        },
+        "required": ["job_url", "user_profile"]
+      },
+      "ApplicationResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "$ref": "#/components/schemas/ApplicationResult" },
+          "error": { "type": "string", "nullable": true }
+        },
+        "required": ["success", "data"]
+      },
+      "ApplicationResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        },
+        "required": ["success", "message"]
+      },
+      "JobDetailsRequest": {
+        "type": "object",
+        "properties": {
+          "job_url": { "type": "string", "format": "uri" }
+        },
+        "required": ["job_url"]
+      },
+      "JobDetailsResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "$ref": "#/components/schemas/JobDetails" },
+          "error": { "type": "string", "nullable": true }
+        },
+        "required": ["success"],
+        "description": "When retrieval fails the response includes an error message instead of data."
+      },
+      "JobDetails": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string", "nullable": true },
+          "skills": {
+            "type": "array",
+            "items": { "type": "string" },
+            "nullable": true
+          },
+          "salary": { "type": "string", "nullable": true },
+          "application_url": { "type": "string", "format": "uri", "nullable": true }
+        },
+        "additionalProperties": true
+      },
+      "JobOpportunity": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "user_id": { "type": "string", "nullable": true },
+          "title": { "type": "string" },
+          "company": { "type": "string" },
+          "location": { "type": "string" },
+          "description": { "type": "string" },
+          "salary": { "type": "string", "nullable": true },
+          "url": { "type": "string", "format": "uri", "nullable": true },
+          "application_url": { "type": "string", "format": "uri" },
+          "source": {
+            "type": "string",
+            "enum": [
+              "linkedin",
+              "indeed",
+              "glassdoor",
+              "angellist",
+              "company",
+              "google",
+              "manual",
+              "remotive",
+              "greenhouse"
+            ]
+          },
+          "skills": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "experience_level": { "type": "string" },
+          "job_type": { "type": "string" },
+          "remote_type": { "type": "string" },
+          "match_percentage": { "type": "number", "nullable": true },
+          "applied": { "type": "boolean" },
+          "applied_at": { "type": "string", "format": "date-time", "nullable": true },
+          "status": {
+            "type": "string",
+            "enum": ["discovered", "interested", "applied", "rejected", "error", "fallback"]
+          },
+          "error": { "type": "string", "nullable": true },
+          "fallback_url": { "type": "string", "format": "uri", "nullable": true },
+          "raw_data": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "greenhouse_job_id": { "type": "string", "nullable": true },
+          "greenhouse_board_token": { "type": "string", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": [
+          "id",
+          "title",
+          "company",
+          "location",
+          "description",
+          "application_url",
+          "source",
+          "skills",
+          "experience_level",
+          "job_type",
+          "remote_type",
+          "applied",
+          "status",
+          "created_at"
+        ]
+      },
+      "Application": {
+        "type": "object",
+        "deprecated": true
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "const": false },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "error"]
+      },
+      "ErrorResponseWithDetails": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ErrorResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "details": {
+                "type": "object",
+                "nullable": true,
+                "additionalProperties": true
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
