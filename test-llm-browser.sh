@@ -4,8 +4,15 @@
 set -e
 
 API_URL="${BROWSER_SERVICE_URL:-https://claude-agent-production.up.railway.app}"
-API_KEY="${BROWSER_SERVICE_API_KEY:-test-key-12345}"
+API_KEY="${BROWSER_SERVICE_API_KEY}"
 SESSION_ID="test-$(date +%s)"
+
+if [ -z "$API_KEY" ]; then
+  echo "❌ Error: BROWSER_SERVICE_API_KEY environment variable is not set"
+  echo "Please set it before running this script:"
+  echo "  export BROWSER_SERVICE_API_KEY=your-api-key"
+  exit 1
+fi
 
 echo "🧪 Testing LLM-Controlled Browser Service"
 echo "========================================="

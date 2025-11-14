@@ -66,7 +66,7 @@ npm run dev
 2. Update `.env.local` to use local service:
 ```bash
 BROWSER_SERVICE_URL=http://localhost:3001
-BROWSER_SERVICE_API_KEY=test-key-12345
+BROWSER_SERVICE_API_KEY=your-api-key-here
 ```
 
 3. Start Next.js dev server:

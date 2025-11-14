@@ -161,7 +161,7 @@ ngrok http 3001
 3. **Update Vercel:**
    - Environment Variables:
      - `BROWSER_SERVICE_URL` = `https://abc123.ngrok-free.app`
-     - `BROWSER_SERVICE_API_KEY` = `test-key-12345`
+     - `BROWSER_SERVICE_API_KEY` = `your-api-key-here`
    - Redeploy
 
 4. **Test:**
@@ -219,7 +219,7 @@ curl http://localhost:3001/health
 # Test Indeed search
 curl -X POST http://localhost:3001/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"software engineer","location":"remote"}'
 
 # Run all tests

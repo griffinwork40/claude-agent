@@ -11,6 +11,16 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Get API key from environment
+API_KEY="${BROWSER_SERVICE_API_KEY}"
+
+if [ -z "$API_KEY" ]; then
+  echo -e "${RED}❌ Error: BROWSER_SERVICE_API_KEY environment variable is not set${NC}"
+  echo "Please set it before running this script:"
+  echo "  export BROWSER_SERVICE_API_KEY=your-api-key"
+  exit 1
+fi
+
 # Check if service is running
 echo ""
 echo "1️⃣  Testing health endpoint..."
@@ -28,7 +38,7 @@ echo ""
 echo "2️⃣  Testing Indeed job search..."
 RESPONSE=$(curl -s -X POST http://localhost:3001/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer $API_KEY" \
   -d '{"keywords":"software engineer","location":"remote"}')
 
 if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then

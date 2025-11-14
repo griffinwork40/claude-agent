@@ -59,7 +59,7 @@ open http://localhost:3000/login
 # Test Indeed search (bypasses auth for demonstration)
 curl -X POST http://localhost:3001/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"software engineer","location":"San Francisco"}'
 ```
 

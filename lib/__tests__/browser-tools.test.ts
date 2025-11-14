@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getBrowserService } from '../browser-tools';
 
+// Set test environment variable for API key
+process.env.BROWSER_SERVICE_API_KEY = 'test-key-12345';
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;

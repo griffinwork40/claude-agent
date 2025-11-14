@@ -5,7 +5,7 @@ This guide provides comprehensive testing procedures for the job search function
 ## Prerequisites
 
 - Browser service running at `https://claude-agent-production.up.railway.app`
-- API key: `test-key-12345`
+- API key: `your-api-key-here`
 - `curl` command available
 - `jq` command available (optional, for JSON formatting)
 
@@ -35,7 +35,7 @@ Expected response:
 ```bash
 curl -X POST https://claude-agent-production.up.railway.app/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"line cook","location":"Altamonte Springs"}' | jq
 ```
 
@@ -91,7 +91,7 @@ curl -X POST https://claude-agent-production.up.railway.app/api/search-indeed \
 ```bash
 curl -X POST https://claude-agent-production.up.railway.app/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"line cook"}' | jq
 ```
 
@@ -113,7 +113,7 @@ curl -X POST https://claude-agent-production.up.railway.app/api/search-indeed \
 ```bash
 curl -X POST https://claude-agent-production.up.railway.app/api/search-google \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"software engineer","location":"San Francisco"}' | jq
 ```
 
@@ -142,7 +142,7 @@ curl -X POST https://claude-agent-production.up.railway.app/api/search-google \
 ```bash
 curl -X POST https://claude-agent-production.up.railway.app/api/search-google \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"remote developer","location":"Remote","remote":true}' | jq
 ```
 
@@ -152,7 +152,7 @@ curl -X POST https://claude-agent-production.up.railway.app/api/search-google \
 ```bash
 curl -X POST https://claude-agent-production.up.railway.app/api/search-linkedin \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"product manager","location":"New York","userId":"test-user-123"}' | jq
 ```
 
@@ -221,7 +221,7 @@ Test with a very long timeout to see if the service handles it gracefully:
 ```bash
 timeout 35s curl -X POST https://claude-agent-production.up.railway.app/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"test","location":"test"}'
 ```
 
@@ -230,7 +230,7 @@ timeout 35s curl -X POST https://claude-agent-production.up.railway.app/api/sear
 ```bash
 curl -X POST https://claude-agent-production.up.railway.app/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"test","location":"test"' | jq
 ```
 
@@ -331,7 +331,7 @@ curl -s https://claude-agent-production.up.railway.app/health
 ### Verify Environment Variables
 
 Ensure these are set in the browser service:
-- `API_KEY=test-key-12345`
+- `API_KEY=your-api-key-here`
 - `NODE_ENV=production`
 - `PORT=3001`
 
