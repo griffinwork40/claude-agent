@@ -23,7 +23,7 @@
 - **Response:** 200 OK
 - **Environment Variables:** ✅ Loaded from .env.local
   - `BROWSER_SERVICE_URL=http://localhost:3001`
-  - `BROWSER_SERVICE_API_KEY=test-key-12345`
+  - `BROWSER_SERVICE_API_KEY=your-api-key-here`
 
 ## Integration Testing
 
@@ -78,7 +78,7 @@ this.browser = await chromium.launch({
 ```bash
 cd browser-service
 docker build -t browser-service .
-docker run -p 3001:3001 -e API_KEY=test-key-12345 browser-service
+docker run -p 3001:3001 -e API_KEY=your-api-key-here browser-service
 ```
 
 #### Option 4: Skip Local Playwright Testing

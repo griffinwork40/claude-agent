@@ -53,7 +53,7 @@ Expected response:
 ```bash
 curl -X POST http://localhost:3001/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"software engineer","location":"San Francisco"}'
 ```
 
@@ -65,7 +65,7 @@ Expected: JSON response with array of job listings.
 ```bash
 # Browser Service (Local Testing)
 BROWSER_SERVICE_URL=http://localhost:3001
-BROWSER_SERVICE_API_KEY=test-key-12345
+BROWSER_SERVICE_API_KEY=your-api-key-here
 ```
 
 2. **Verify the file exists:**
@@ -105,7 +105,7 @@ npm run dev
 
 **Issue: 401 Unauthorized**
 - Check API key matches in both services
-- Verify `.env.local` has `BROWSER_SERVICE_API_KEY=test-key-12345`
+- Verify `.env.local` has `BROWSER_SERVICE_API_KEY=your-api-key-here`
 
 **Issue: Connection refused**
 - Ensure browser service is running on port 3001
@@ -141,7 +141,7 @@ Copy the ngrok URL (e.g., `https://abc123.ngrok-free.app`)
 1. Go to Vercel dashboard → Your project → Settings → Environment Variables
 2. Add/update:
    - `BROWSER_SERVICE_URL` = `https://abc123.ngrok-free.app`
-   - `BROWSER_SERVICE_API_KEY` = `test-key-12345`
+   - `BROWSER_SERVICE_API_KEY` = `your-api-key-here`
 3. Redeploy or wait for automatic deployment
 
 ### Step 4: Test Production → Local

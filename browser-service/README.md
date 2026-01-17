@@ -51,7 +51,7 @@ Test Indeed search (requires API key):
 ```bash
 curl -X POST http://localhost:3001/api/search-indeed \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test-key-12345" \
+  -H "Authorization: Bearer your-api-key-here" \
   -d '{"keywords":"frontend developer","location":"San Francisco"}'
 ```
 
