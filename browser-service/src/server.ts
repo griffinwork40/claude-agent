@@ -17,6 +17,12 @@ app.use(express.json({ limit: '50mb' })); // Increase limit for screenshots
 const expectedApiKey =
   process.env.BROWSER_SERVICE_API_KEY || process.env.API_KEY;
 
+if (!expectedApiKey) {
+  throw new Error(
+    'Missing API key. Set BROWSER_SERVICE_API_KEY (or legacy API_KEY) before starting the browser service.'
+  );
+}
+
 // Simple API key authentication middleware
 const authenticate = (req: Request, res: Response, next: NextFunction) => {
   const apiKey = req.headers.authorization?.replace('Bearer ', '');
